@@ -46,9 +46,19 @@ function getOAuth() {
   o.setCredentials({ refresh_token: OAUTH_REFRESH_TOKEN });
   return o;
 }
+// 서비스계정 JSON 파싱: 그냥 JSON이든 Base64로 인코딩된 거든 둘 다 처리
+function parseServiceAccount(raw) {
+  let s = (raw || "").trim();
+  if (!s.startsWith("{")) {
+    // { 로 시작 안 하면 Base64로 보고 디코딩
+    s = Buffer.from(s, "base64").toString("utf8").trim();
+  }
+  return JSON.parse(s);
+}
+
 // (2) 시트 쓰기용: 서비스계정(로봇)
 function getSheetsClient() {
-  const creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
+  const creds = parseServiceAccount(GOOGLE_SERVICE_ACCOUNT);
   const auth = new google.auth.GoogleAuth({
     credentials: creds,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
