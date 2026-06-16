@@ -239,14 +239,14 @@
     function closePlayer(){document.body.classList.remove("player-open");document.getElementById("ph_frame").innerHTML="";}
 
     // ===== 영상 상세 시계열 (왼쪽 그래프) =====
-    const VD_PERIODS=[{k:7,label:"게시 후 7일"},{k:28,label:"게시 후 28일"},{k:99999,label:"전체"}];
+    const VD_PERIODS=[{k:24,label:"게시 후 24시간"},{k:7,label:"게시 후 7일"},{k:28,label:"게시 후 28일"},{k:99999,label:"전체"}];
     const VD_METRICS=[
       {k:"views",label:"조회수",color:"#3182f6",cum:true},
       {k:"avp",label:"평균조회율",color:"#22c55e",cum:false},
       {k:"eng",label:"참여(좋아요+댓글+공유)",color:"#f5c33b",cum:true},
       {k:"subs",label:"구독자",color:"#a78bfa",cum:true},
     ];
-    let vd={id:null,rows:[],period:7,metric:"views",chart:null};
+    let vd={id:null,rows:[],hourly:[],period:24,metric:"views",chart:null};
 
     function openVideo(id,title,upload){
       openPlayer(id,title);   // 오른쪽 재생
@@ -258,9 +258,13 @@
       const box=document.getElementById("videoDetail");
       box.style.display="block"; box.scrollIntoView({behavior:"smooth",block:"center"});
       try{
-        const r=await fetch("/api/video",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,start:upload})}).then(r=>r.json());
+        const [r,h]=await Promise.all([
+          fetch("/api/video",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,start:upload})}).then(r=>r.json()),
+          fetch("/api/video-hourly?id="+id).then(r=>r.json())
+        ]);
         vd.rows=r.ok?(r.rows||[]):[];
-      }catch(_){ vd.rows=[]; }
+        vd.hourly=h.ok?(h.rows||[]):[];
+      }catch(_){ vd.rows=[]; vd.hourly=[]; }
       buildVdTabs(); drawVd();
     }
     function closeDetail(){ document.getElementById("videoDetail").style.display="none"; if(vd.chart){vd.chart.destroy();vd.chart=null;} }
@@ -274,19 +278,40 @@
     }
     function drawVd(){
       const met=VD_METRICS.find(x=>x.k===vd.metric);
-      const rows=vd.rows.slice(0, vd.period===99999? vd.rows.length : vd.period);
-      const labels=rows.map((_,i)=>"D"+(i+1));
-      const valOf=(r)=> met.k==="eng"?(r.likes+r.comments+r.shares):met.k==="avp"?r.avp:met.k==="subs"?r.subs:r.views;
-      let data;
-      if(met.cum){ let run=0; data=rows.map(r=>{run+=valOf(r);return run;}); }
-      else data=rows.map(valOf);
       if(vd.chart)vd.chart.destroy();
-      if(!rows.length){ return; }
+      let labels, data, titleFn;
+
+      if(vd.period===24){
+        // 시간별 스냅샷 (조회수/참여만 가능, 누적값을 그대로 찍음)
+        const hr=vd.hourly;
+        if(!hr.length){
+          vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",data:{labels:[],datasets:[]},
+            options:{plugins:{title:{display:true,text:"아직 시간별 데이터가 없어요. 이 영상이 업로드된 뒤 로봇이 1시간마다 쌓습니다.",color:"#8b95a1"}}}});
+          return;
+        }
+        labels=hr.map(h=>Math.round(h.hours)+"H");
+        const v=(h)=> met.k==="eng"?(h.likes+h.comments): h.views;  // 24h는 조회수/참여만
+        data=hr.map(v);
+        titleFn=(it)=>"게시 후 "+it[0].label;
+      } else {
+        const rows=vd.rows.slice(0, vd.period===99999? vd.rows.length : vd.period);
+        if(!rows.length){
+          vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",data:{labels:[],datasets:[]},
+            options:{plugins:{title:{display:true,text:"데이터가 없습니다.",color:"#8b95a1"}}}});
+          return;
+        }
+        labels=rows.map((_,i)=>"D"+(i+1));
+        const valOf=(r)=> met.k==="eng"?(r.likes+r.comments+r.shares):met.k==="avp"?r.avp:met.k==="subs"?r.subs:r.views;
+        if(met.cum){ let run=0; data=rows.map(r=>{run+=valOf(r);return run;}); }
+        else data=rows.map(valOf);
+        titleFn=(it)=>"게시 후 "+it[0].label.replace("D","")+"일";
+      }
+
       vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",
-        data:{labels,datasets:[{label:met.label,data,borderColor:met.color,backgroundColor:met.color+"22",borderWidth:2.5,pointRadius:0,fill:met.cum,tension:.25}]},
+        data:{labels,datasets:[{label:met.label,data,borderColor:met.color,backgroundColor:met.color+"22",borderWidth:2.5,pointRadius:vd.period===24?3:0,fill:met.cum,tension:.25}]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
           plugins:{legend:{display:false},tooltip:{callbacks:{
-            title:(it)=>"게시 후 "+it[0].label.replace("D","")+"일",
+            title:titleFn,
             label:(c)=>met.label+": "+(met.k==="avp"? c.parsed.y.toFixed(1)+"%": c.parsed.y.toLocaleString("ko-KR"))
           }}},
           scales:{x:{ticks:{color:"#8b95a1",autoSkip:true,maxTicksLimit:14},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});

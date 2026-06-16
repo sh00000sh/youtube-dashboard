@@ -75,6 +75,13 @@ function daysAgo(n) {
   d.setDate(d.getDate() - n);
   return d;
 }
+// 시트 날짜(26-06-02) → API용(2026-06-02) 정규화
+function fullDate(s) {
+  s = String(s || "").trim();
+  if (/^\d{2}-\d{2}-\d{2}$/.test(s)) return "20" + s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return "2020-01-01";
+}
 // 초 -> "m:ss"
 function secToMMSS(sec) {
   sec = Math.round(Number(sec) || 0);
@@ -380,7 +387,7 @@ app.post("/api/sync", async (req, res) => {
 app.post("/api/video", async (req, res) => {
   try {
     const id = (req.body && req.body.id) || req.query.id;
-    const start = (req.body && req.body.start) || req.query.start || "2020-01-01";
+    const start = fullDate((req.body && req.body.start) || req.query.start);
     if (!id) return res.status(400).json({ ok: false, error: "영상 id 없음" });
     const auth = getOAuth();
     const ya = google.youtubeAnalytics({ version: "v2", auth });
@@ -418,6 +425,96 @@ app.get("/api/data", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ===================================================================
+//  시간별 스냅샷 로봇 (업로드 후 24시간, 1시간 간격 자동 기록)
+// ===================================================================
+const SNAP_TAB = process.env.SNAP_TAB || "시간별스냅샷";
+
+// 탭 없으면 만들고 헤더 깔기
+async function ensureTab(sheets, title, header) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const exists = (meta.data.sheets || []).some((s) => s.properties.title === title);
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: { requests: [{ addSheet: { properties: { title } } }] },
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID, range: `${title}!A1`,
+      valueInputOption: "RAW", requestBody: { values: [header] },
+    });
+  }
+}
+
+// 한 번 스냅샷: 최근 24시간 내 게시된 영상의 현재 조회수를 기록
+async function snapshotJob() {
+  if (!CHANNEL_ID || !YOUTUBE_API_KEY || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return 0;
+  const sheets = getSheetsClient();
+  // 업로드 재생목록
+  const ch = await (await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
+  const uploads = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploads) return 0;
+  const pl = await (await fetch(
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails,snippet&maxResults=15&playlistId=${uploads}&key=${YOUTUBE_API_KEY}`)).json();
+  const now = Date.now();
+  const recent = (pl.items || []).map((it) => ({
+    id: it.contentDetails.videoId,
+    publishedAt: it.contentDetails.videoPublishedAt || it.snippet.publishedAt,
+    title: it.snippet.title,
+  })).filter((v) => ((now - new Date(v.publishedAt).getTime()) / 3600000) <= 24.5);
+  if (!recent.length) return 0;
+
+  const ids = recent.map((v) => v.id);
+  const stat = await (await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
+  const sm = {}; (stat.items || []).forEach((it) => sm[it.id] = it.statistics);
+
+  await ensureTab(sheets, SNAP_TAB, ["타임스탬프", "영상ID", "제목", "게시후시간(H)", "조회수", "좋아요", "댓글"]);
+  const rows = recent.map((v) => {
+    const s = sm[v.id] || {};
+    const hrs = (now - new Date(v.publishedAt).getTime()) / 3600000;
+    return [new Date().toISOString(), v.id, v.title, Number(hrs.toFixed(2)),
+      Number(s.viewCount || 0), Number(s.likeCount || 0), Number(s.commentCount || 0)];
+  });
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A:G`,
+    valueInputOption: "USER_ENTERED", requestBody: { values: rows },
+  });
+  console.log(`📸 스냅샷 기록: ${rows.length}개 영상`);
+  return rows.length;
+}
+
+// 수동 트리거
+app.post("/api/snapshot", async (req, res) => {
+  try { const n = await snapshotJob(); res.json({ ok: true, count: n }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// 특정 영상의 시간별 스냅샷 읽기 (24시간 그래프용)
+app.get("/api/video-hourly", async (req, res) => {
+  try {
+    const id = req.query.id;
+    if (!id) return res.status(400).json({ ok: false, error: "id 없음" });
+    const sheets = getSheetsClient();
+    let rows = [];
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:G` });
+      rows = (r.data.values || []).filter((x) => x[1] === id).map((x) => ({
+        hours: Number(x[3] || 0), views: Number(x[4] || 0),
+        likes: Number(x[5] || 0), comments: Number(x[6] || 0),
+      })).sort((a, b) => a.hours - b.hours);
+    } catch (_) {}
+    res.json({ ok: true, rows });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 1시간마다 자동 스냅샷 (서버 항상 켜져 있으니 별도 Cron 불필요)
+setInterval(() => snapshotJob().catch((e) => console.log("snapshot err:", e.message)), 60 * 60 * 1000);
+setTimeout(() => snapshotJob().catch(() => {}), 15000); // 서버 켜지고 15초 뒤 1회
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 대시보드 실행 중: http://localhost:${PORT}`));
