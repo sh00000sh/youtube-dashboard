@@ -1,7 +1,7 @@
 {
   "name": "youtube-dashboard",
-  "version": "1.0.0",
-  "description": "유튜브 인게이지먼트 동기화 대시보드",
+  "version": "2.0.0",
+  "description": "유튜브 인게이지먼트 자동 수집 대시보드 (Analytics + Sheets)",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js"
@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "pg": "^8.11.5"
+    "googleapis": "^140.0.1"
   }
 }
