@@ -108,7 +108,7 @@
     <h2>🚀 5/11 이후 누적 성장</h2>
     <div class="cards cards5">
       <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div></div>
-      <div class="card"><div class="label">구독자 순증</div><div class="value" id="cum_subs">-</div></div>
+      <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div></div>
       <div class="card"><div class="label">누적 좋아요</div><div class="value" id="cum_likes">-</div></div>
       <div class="card"><div class="label">누적 댓글</div><div class="value" id="cum_comments">-</div></div>
       <div class="card"><div class="label">누적 공유</div><div class="value" id="cum_shares">-</div></div>
@@ -130,7 +130,7 @@
       <select id="dailySort" style="margin-left:auto">
         <option value="date">날짜 최신순</option>
         <option value="6">조회수 높은순</option>
-        <option value="1">구독자증감 높은순</option>
+        <option value="1">구독자 높은순</option>
         <option value="3">좋아요 높은순</option>
         <option value="4">댓글 높은순</option>
         <option value="5">공유 높은순</option>
@@ -139,12 +139,25 @@
     <div class="tbl-wrap"><div class="scroll">
       <table>
         <thead><tr>
-          <th>날짜</th><th>구독자증감</th><th>노출수</th><th>CTR</th><th>조회수</th>
+          <th>날짜</th><th>구독자</th><th>노출수</th><th>CTR</th><th>조회수</th>
           <th>평균조회율</th><th>평균시청시간</th><th>좋아요</th><th>댓글</th><th>공유</th><th>추가영상</th><th>특이사항</th>
         </tr></thead>
         <tbody id="dailyRows"><tr><td colspan="12" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
+
+    <!-- 영상 상세 (제목 클릭 시) -->
+    <div id="videoDetail" style="display:none">
+      <h2>🎥 <span id="vd_title"></span> — 게시 후 추이
+        <button onclick="closeDetail()" style="margin-left:auto;background:#f2f4f6;color:#191f28;padding:6px 12px;font-size:13px;border-radius:9px">닫기</button>
+      </h2>
+      <div class="panel">
+        <div class="metric-tabs" id="vd_periodTabs"></div>
+        <div class="metric-tabs" id="vd_metricTabs"></div>
+        <div class="chart-box"><canvas id="vdChart"></canvas></div>
+        <div class="note">※ 노출수·CTR·시간단위(24시간) 추이는 유튜브 API로 제공되지 않아 제외됩니다(스튜디오 전용).</div>
+      </div>
+    </div>
 
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
       <select id="videoSort" style="margin-left:auto">
@@ -193,7 +206,7 @@
     let DAILY=[], VIDEOS=[], chart=null, growth=null, activeMetric=6, activeGrowth=6;
     const METRICS=[
       {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
-      {key:1,label:"구독자증감",color:"#3bce82",kpi:KPI.daily.subs},
+      {key:1,label:"구독자",color:"#3bce82",kpi:KPI.daily.subs},
       {key:3,label:"좋아요",color:"#f5c33b",kpi:0},
       {key:4,label:"댓글",color:"#a78bfa",kpi:0},
       {key:5,label:"공유",color:"#f56a7e",kpi:0},
@@ -224,6 +237,60 @@
       document.body.classList.add("player-open");
     }
     function closePlayer(){document.body.classList.remove("player-open");document.getElementById("ph_frame").innerHTML="";}
+
+    // ===== 영상 상세 시계열 (왼쪽 그래프) =====
+    const VD_PERIODS=[{k:7,label:"게시 후 7일"},{k:28,label:"게시 후 28일"},{k:99999,label:"전체"}];
+    const VD_METRICS=[
+      {k:"views",label:"조회수",color:"#3182f6",cum:true},
+      {k:"avp",label:"평균조회율",color:"#22c55e",cum:false},
+      {k:"eng",label:"참여(좋아요+댓글+공유)",color:"#f5c33b",cum:true},
+      {k:"subs",label:"구독자",color:"#a78bfa",cum:true},
+    ];
+    let vd={id:null,rows:[],period:7,metric:"views",chart:null};
+
+    function openVideo(id,title,upload){
+      openPlayer(id,title);   // 오른쪽 재생
+      openDetail(id,title,upload); // 왼쪽 그래프
+    }
+    async function openDetail(id,title,upload){
+      vd.id=id;
+      document.getElementById("vd_title").textContent=title;
+      const box=document.getElementById("videoDetail");
+      box.style.display="block"; box.scrollIntoView({behavior:"smooth",block:"center"});
+      try{
+        const r=await fetch("/api/video",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,start:upload})}).then(r=>r.json());
+        vd.rows=r.ok?(r.rows||[]):[];
+      }catch(_){ vd.rows=[]; }
+      buildVdTabs(); drawVd();
+    }
+    function closeDetail(){ document.getElementById("videoDetail").style.display="none"; if(vd.chart){vd.chart.destroy();vd.chart=null;} }
+    function buildVdTabs(){
+      const p=document.getElementById("vd_periodTabs");
+      p.innerHTML=VD_PERIODS.map(x=>`<div class="mt ${x.k===vd.period?'active':''}" data-k="${x.k}">${x.label}</div>`).join("");
+      p.querySelectorAll(".mt").forEach(el=>el.onclick=()=>{vd.period=Number(el.dataset.k);buildVdTabs();drawVd();});
+      const m=document.getElementById("vd_metricTabs");
+      m.innerHTML=VD_METRICS.map(x=>`<div class="mt ${x.k===vd.metric?'active':''}" data-k="${x.k}">${x.label}</div>`).join("");
+      m.querySelectorAll(".mt").forEach(el=>el.onclick=()=>{vd.metric=el.dataset.k;buildVdTabs();drawVd();});
+    }
+    function drawVd(){
+      const met=VD_METRICS.find(x=>x.k===vd.metric);
+      const rows=vd.rows.slice(0, vd.period===99999? vd.rows.length : vd.period);
+      const labels=rows.map((_,i)=>"D"+(i+1));
+      const valOf=(r)=> met.k==="eng"?(r.likes+r.comments+r.shares):met.k==="avp"?r.avp:met.k==="subs"?r.subs:r.views;
+      let data;
+      if(met.cum){ let run=0; data=rows.map(r=>{run+=valOf(r);return run;}); }
+      else data=rows.map(valOf);
+      if(vd.chart)vd.chart.destroy();
+      if(!rows.length){ return; }
+      vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",
+        data:{labels,datasets:[{label:met.label,data,borderColor:met.color,backgroundColor:met.color+"22",borderWidth:2.5,pointRadius:0,fill:met.cum,tension:.25}]},
+        options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+          plugins:{legend:{display:false},tooltip:{callbacks:{
+            title:(it)=>"게시 후 "+it[0].label.replace("D","")+"일",
+            label:(c)=>met.label+": "+(met.k==="avp"? c.parsed.y.toFixed(1)+"%": c.parsed.y.toLocaleString("ko-KR"))
+          }}},
+          scales:{x:{ticks:{color:"#8b95a1",autoSkip:true,maxTicksLimit:14},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
+    }
 
     function buildTabs(){
       const box=document.getElementById("metricTabs");
@@ -280,7 +347,7 @@
     }
 
     function renderDailyTable(){
-      document.getElementById("dailyKpiBadge").textContent=`KPI: 조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·구독 +${KPI.daily.subs}`;
+      document.getElementById("dailyKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·구독자 +${KPI.daily.subs}`;
       const el=document.getElementById("dailyRows");
       // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간 12특이사항
       const rows=sortRows(DAILY, document.getElementById("dailySort").value, 0);
@@ -301,7 +368,7 @@
       </tr>`).join("");
     }
     function renderVideos(){
-      document.getElementById("videoKpiBadge").textContent=`KPI: 조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·구독전환 ${KPI.video.subs}`;
+      document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·구독전환 ${KPI.video.subs}`;
       const el=document.getElementById("videoRows");
       // 영상 컬럼(A~V): 0ID 1업로드일 2형태 3타이틀 4길이 5노출수 6CTR 7평균조회율 8조회수 9좋아요 10댓글 11공유 12구독전환 ... 21특이사항
       const rows=sortRows(VIDEOS, document.getElementById("videoSort").value, 1);
@@ -309,7 +376,7 @@
       el.innerHTML=rows.map(x=>`<tr>
         <td>${x[1]??""}</td>
         <td>${x[2]??""}</td>
-        <td><span class="vtitle" onclick="openPlayer('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`)">${x[3]??""}</span></td>
+        <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td>${x[4]??""}</td>
         <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}">${x[5]?fmt(x[5]):"-"}</td>
         <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}">${x[6]?pctStr(x[6]):"-"}</td>

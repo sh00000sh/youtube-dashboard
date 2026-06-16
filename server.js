@@ -376,6 +376,34 @@ app.post("/api/sync", async (req, res) => {
   }
 });
 
+// 영상 하나의 "게시 후 일자별" 추이 (조회/좋아요/댓글/공유/구독/평균조회율)
+app.post("/api/video", async (req, res) => {
+  try {
+    const id = (req.body && req.body.id) || req.query.id;
+    const start = (req.body && req.body.start) || req.query.start || "2020-01-01";
+    if (!id) return res.status(400).json({ ok: false, error: "영상 id 없음" });
+    const auth = getOAuth();
+    const ya = google.youtubeAnalytics({ version: "v2", auth });
+    const r = await ya.reports.query({
+      ids: "channel==MINE",
+      filters: "video==" + id,
+      startDate: start,
+      endDate: ymd(new Date()),
+      dimensions: "day",
+      metrics: "views,likes,comments,shares,subscribersGained,averageViewPercentage",
+      sort: "day",
+    });
+    const rows = (r.data.rows || []).map((x) => ({
+      date: x[0], views: Number(x[1]||0), likes: Number(x[2]||0),
+      comments: Number(x[3]||0), shares: Number(x[4]||0),
+      subs: Number(x[5]||0), avp: Number(x[6]||0),
+    }));
+    res.json({ ok: true, rows });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/api/data", async (req, res) => {
   try {
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) {
