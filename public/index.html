@@ -41,6 +41,7 @@
     .dg{background:#3bce82}.dy{background:#f5c33b}.dr{background:#f56a7e}
 
     .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+    .cards5{grid-template-columns:repeat(5,1fr);}
     .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
     .card .label{font-size:12px;color:var(--sub);margin-bottom:7px;}
     .card .value{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;}
@@ -105,15 +106,19 @@
     </div>
 
     <h2>🚀 5/11 이후 누적 성장</h2>
-    <div class="cards">
+    <div class="cards cards5">
       <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div></div>
       <div class="card"><div class="label">구독자 순증</div><div class="value" id="cum_subs">-</div></div>
       <div class="card"><div class="label">누적 좋아요</div><div class="value" id="cum_likes">-</div></div>
-      <div class="card"><div class="label">누적 댓글+공유</div><div class="value" id="cum_eng">-</div></div>
+      <div class="card"><div class="label">누적 댓글</div><div class="value" id="cum_comments">-</div></div>
+      <div class="card"><div class="label">누적 공유</div><div class="value" id="cum_shares">-</div></div>
     </div>
 
-    <h2>📐 누적 성장 추이 <span class="kpi-badge">(점선 = 누적 KPI 목표선, 일 +500 기준)</span></h2>
-    <div class="panel"><div class="chart-box"><canvas id="growthChart"></canvas></div></div>
+    <h2>📐 누적 성장 추이 <span class="kpi-badge">(점선 = 누적 KPI 목표선)</span></h2>
+    <div class="panel">
+      <div class="metric-tabs" id="growthTabs"></div>
+      <div class="chart-box"><canvas id="growthChart"></canvas></div>
+    </div>
 
     <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span></h2>
     <div class="panel">
@@ -169,7 +174,11 @@
 
   <script>
     // ===== 설정 =====
-    const KPI = { daily:{views:500,avp:55,subs:1}, video:{views:1000,avp:50,subs:1} };
+    // impr=노출수, ctr=노출클릭률(%) KPI 추가
+    const KPI = {
+      daily:{ views:500, impr:400, ctr:5.5, avp:55, subs:1 },
+      video:{ views:1000, impr:300, ctr:5, avp:50, subs:1 },
+    };
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
     const SINCE = "26-05-11";
 
@@ -181,10 +190,18 @@
     const kCls=(a,t)=>{if(!t)return "";const r=a/t;return r>=1?"g":r>=0.5?"y":"r";};
     const eCls=(v)=>{v=N(v);return v>=ENG.green?"g":v>=ENG.yellow?"y":"r";};
 
-    let DAILY=[], VIDEOS=[], chart=null, growth=null, activeMetric=6;
+    let DAILY=[], VIDEOS=[], chart=null, growth=null, activeMetric=6, activeGrowth=6;
     const METRICS=[
       {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
       {key:1,label:"구독자증감",color:"#3bce82",kpi:KPI.daily.subs},
+      {key:3,label:"좋아요",color:"#f5c33b",kpi:0},
+      {key:4,label:"댓글",color:"#a78bfa",kpi:0},
+      {key:5,label:"공유",color:"#f56a7e",kpi:0},
+    ];
+    // 누적 그래프용 (점선 KPI는 일별 KPI가 있는 조회수·구독자만)
+    const GROWTH=[
+      {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
+      {key:1,label:"구독자",color:"#3bce82",kpi:KPI.daily.subs},
       {key:3,label:"좋아요",color:"#f5c33b",kpi:0},
       {key:4,label:"댓글",color:"#a78bfa",kpi:0},
       {key:5,label:"공유",color:"#f56a7e",kpi:0},
@@ -223,20 +240,29 @@
         plugins:{legend:{display:!!m.kpi,labels:{color:"#8b95a1",boxWidth:12}}},
         scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
     }
-    // 누적 성장 꺾은선 + 누적 KPI 점선
+    function buildGrowthTabs(){
+      const box=document.getElementById("growthTabs");
+      box.innerHTML=GROWTH.map(m=>`<div class="mt ${m.key===activeGrowth?'active':''}" data-k="${m.key}">${m.label}</div>`).join("");
+      box.querySelectorAll(".mt").forEach(el=>el.onclick=()=>{activeGrowth=Number(el.dataset.k);buildGrowthTabs();drawGrowth();});
+    }
+    // 누적 성장 꺾은선 (지표 선택형) + 누적 KPI 점선 + 호버 툴팁
     function drawGrowth(){
+      const m=GROWTH.find(x=>x.key===activeGrowth);
       const rows=DAILY.filter(r=>r[0]>=SINCE);
       const labels=rows.map(r=>r[0]);
-      let run=0; const actual=rows.map(r=>{run+=N(r[6]);return run;});         // 누적 조회수
-      const target=rows.map((_,i)=>KPI.daily.views*(i+1));                     // 누적 KPI (일 500 기준)
+      let run=0; const actual=rows.map(r=>{run+=N(r[m.key]);return run;});      // 선택 지표 누적
+      const datasets=[{label:"누적 "+m.label,data:actual,borderColor:m.color,backgroundColor:m.color+"22",borderWidth:2.5,pointRadius:0,fill:true,tension:.25}];
+      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:rows.map((_,i)=>m.kpi*(i+1)),borderColor:"#f56a7e",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false});
       if(growth)growth.destroy();
       growth=new Chart(document.getElementById("growthChart"),{type:"line",
-        data:{labels,datasets:[
-          {label:"누적 조회수",data:actual,borderColor:"#3182f6",backgroundColor:"rgba(49,130,246,.12)",borderWidth:2.5,pointRadius:0,fill:true,tension:.25},
-          {label:"누적 KPI 목표",data:target,borderColor:"#f56a7e",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false}
-        ]},
+        data:{labels,datasets},
         options:{responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{labels:{color:"#8b95a1",boxWidth:12}}},
+          interaction:{mode:"index",intersect:false},
+          plugins:{legend:{labels:{color:"#8b95a1",boxWidth:12}},
+            tooltip:{enabled:true,callbacks:{
+              title:(items)=>items[0].label+" 까지 누적",
+              label:(c)=>c.dataset.label+": "+c.parsed.y.toLocaleString("ko-KR")
+            }}},
           scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
     }
     function renderCumulative(){
@@ -244,7 +270,8 @@
       document.getElementById("cum_views").textContent=fmt(sum(6));
       const s=sum(1); document.getElementById("cum_subs").textContent=(s>0?"+":"")+fmt(s);
       document.getElementById("cum_likes").textContent=fmt(sum(3));
-      document.getElementById("cum_eng").textContent=fmt(sum(4)+sum(5));
+      document.getElementById("cum_comments").textContent=fmt(sum(4));
+      document.getElementById("cum_shares").textContent=fmt(sum(5));
     }
 
     function sortRows(rows, val, dateIdx){
@@ -261,8 +288,8 @@
       el.innerHTML=rows.map(x=>`<tr>
         <td>${x[0]??""}</td>
         <td class="${kCls(N(x[1]),KPI.daily.subs)}">${fmt(x[1])}</td>
-        <td>${x[7]?fmt(x[7]):"-"}</td>
-        <td>${x[8]?pctStr(x[8]):"-"}</td>
+        <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}">${x[7]?fmt(x[7]):"-"}</td>
+        <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}">${x[8]?pctStr(x[8]):"-"}</td>
         <td class="${kCls(N(x[6]),KPI.daily.views)}">${fmt(x[6])}</td>
         <td class="${kCls(toPctNum(x[9]),KPI.daily.avp)}">${pctStr(x[9])}</td>
         <td>${x[11]??"-"}</td>
@@ -284,8 +311,8 @@
         <td>${x[2]??""}</td>
         <td><span class="vtitle" onclick="openPlayer('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`)">${x[3]??""}</span></td>
         <td>${x[4]??""}</td>
-        <td>${x[5]?fmt(x[5]):"-"}</td>
-        <td>${x[6]?pctStr(x[6]):"-"}</td>
+        <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}">${x[5]?fmt(x[5]):"-"}</td>
+        <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}">${x[6]?pctStr(x[6]):"-"}</td>
         <td class="${kCls(toPctNum(x[7]),KPI.video.avp)}">${pctStr(x[7])}</td>
         <td class="${kCls(N(x[8]),KPI.video.views)}">${fmt(x[8])}</td>
         <td class="${eCls(x[9])}">${fmt(x[9])}</td>
@@ -302,7 +329,7 @@
       renderChannel(r.channel);
       DAILY=(r.daily||[]).filter(x=>x[0]&&N(x[6])>0).sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0));
       VIDEOS=(r.videos||[]).filter(x=>x[3]&&x[3]!==x[0]);
-      buildTabs();drawChart();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
+      buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
     }
     async function sync(){
       const btn=document.getElementById("syncBtn"),st=document.getElementById("status");
