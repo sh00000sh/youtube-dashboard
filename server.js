@@ -313,6 +313,7 @@ async function readForDashboard(sheets) {
 // ===================================================================
 
 app.post("/api/sync", async (req, res) => {
+  let step = "초기화";
   try {
     const missing = [];
     if (!OAUTH_CLIENT_ID) missing.push("OAUTH_CLIENT_ID");
@@ -328,20 +329,25 @@ app.post("/api/sync", async (req, res) => {
     const sheets = getSheetsClient();
 
     // 1) 채널 일별
+    step = "채널분석(Analytics)";
     const daily = await fetchChannelDaily(auth);
 
     // 2) 영상별
+    step = "영상분석(Analytics)";
     const vids = await fetchVideoAnalytics(auth);
+    step = "영상정보(Data API)";
     const meta = await fetchVideoMeta(vids.map((v) => v.video_id));
     const uploadsPerDay = await fetchUploadsPerDay(Object.values(meta));
 
     // 3) 시트에 쓰기
+    step = "시트쓰기(일별)";
     const dCount = await writeDaily(sheets, daily, uploadsPerDay);
+    step = "시트쓰기(영상별)";
     const vCount = await writeVideos(sheets, vids, meta);
 
     res.json({ ok: true, dailyRows: dCount, videoRows: vCount });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: `[${step}] ${e.message}` });
   }
 });
 
