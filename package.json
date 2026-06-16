@@ -1,0 +1,16 @@
+{
+  "name": "youtube-dashboard",
+  "version": "1.0.0",
+  "description": "유튜브 인게이지먼트 동기화 대시보드",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5"
+  }
+}
