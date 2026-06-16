@@ -146,19 +146,6 @@
       </table>
     </div></div>
 
-    <!-- 영상 상세 (제목 클릭 시) -->
-    <div id="videoDetail" style="display:none">
-      <h2>🎥 <span id="vd_title"></span> — 게시 후 추이
-        <button onclick="closeDetail()" style="margin-left:auto;background:#f2f4f6;color:#191f28;padding:6px 12px;font-size:13px;border-radius:9px">닫기</button>
-      </h2>
-      <div class="panel">
-        <div class="metric-tabs" id="vd_periodTabs"></div>
-        <div class="metric-tabs" id="vd_metricTabs"></div>
-        <div class="chart-box"><canvas id="vdChart"></canvas></div>
-        <div class="note">※ 노출수·CTR·시간단위(24시간) 추이는 유튜브 API로 제공되지 않아 제외됩니다(스튜디오 전용).</div>
-      </div>
-    </div>
-
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
       <select id="videoSort" style="margin-left:auto">
         <option value="date">업로드 최신순</option>
@@ -178,6 +165,16 @@
         <tbody id="videoRows"><tr><td colspan="13" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
+
+    <!-- 영상별 게시 후 추이 (드롭다운으로 영상 선택) -->
+    <h2>📉 영상별 게시 후 추이</h2>
+    <div class="panel">
+      <div style="margin-bottom:12px"><select id="vd_select" style="width:100%;max-width:560px"><option value="">영상을 선택하세요</option></select></div>
+      <div class="metric-tabs" id="vd_periodTabs"></div>
+      <div class="metric-tabs" id="vd_metricTabs"></div>
+      <div class="chart-box"><canvas id="vdChart"></canvas></div>
+      <div class="note">※ 노출수·CTR·시간단위(24시간) 추이는 유튜브 API로 제공되지 않습니다(스튜디오 전용). 24시간은 업로드 후 로봇이 쌓은 스냅샷이 있을 때만 표시됩니다.</div>
+    </div>
   </div>
 
   <div id="player">
@@ -246,17 +243,16 @@
       {k:"eng",label:"참여(좋아요+댓글+공유)",color:"#f5c33b",cum:true},
       {k:"subs",label:"구독자",color:"#a78bfa",cum:true},
     ];
-    let vd={id:null,rows:[],hourly:[],period:24,metric:"views",chart:null};
+    let vd={id:null,rows:[],hourly:[],period:99999,metric:"views",chart:null};
 
+    // 제목 클릭 → 재생 + 드롭다운도 그 영상으로 맞춰 추이 표시
     function openVideo(id,title,upload){
-      openPlayer(id,title);   // 오른쪽 재생
-      openDetail(id,title,upload); // 왼쪽 그래프
+      openPlayer(id,title);
+      document.getElementById("vd_select").value=id+"|"+(upload||"");
+      openDetail(id,title,upload);
     }
     async function openDetail(id,title,upload){
       vd.id=id;
-      document.getElementById("vd_title").textContent=title;
-      const box=document.getElementById("videoDetail");
-      box.style.display="block"; box.scrollIntoView({behavior:"smooth",block:"center"});
       try{
         const [r,h]=await Promise.all([
           fetch("/api/video",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,start:upload})}).then(r=>r.json()),
@@ -422,7 +418,21 @@
       DAILY=(r.daily||[]).filter(x=>x[0]&&N(x[6])>0).sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0));
       VIDEOS=(r.videos||[]).filter(x=>x[3]&&x[3]!==x[0]);
       buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
+      populateVideoSelect();
     }
+    // 추이 영상 선택 드롭다운 채우기 (업로드 최신순)
+    function populateVideoSelect(){
+      const sel=document.getElementById("vd_select");
+      const list=[...VIDEOS].sort((a,b)=>(a[1]<b[1]?1:a[1]>b[1]?-1:0));
+      sel.innerHTML='<option value="">영상을 선택하세요</option>'+
+        list.map(v=>`<option value="${v[0]}|${v[1]||''}">${(v[3]||'').replace(/"/g,'')}</option>`).join("");
+    }
+    document.getElementById("vd_select").onchange=function(){
+      if(!this.value)return;
+      const [id,upload]=this.value.split("|");
+      const v=VIDEOS.find(x=>x[0]===id);
+      openDetail(id, v?v[3]:"", upload);
+    };
     async function sync(){
       const btn=document.getElementById("syncBtn"),st=document.getElementById("status");
       btn.disabled=true; st.textContent="동기화 중... (유튜브→시트, 10~30초)";
