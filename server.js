@@ -149,6 +149,27 @@ async function fetchVideoAnalytics(auth) {
   }));
 }
 
+// 채널 정보 (배너/이름/구독자/누적조회수) — Data API, 공개 정보
+async function fetchChannelInfo() {
+  if (!CHANNEL_ID || !YOUTUBE_API_KEY) return null;
+  const url =
+    "https://www.googleapis.com/youtube/v3/channels" +
+    "?part=snippet,statistics,brandingSettings&id=" + CHANNEL_ID +
+    "&key=" + YOUTUBE_API_KEY;
+  const data = await (await fetch(url)).json();
+  if (data.error) throw new Error(data.error.message);
+  const it = (data.items || [])[0];
+  if (!it) return null;
+  return {
+    title: it.snippet.title,
+    avatar: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url || "",
+    banner: it.brandingSettings?.image?.bannerExternalUrl || "",
+    subscribers: Number(it.statistics.subscriberCount || 0),
+    totalViews: Number(it.statistics.viewCount || 0),
+    url: "https://www.youtube.com/channel/" + it.id,
+  };
+}
+
 // 영상 제목/길이/업로드일 보충 (Data API)
 async function fetchVideoMeta(ids) {
   const out = {};
@@ -264,7 +285,11 @@ async function writeVideos(sheets, videos, meta) {
     let row = map[title];
     if (!row) { row = appendRow++; }
 
-    // B,D,E 채움 (C 형태는 안 건드림)
+    // A: 영상ID (재생용, 보통 숨겨두는 열), B: 업로드일
+    updates.push({
+      range: `${VIDEO_TAB}!A${row}`,
+      values: [[v.video_id]],
+    });
     updates.push({
       range: `${VIDEO_TAB}!B${row}`,
       values: [[m.publishedAt || ""]],
@@ -300,7 +325,7 @@ async function writeVideos(sheets, videos, meta) {
 async function readForDashboard(sheets) {
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: SHEET_ID,
-    ranges: [`${DAILY_TAB}!B${DAILY_FIRST_ROW}:N`, `${VIDEO_TAB}!B${VIDEO_FIRST_ROW}:M`],
+    ranges: [`${DAILY_TAB}!B${DAILY_FIRST_ROW}:N`, `${VIDEO_TAB}!A${VIDEO_FIRST_ROW}:M`],
   });
   return {
     daily: res.data.valueRanges?.[0]?.values || [],
@@ -358,7 +383,9 @@ app.get("/api/data", async (req, res) => {
     }
     const sheets = getSheetsClient();
     const data = await readForDashboard(sheets);
-    res.json({ ok: true, ...data });
+    let channel = null;
+    try { channel = await fetchChannelInfo(); } catch (_) {}
+    res.json({ ok: true, channel, ...data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
