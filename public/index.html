@@ -4,38 +4,84 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>유튜브 인게이지먼트 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system,"Segoe UI","Malgun Gothic",sans-serif; background:#0f1117; color:#e6e8ee; padding:28px; }
-    .wrap { max-width: 1100px; margin: 0 auto; }
-    h1 { font-size: 22px; margin-bottom: 4px; }
-    .sub { color:#8b90a0; font-size:13px; margin-bottom:20px; }
-    .bar { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,"Segoe UI","Malgun Gothic",sans-serif; background:#0f1117; color:#e6e8ee; padding:28px; }
+    .wrap { max-width:1140px; margin:0 auto; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .sub { color:#8b90a0; font-size:13px; margin-bottom:18px; }
+    .bar { display:flex; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
     button { background:#ff0033; color:#fff; border:0; padding:11px 18px; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; }
     button:disabled { opacity:.5; cursor:wait; }
     .status { font-size:13px; color:#8b90a0; }
-    h2 { font-size:15px; color:#aab; margin:24px 0 10px; }
+    h2 { font-size:15px; color:#aab; margin:26px 0 12px; display:flex; align-items:center; gap:10px; }
+    .kpi-badge { font-size:11px; color:#8b90a0; font-weight:400; }
+
+    .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .card { background:#171a23; border:1px solid #242838; border-radius:12px; padding:16px 18px; }
+    .card .label { font-size:12px; color:#8b90a0; margin-bottom:6px; }
+    .card .value { font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; }
+
+    .legend { display:flex; gap:14px; font-size:12px; color:#8b90a0; margin:10px 0 0; }
+    .legend span { display:inline-flex; align-items:center; gap:5px; }
+    .dot { width:10px; height:10px; border-radius:3px; display:inline-block; }
+    .dg{background:#1f7a4d} .dy{background:#8a6d1f} .dr{background:#8a2f2f}
+
+    .panel { background:#171a23; border:1px solid #242838; border-radius:14px; padding:18px; }
+    .metric-tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+    .mt { background:#1e2231; color:#aab; border:1px solid #2a2f42; padding:7px 13px; border-radius:8px; font-size:13px; cursor:pointer; }
+    .mt.active { background:#ff0033; color:#fff; border-color:#ff0033; }
+    .chart-box { height:300px; }
+
     table { width:100%; border-collapse:collapse; background:#171a23; border-radius:12px; overflow:hidden; font-size:13px; }
-    th,td { padding:10px 12px; text-align:right; border-bottom:1px solid #242838; white-space:nowrap; }
+    th,td { padding:9px 12px; text-align:right; border-bottom:1px solid #242838; white-space:nowrap; }
     th:first-child,td:first-child { text-align:left; }
     th { background:#1e2231; color:#aab; font-size:11px; position:sticky; top:0; }
     tr:last-child td { border-bottom:0; }
     .scroll { max-height:360px; overflow:auto; border-radius:12px; }
     .empty { padding:30px; text-align:center; color:#8b90a0; }
     .note { font-size:12px; color:#6b7080; margin-top:6px; }
+    .title-cell { text-align:left; max-width:300px; overflow:hidden; text-overflow:ellipsis; }
+    /* KPI 색칠 */
+    td.g { background:rgba(31,122,77,.28); color:#7ee2a8; font-weight:700; }
+    td.y { background:rgba(138,109,31,.28); color:#f0d98a; font-weight:700; }
+    td.r { background:rgba(138,47,47,.28); color:#f5a3a3; font-weight:700; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>⚡ 유튜브 인게이지먼트 대시보드</h1>
-    <div class="sub">동기화를 누르면 유튜브에서 숫자를 가져와 구글 시트에 기록하고, 아래에 보여줍니다.</div>
+    <div class="sub">동기화 → 구글 시트 → 이 화면. 색은 KPI 대비 달성률입니다.</div>
 
     <div class="bar">
       <button id="syncBtn" onclick="sync()">🔄 동기화</button>
       <span class="status" id="status">-</span>
     </div>
+    <div class="legend">
+      <span><i class="dot dg"></i>KPI 100%+ (달성)</span>
+      <span><i class="dot dy"></i>50~100% (미달)</span>
+      <span><i class="dot dr"></i>50% 미만 (완전미달)</span>
+    </div>
 
-    <h2>📅 채널 일별</h2>
+    <!-- 5/11 이후 누적 -->
+    <h2>🚀 5/11 이후 누적 성장</h2>
+    <div class="cards" id="cumCards">
+      <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div></div>
+      <div class="card"><div class="label">구독자 순증</div><div class="value" id="cum_subs">-</div></div>
+      <div class="card"><div class="label">누적 좋아요</div><div class="value" id="cum_likes">-</div></div>
+      <div class="card"><div class="label">누적 댓글+공유</div><div class="value" id="cum_eng">-</div></div>
+    </div>
+
+    <!-- 차트 -->
+    <h2>📈 채널 일별 추이 <span class="kpi-badge">(KPI 점선 = 목표)</span></h2>
+    <div class="panel">
+      <div class="metric-tabs" id="metricTabs"></div>
+      <div class="chart-box"><canvas id="chart"></canvas></div>
+    </div>
+
+    <!-- 일별 표 -->
+    <h2>📅 일별 상세 (최신순) <span class="kpi-badge" id="dailyKpiBadge"></span></h2>
     <div class="scroll">
       <table>
         <thead><tr>
@@ -45,9 +91,10 @@
         <tbody id="dailyRows"><tr><td colspan="9" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div>
-    <div class="note">※ 노출수·노출클릭률(CTR)은 유튜브 스튜디오 전용이라 자동 수집되지 않습니다(수동 입력).</div>
+    <div class="note">※ 노출수·CTR은 유튜브 스튜디오 전용이라 자동 수집되지 않습니다(수동 입력).</div>
 
-    <h2>🎬 영상별</h2>
+    <!-- 영상별 -->
+    <h2>🎬 영상별 (조회수순) <span class="kpi-badge" id="videoKpiBadge"></span></h2>
     <div class="scroll">
       <table>
         <thead><tr>
@@ -60,42 +107,119 @@
   </div>
 
   <script>
-    const num = (n) => { const x = Number(String(n).replace(/[^0-9.-]/g,"")); return isNaN(x)? (n??"-") : x.toLocaleString("ko-KR"); };
-    const pct = (n) => { const x = Number(String(n).replace(/[^0-9.]/g,"")); if(isNaN(x)) return n??"-"; return (x<=1? (x*100).toFixed(1): x.toFixed(1))+"%"; };
+    // ===== KPI 기준 (여기 숫자만 바꾸면 색 기준이 바뀜) =====
+    const KPI = {
+      daily: { views: 500, avp: 55, subs: 1 },   // 일별: 조회수 / 평균조회율(%) / 구독자증감
+      video: { views: 1000, avp: 50, subs: 1 },  // 영상: 조회수 / 평균조회율(%) / 구독전환
+    };
+    const SINCE = "26-05-11";  // 이 날짜(포함) 이후 누적 집계
 
-    function renderDaily(rows) {
-      const el = document.getElementById("dailyRows");
-      // 최신이 아래쪽이므로 역순 표시
-      const r = [...rows].reverse().filter(x=>x[0]);
-      if (!r.length) { el.innerHTML='<tr><td colspan="9" class="empty">데이터 없음</td></tr>'; return; }
-      // 컬럼: 0날짜 1구독자 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간
-      el.innerHTML = r.map(x=>`<tr>
-        <td>${x[0]??""}</td><td>${num(x[1])}</td><td>${num(x[2])}</td><td>${num(x[3])}</td>
-        <td>${num(x[4])}</td><td>${num(x[5])}</td><td>${num(x[6])}</td><td>${pct(x[9])}</td><td>${x[11]??"-"}</td>
-      </tr>`).join("");
+    // ===== 유틸 =====
+    const N = (n) => { const x = Number(String(n??"").replace(/[^0-9.-]/g,"")); return isNaN(x)?0:x; };
+    const fmt = (n) => N(n).toLocaleString("ko-KR");
+    const toPctNum = (n) => { const x=N(n); return x<=1? x*100 : x; };       // 0.65/65% → 65
+    const pctStr = (n) => toPctNum(n).toFixed(1)+"%";
+    // KPI 색 클래스
+    const cls = (actual, target) => { if(!target) return ""; const r=actual/target; return r>=1?"g":r>=0.5?"y":"r"; };
+
+    let DAILY = [];
+    let chart = null, activeMetric = 6;
+    // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간
+    const METRICS = [
+      { key:6, label:"조회수", color:"#ff0033", kpi:KPI.daily.views },
+      { key:1, label:"구독자증감", color:"#4ade80", kpi:KPI.daily.subs },
+      { key:3, label:"좋아요", color:"#60a5fa", kpi:0 },
+      { key:4, label:"댓글", color:"#fbbf24", kpi:0 },
+      { key:5, label:"공유", color:"#a78bfa", kpi:0 },
+    ];
+
+    function buildTabs() {
+      const box = document.getElementById("metricTabs");
+      box.innerHTML = METRICS.map(m=>`<div class="mt ${m.key===activeMetric?'active':''}" data-k="${m.key}">${m.label}</div>`).join("");
+      box.querySelectorAll(".mt").forEach(el=>el.onclick=()=>{activeMetric=Number(el.dataset.k);buildTabs();drawChart();});
     }
+
+    function drawChart() {
+      const m = METRICS.find(x=>x.key===activeMetric);
+      const labels = DAILY.map(r=>r[0]);
+      const data = DAILY.map(r=>N(r[m.key]));
+      const ds = [{ type:"bar", label:m.label, data, backgroundColor:m.color, borderRadius:4, maxBarThickness:34 }];
+      if (m.kpi) ds.push({ type:"line", label:"KPI", data:labels.map(()=>m.kpi), borderColor:"#fff", borderDash:[6,5], borderWidth:1.5, pointRadius:0, fill:false });
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("chart"), {
+        data:{ labels, datasets:ds },
+        options:{ responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{display:!!m.kpi, labels:{color:"#8b90a0",boxWidth:12}} },
+          scales:{ x:{ticks:{color:"#8b90a0",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},
+                   y:{ticks:{color:"#8b90a0"},grid:{color:"#242838"}} } }
+      });
+    }
+
+    function renderCumulative() {
+      const rows = DAILY.filter(r => r[0] >= SINCE);
+      const sum = (i)=> rows.reduce((a,r)=>a+N(r[i]),0);
+      document.getElementById("cum_views").textContent = fmt(sum(6));
+      const subs = sum(1); document.getElementById("cum_subs").textContent = (subs>0?"+":"")+fmt(subs);
+      document.getElementById("cum_likes").textContent = fmt(sum(3));
+      document.getElementById("cum_eng").textContent = fmt(sum(4)+sum(5));
+    }
+
+    function renderDailyTable() {
+      const el = document.getElementById("dailyRows");
+      document.getElementById("dailyKpiBadge").textContent = `KPI: 조회수 ${fmt(KPI.daily.views)} · 평균조회율 ${KPI.daily.avp}% · 구독 +${KPI.daily.subs}`;
+      const rows = [...DAILY].reverse();
+      if (!rows.length) { el.innerHTML='<tr><td colspan="9" class="empty">데이터 없음</td></tr>'; return; }
+      el.innerHTML = rows.map(x=>{
+        const subCls = cls(N(x[1]), KPI.daily.subs);
+        const viewCls = cls(N(x[6]), KPI.daily.views);
+        const avpCls = cls(toPctNum(x[9]), KPI.daily.avp);
+        return `<tr>
+          <td>${x[0]??""}</td>
+          <td class="${subCls}">${fmt(x[1])}</td>
+          <td>${fmt(x[2])}</td><td>${fmt(x[3])}</td><td>${fmt(x[4])}</td><td>${fmt(x[5])}</td>
+          <td class="${viewCls}">${fmt(x[6])}</td>
+          <td class="${avpCls}">${pctStr(x[9])}</td>
+          <td>${x[11]??"-"}</td>
+        </tr>`;
+      }).join("");
+    }
+
     function renderVideos(rows) {
       const el = document.getElementById("videoRows");
-      const r = rows.filter(x=>x[2]); // 타이틀 있는 것만 (D열=index2)
+      document.getElementById("videoKpiBadge").textContent = `KPI: 조회수 ${fmt(KPI.video.views)} · 평균조회율 ${KPI.video.avp}% · 구독전환 ${KPI.video.subs}`;
+      // 영상 컬럼: 0업로드일 1형태 2타이틀 3길이 4노출수 5CTR 6평균조회율 7조회수 8좋아요 9댓글 10공유 11구독전환
+      const r = rows.filter(x=>x[2]);
       if (!r.length) { el.innerHTML='<tr><td colspan="9" class="empty">데이터 없음</td></tr>'; return; }
-      // 컬럼: 0업로드일 1형태 2타이틀 3길이 4노출수 5CTR 6평균조회율 7조회수 8좋아요 9댓글 10공유 11구독전환
-      el.innerHTML = r.map(x=>`<tr>
-        <td>${x[0]??""}</td><td style="text-align:left;max-width:320px;overflow:hidden;text-overflow:ellipsis">${x[2]??""}</td>
-        <td>${x[3]??""}</td><td>${pct(x[6])}</td><td>${num(x[7])}</td>
-        <td>${num(x[8])}</td><td>${num(x[9])}</td><td>${num(x[10])}</td><td>${num(x[11])}</td>
-      </tr>`).join("");
+      el.innerHTML = r.map(x=>{
+        const avpCls = cls(toPctNum(x[6]), KPI.video.avp);
+        const viewCls = cls(N(x[7]), KPI.video.views);
+        const subCls = cls(N(x[11]), KPI.video.subs);
+        return `<tr>
+          <td>${x[0]??""}</td><td class="title-cell">${x[2]??""}</td><td>${x[3]??""}</td>
+          <td class="${avpCls}">${pctStr(x[6])}</td>
+          <td class="${viewCls}">${fmt(x[7])}</td>
+          <td>${fmt(x[8])}</td><td>${fmt(x[9])}</td><td>${fmt(x[10])}</td>
+          <td class="${subCls}">${fmt(x[11])}</td>
+        </tr>`;
+      }).join("");
     }
 
     async function load() {
       const r = await fetch("/api/data").then(r=>r.json());
-      if (r.ok) { renderDaily(r.daily||[]); renderVideos(r.videos||[]); }
+      if (!r.ok) return;
+      DAILY = (r.daily||[])
+        .filter(x => x[0] && N(x[6])>0)               // 빈 템플릿 행 제거
+        .sort((a,b)=> (a[0]<b[0]?-1:a[0]>b[0]?1:0));  // 날짜 오름차순
+      buildTabs(); drawChart(); renderCumulative(); renderDailyTable();
+      renderVideos(r.videos||[]);
     }
+
     async function sync() {
       const btn=document.getElementById("syncBtn"), st=document.getElementById("status");
-      btn.disabled=true; st.textContent="동기화 중... (유튜브→시트, 10~30초 걸릴 수 있어요)";
+      btn.disabled=true; st.textContent="동기화 중... (유튜브→시트, 10~30초)";
       try {
         const r = await fetch("/api/sync",{method:"POST"}).then(r=>r.json());
-        if (r.ok) { st.textContent=`✅ 완료: 일별 ${r.dailyRows}일, 영상 ${r.videoRows}개 기록 (${new Date().toLocaleString("ko-KR")})`; await load(); }
+        if (r.ok) { st.textContent=`✅ 완료: 일별 ${r.dailyRows}일, 영상 ${r.videoRows}개 (${new Date().toLocaleString("ko-KR")})`; await load(); }
         else st.textContent="❌ 오류: "+r.error;
       } catch(e){ st.textContent="❌ 오류: "+e.message; }
       finally { btn.disabled=false; }
