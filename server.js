@@ -325,7 +325,7 @@ async function writeVideos(sheets, videos, meta) {
 async function readForDashboard(sheets) {
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: SHEET_ID,
-    ranges: [`${DAILY_TAB}!B${DAILY_FIRST_ROW}:N`, `${VIDEO_TAB}!A${VIDEO_FIRST_ROW}:M`],
+    ranges: [`${DAILY_TAB}!B${DAILY_FIRST_ROW}:N`, `${VIDEO_TAB}!A${VIDEO_FIRST_ROW}:V`],
   });
   return {
     daily: res.data.valueRanges?.[0]?.values || [],
