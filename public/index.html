@@ -170,7 +170,7 @@
       .channel .info{padding:14px 16px;gap:12px;flex-wrap:wrap;}
       .channel .avatar{width:56px;height:56px;}
       .channel .name{font-size:19px;}
-      .channel .substat{font-size:13px;}
+      .channel .substat{font-size:11.5px;line-height:1.5;margin-top:4px;}   /* ③ 더 작게·두 줄(마크업 <br>) */
       .channel .dday{font-size:22px;}
       /* KPI 게이지: 고정폭 제거 */
       .gauge-row{gap:8px;}
@@ -180,7 +180,7 @@
       .chart-box{height:240px;}
       .panel{padding:14px;border-radius:16px;}
       /* ④ 표: 셀 축소 + 헤더 첫 줄(thead) 고정 + 첫 열(기준열) 고정 */
-      .scroll{max-height:340px;-webkit-overflow-scrolling:touch;}
+      .scroll{max-height:340px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}  /* ④ 대각선 스크롤 튐 방지 */
       th,td{padding:9px 7px;font-size:11.5px;}
       th{font-size:10px;z-index:2;}
       .vtitle{max-width:130px;}
@@ -192,6 +192,13 @@
       tbody tr:hover td:first-child{background:var(--hover);}
       /* ⑤ 제목 옆 드롭다운: 우측밀기 해제하고 일정 간격으로 정렬 */
       h2 select{margin-left:0!important;font-size:12px;padding:5px 8px;}
+      /* ② 파란 액션 버튼(동기화·비교·저장) 크기 통일 + 더 작게 */
+      #syncBtn,#cmpBtn,#adminPanel button{padding:7px 13px!important;font-size:12.5px!important;border-radius:10px!important;}
+      /* ⑤ KPI 달성률 안의 작은 글씨 모두 더 작게 */
+      .kpi-badge{font-size:10px;}
+      #sec-kpi .card .label{font-size:10.5px;}
+      #sec-kpi .card .note{font-size:10px;line-height:1.4;}
+      #sec-kpi .gauge-row .gl,#sec-kpi .gauge-row .gv{font-size:11px;}
       /* 영상 재생 패널: 전체화면, 본문 밀지 않음 */
       #player{width:100vw;right:-100vw;}
       body.player-open .wrap{margin-right:0;}
@@ -220,7 +227,7 @@
       <button id="adminBtn" onclick="toggleAdmin()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🔒 관리자</button>
       <button id="themeBtn" onclick="toggleTheme()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🌙 다크</button>
     </div>
-    <div class="desc" style="margin-top:-10px">채널 성과를 한곳에서 봐요. 동기화를 누르면 유튜브에서 최신 숫자를 가져와 새로고침돼요.</div>
+    <div class="desc" style="margin-top:-10px">채널 성과를 한곳에서 봐요.<br>동기화를 누르면 유튜브에서 최신 숫자를 가져와 새로고침돼요.</div>
 
     <div class="bar" style="margin:6px 0 18px">
       <button id="syncBtn" onclick="sync()">🔄 동기화</button>
@@ -581,7 +588,7 @@
       }
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
-      document.getElementById("ch_stat").innerHTML=`구독자 <b>${fmt(c.subscribers)}명</b> · 전체 누적 조회수 <b>${fmt(c.totalViews)}회</b>`;
+      document.getElementById("ch_stat").innerHTML=`구독자 ${fmt(c.subscribers)}명<br>전체 누적 조회수 ${fmt(c.totalViews)}회`;
       // 본격 업로드(6/1) 후 운영일 D+NN
       const days=Math.floor((Date.now()-new Date("2026-06-01").getTime())/86400000);
       document.getElementById("ddayBadge").textContent="D+"+Math.max(0,days);
