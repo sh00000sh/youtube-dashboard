@@ -105,7 +105,7 @@
       <span><i class="dot dr"></i>50%미만 / 참여 10미만</span>
     </div>
 
-    <h2>🚀 5/11 이후 누적 성장</h2>
+    <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">5/11 이후 누적 성장</span></h2>
     <div class="cards cards5">
       <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div></div>
       <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div></div>
@@ -129,11 +129,17 @@
     <h2>📅 일별 상세 <span class="kpi-badge" id="dailyKpiBadge"></span>
       <select id="dailySort" style="margin-left:auto">
         <option value="date">날짜 최신순</option>
+        <option value="date_asc">날짜 오래된순</option>
         <option value="6">조회수 높은순</option>
+        <option value="6_asc">조회수 낮은순</option>
         <option value="1">구독자 높은순</option>
+        <option value="1_asc">구독자 낮은순</option>
         <option value="3">좋아요 높은순</option>
+        <option value="3_asc">좋아요 낮은순</option>
         <option value="4">댓글 높은순</option>
+        <option value="4_asc">댓글 낮은순</option>
         <option value="5">공유 높은순</option>
+        <option value="5_asc">공유 낮은순</option>
       </select>
     </h2>
     <div class="tbl-wrap"><div class="scroll">
@@ -154,11 +160,17 @@
       </select>
       <select id="videoSort">
         <option value="date">업로드 최신순</option>
+        <option value="date_asc">업로드 오래된순</option>
         <option value="8">조회수 높은순</option>
+        <option value="8_asc">조회수 낮은순</option>
         <option value="9">좋아요 높은순</option>
+        <option value="9_asc">좋아요 낮은순</option>
         <option value="10">댓글 높은순</option>
+        <option value="10_asc">댓글 낮은순</option>
         <option value="11">공유 높은순</option>
+        <option value="11_asc">공유 낮은순</option>
         <option value="12">구독전환 높은순</option>
+        <option value="12_asc">구독전환 낮은순</option>
       </select>
     </h2>
     <div class="tbl-wrap"><div class="scroll">
@@ -360,6 +372,8 @@
           scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
     }
     function renderCumulative(){
+      const now=new Date();
+      document.getElementById("cumDate").textContent=`${now.getFullYear()}.${now.getMonth()+1}.${now.getDate()} 기준`;
       const rows=DAILY.filter(r=>r[0]>=SINCE); const sum=(i)=>rows.reduce((a,r)=>a+N(r[i]),0);
       document.getElementById("cum_views").textContent=fmt(sum(6));
       const s=sum(1); document.getElementById("cum_subs").textContent=(s>0?"+":"")+fmt(s);
@@ -369,8 +383,10 @@
     }
 
     function sortRows(rows, val, dateIdx){
-      if(val==="date") return [...rows].sort((a,b)=>(a[dateIdx]<b[dateIdx]?1:a[dateIdx]>b[dateIdx]?-1:0));
-      const i=Number(val); return [...rows].sort((a,b)=>N(b[i])-N(a[i]));
+      if(val==="date") return [...rows].sort((a,b)=>(a[dateIdx]<b[dateIdx]?1:a[dateIdx]>b[dateIdx]?-1:0));   // 최신순
+      if(val==="date_asc") return [...rows].sort((a,b)=>(a[dateIdx]<b[dateIdx]?-1:a[dateIdx]>b[dateIdx]?1:0)); // 오래된순
+      if(val.endsWith("_asc")){ const i=Number(val.replace("_asc","")); return [...rows].sort((a,b)=>N(a[i])-N(b[i])); } // 낮은순
+      const i=Number(val); return [...rows].sort((a,b)=>N(b[i])-N(a[i]));  // 높은순
     }
 
     function renderDailyTable(){
