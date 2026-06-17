@@ -407,6 +407,22 @@
     <div class="frame" id="ph_frame"></div>
   </div>
 
+  <!-- 🔒 관리자 로그인 모달 -->
+  <div id="pwModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);align-items:center;justify-content:center" onclick="if(event.target===this)closePwModal()">
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:24px;width:min(340px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.35)">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">🔒 관리자 로그인</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">관리자 비밀번호를 입력하세요.</div>
+      <input id="pwInput" type="password" autocomplete="current-password" placeholder="비밀번호"
+        onkeydown="if(event.key==='Enter')submitPw();if(event.key==='Escape')closePwModal();"
+        style="width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--chip);color:var(--text);font-size:15px">
+      <div id="pwErr" style="display:none;color:#e5484d;font-size:13px;margin-top:8px"></div>
+      <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+        <button onclick="closePwModal()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:9px 16px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">취소</button>
+        <button id="pwSubmit" onclick="submitPw()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">확인</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ===== 설정 =====
     // impr=노출수, ctr=노출클릭률(%) KPI 추가
@@ -1078,28 +1094,41 @@
       if(p) p.style.display = ADMIN ? "" : "none";
     }
     function initAdmin(){
-      ADMIN_PW = sessionStorage.getItem("adminpw") || "";
-      ADMIN = !!ADMIN_PW;
+      // 새로고침하면 항상 로그아웃 상태에서 시작 (관리자 모드 유지 안 함)
+      ADMIN=false; ADMIN_PW="";
       buildConfigForm();
       updateAdminUI();
-      if(ADMIN){ fillConfigForm(); renderDailyTable(); renderVideos(); }  // 새로고침 후 편집 셀 복원
     }
-    async function toggleAdmin(){
+    function toggleAdmin(){
       if(ADMIN){   // 로그아웃
-        ADMIN=false; ADMIN_PW=""; sessionStorage.removeItem("adminpw");
+        ADMIN=false; ADMIN_PW="";
         updateAdminUI(); renderDailyTable(); renderVideos(); return;
       }
-      const pw=prompt("관리자 비밀번호를 입력하세요");
-      if(pw===null||pw==="") return;
+      openPwModal();   // 로그인 모달 띄우기
+    }
+    function openPwModal(){
+      const inp=document.getElementById("pwInput");
+      inp.value=""; document.getElementById("pwErr").style.display="none";
+      document.getElementById("pwModal").style.display="flex";
+      setTimeout(()=>inp.focus(),50);
+    }
+    function closePwModal(){ document.getElementById("pwModal").style.display="none"; }
+    async function submitPw(){
+      const pw=document.getElementById("pwInput").value;
+      if(!pw) return;
+      const btn=document.getElementById("pwSubmit"), err=document.getElementById("pwErr");
+      btn.disabled=true;
       try{
         const r=await fetch("/api/admin/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pw})}).then(r=>r.json());
         if(r.ok){
-          ADMIN=true; ADMIN_PW=pw; sessionStorage.setItem("adminpw",pw);
-          updateAdminUI(); fillConfigForm(); renderDailyTable(); renderVideos();
+          ADMIN=true; ADMIN_PW=pw;
+          closePwModal(); updateAdminUI(); fillConfigForm(); renderDailyTable(); renderVideos();
         }else{
-          alert(r.error||"비밀번호가 올바르지 않습니다.");
+          err.textContent=r.error||"비밀번호가 올바르지 않습니다."; err.style.display="block";
+          document.getElementById("pwInput").select();
         }
-      }catch(e){ alert("오류: "+e.message); }
+      }catch(e){ err.textContent="오류: "+e.message; err.style.display="block"; }
+      finally{ btn.disabled=false; }
     }
 
     // 표 안에서 배열에 안전하게 값 넣기 (길이 부족하면 패딩)
