@@ -25,8 +25,8 @@
     select{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer;}
 
     .channel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
-    /* 배너: 늘리지 않고 원본 비율 유지 + 검은 배경 (해상도 깨짐 방지) */
-    .channel .banner{height:150px;background-color:#0b0d12;background-size:contain;background-position:center;background-repeat:no-repeat;}
+    /* 배너: 유튜브 채널처럼 풀와이드 + 고해상도 소스로 선명하게 */
+    .channel .banner{height:200px;background-color:#0b0d12;background-size:cover;background-position:center;background-repeat:no-repeat;}
     .channel .info{display:flex;align-items:center;gap:16px;padding:0 22px 18px;margin-top:-32px;}
     .channel .avatar{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:#fff;object-fit:cover;}
     .channel .meta{flex:1;padding-top:34px;}
@@ -140,9 +140,16 @@
         <option value="all">5/11 이후 전체</option>
       </select>
     </h2>
-    <div class="panel" id="gaugePanel"></div>
+    <div class="cards" id="gaugePanel" style="grid-template-columns:repeat(3,1fr)"></div>
 
-    <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">5/11 이후 누적 성장</span></h2>
+    <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">누적 성과</span>
+      <select id="cumPeriod" style="margin-left:auto">
+        <option value="all">5/11 이후 전체</option>
+        <option value="7">최근 7일</option>
+        <option value="28">최근 28일</option>
+        <option value="90">최근 90일</option>
+      </select>
+    </h2>
     <div class="cards cards5">
       <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div><div class="delta" id="d_views"></div></div>
       <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div><div class="delta" id="d_subs"></div></div>
@@ -151,13 +158,27 @@
       <div class="card"><div class="label">누적 공유</div><div class="value" id="cum_shares">-</div><div class="delta" id="d_shares"></div></div>
     </div>
 
-    <h2>📐 누적 성장 추이 <span class="kpi-badge">(점선 = 누적 KPI 목표선)</span></h2>
+    <h2>📐 누적 성장 추이 <span class="kpi-badge">(점선 = 누적 KPI 목표선)</span>
+      <select id="growthPeriod" style="margin-left:auto">
+        <option value="all">5/11 이후 전체</option>
+        <option value="7">최근 7일</option>
+        <option value="28">최근 28일</option>
+        <option value="90">최근 90일</option>
+      </select>
+    </h2>
     <div class="panel">
       <div class="metric-tabs" id="growthTabs"></div>
       <div class="chart-box"><canvas id="growthChart"></canvas></div>
     </div>
 
-    <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span></h2>
+    <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span>
+      <select id="dailyPeriod" style="margin-left:auto">
+        <option value="all">5/11 이후 전체</option>
+        <option value="7">최근 7일</option>
+        <option value="28">최근 28일</option>
+        <option value="90">최근 90일</option>
+      </select>
+    </h2>
     <div class="panel">
       <div class="metric-tabs" id="metricTabs"></div>
       <div class="chart-box"><canvas id="chart"></canvas></div>
@@ -281,6 +302,12 @@
       {key:5,label:"공유",color:"#f56a7e",kpi:0},
     ];
 
+    // 기간 필터 헬퍼: "all"=5/11 이후 전체, 그 외=최근 N일
+    function periodRows(sel){
+      if(sel==="all"||!sel) return DAILY.filter(r=>r[0]>=SINCE);
+      return DAILY.slice(-Number(sel));
+    }
+
     function renderChannel(c){
       if(!c)return;
       if(c.banner){
@@ -385,7 +412,8 @@
     }
     function drawChart(){
       const m=METRICS.find(x=>x.key===activeMetric);
-      const labels=DAILY.map(r=>r[0]); const data=DAILY.map(r=>N(r[m.key]));
+      const dr=periodRows(document.getElementById("dailyPeriod").value);
+      const labels=dr.map(r=>r[0]); const data=dr.map(r=>N(r[m.key]));
       const ds=[{type:"bar",label:m.label,data,backgroundColor:m.color,borderRadius:6,maxBarThickness:30}];
       if(m.kpi)ds.push({type:"line",label:"KPI",data:labels.map(()=>m.kpi),borderColor:"#191f28",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false});
       if(chart)chart.destroy();
@@ -401,7 +429,7 @@
     // 누적 성장 꺾은선 (지표 선택형) + 누적 KPI 점선 + 호버 툴팁
     function drawGrowth(){
       const m=GROWTH.find(x=>x.key===activeGrowth);
-      const rows=DAILY.filter(r=>r[0]>=SINCE);
+      const rows=periodRows(document.getElementById("growthPeriod").value);
       const labels=rows.map(r=>r[0]);
       let run=0; const actual=rows.map(r=>{run+=N(r[m.key]);return run;});      // 선택 지표 누적
       const datasets=[{label:"누적 "+m.label,data:actual,borderColor:m.color,backgroundColor:m.color+"22",borderWidth:2.5,pointRadius:0,fill:true,tension:.25}];
@@ -421,7 +449,7 @@
     function renderCumulative(){
       const now=new Date();
       document.getElementById("cumDate").textContent=`${now.getFullYear()}.${now.getMonth()+1}.${now.getDate()} 기준`;
-      const rows=DAILY.filter(r=>r[0]>=SINCE); const sum=(i)=>rows.reduce((a,r)=>a+N(r[i]),0);
+      const rows=periodRows(document.getElementById("cumPeriod").value); const sum=(i)=>rows.reduce((a,r)=>a+N(r[i]),0);
       document.getElementById("cum_views").textContent=fmt(sum(6));
       const s=sum(1); document.getElementById("cum_subs").textContent=(s>0?"+":"")+fmt(s);
       document.getElementById("cum_likes").textContent=fmt(sum(3));
@@ -461,17 +489,18 @@
         {l:"평균조회율",v:avgP(9),k:KPI.daily.avp,p:true},
         {l:"구독자",v:avg(1),k:KPI.daily.subs,p:false},
       ];
-      const col=(r)=>r>=1?"#3bce82":r>=0.5?"#f5c33b":"#f56a7e";
-      const range=rows.length?`${rows[0][0]} ~ ${rows[rows.length-1][0]} · ${rows.length}일 평균`:"데이터 없음";
-      const bars=items.map(it=>{
-        const r=it.k?it.v/it.k:0, pct=Math.round(r*100), w=Math.min(100,pct);
+      const col=(r)=>r>=1?"#15803d":r>=0.5?"#b88600":"#e11d48";
+      const range=rows.length?`${rows[0][0]}~${rows[rows.length-1][0]} · ${rows.length}일 평균`:"데이터 없음";
+      document.getElementById("gaugePanel").innerHTML=items.map(it=>{
+        const r=it.k?it.v/it.k:0, pct=Math.round(r*100);
         const vt=it.p?it.v.toFixed(1)+"%":Math.round(it.v).toLocaleString("ko-KR");
         const kt=it.p?it.k+"%":fmt(it.k);
-        return `<div class="gauge-row"><div class="gl">${it.l}</div>
-          <div class="gauge-bar"><div class="gauge-fill" style="width:${w}%;background:${col(r)}"></div></div>
-          <div class="gv" style="color:${col(r)}">${pct}% <span style="color:var(--sub);font-weight:400">(${vt}/${kt})</span></div></div>`;
+        return `<div class="card">
+          <div class="label">${it.l} 달성률</div>
+          <div class="value" style="color:${col(r)};font-size:34px">${pct}%</div>
+          <div class="note" style="margin-top:6px">평균 ${vt} / KPI ${kt} · ${range}</div>
+        </div>`;
       }).join("");
-      document.getElementById("gaugePanel").innerHTML=`<div class="note" style="margin:0 0 10px">기준 기간: ${range}</div>`+bars;
     }
     // 베스트/워스트 영상
     function renderBestWorst(){
@@ -617,6 +646,9 @@
     document.getElementById("videoSortDir").onchange=renderVideos;
     document.getElementById("videoForm").onchange=renderVideos;
     document.getElementById("gaugePeriod").onchange=renderGauge;
+    document.getElementById("cumPeriod").onchange=renderCumulative;
+    document.getElementById("growthPeriod").onchange=drawGrowth;
+    document.getElementById("dailyPeriod").onchange=drawChart;
     load();
   </script>
 </body>
