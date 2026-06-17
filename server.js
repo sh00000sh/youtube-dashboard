@@ -33,6 +33,11 @@ const {
 const DAYS = Number(process.env.SYNC_DAYS || 30);     // 며칠치 가져올지 (기본 30일)
 const MAX_VIDEOS = Number(process.env.MAX_VIDEOS || 50);
 
+// ----- 관리자 모드 -----
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";   // Railway 환경변수로 설정
+const CONFIG_TAB = process.env.CONFIG_TAB || "_설정";      // KPI·제목 등 설정 JSON 저장 탭
+function checkPw(pw) { return !!ADMIN_PASSWORD && pw === ADMIN_PASSWORD; }
+
 // 시트 탭 이름 / 데이터 시작 행
 const DAILY_TAB = process.env.DAILY_TAB || "일별";
 const VIDEO_TAB = process.env.VIDEO_TAB || "영상별";
@@ -533,6 +538,103 @@ app.get("/api/data", async (req, res) => {
     let channel = null;
     try { channel = await fetchChannelInfo(); } catch (_) {}
     res.json({ ok: true, channel, ...data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ===================================================================
+//  관리자 모드 (비밀번호 잠금 + 셀 수정 + 설정 저장)
+// ===================================================================
+
+// 탭 없으면 만들기 (헤더 없이 — A1에 데이터를 직접 쓰는 설정탭용)
+async function ensureTabExists(sheets, title) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const exists = (meta.data.sheets || []).some((s) => s.properties.title === title);
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: { requests: [{ addSheet: { properties: { title } } }] },
+    });
+  }
+}
+
+// 비밀번호 확인
+app.post("/api/admin/verify", (req, res) => {
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).json({ ok: false, error: "서버에 ADMIN_PASSWORD가 설정되지 않았습니다." });
+  }
+  const pw = (req.body || {}).pw;
+  res.json({ ok: checkPw(pw) });
+});
+
+// 셀 한 칸 쓰기 (노출수/CTR 수동 입력)
+//   daily: 노출수=I열, CTR=J열 (B열 날짜로 행 찾기)
+//   video: 노출수=F열, CTR=G열 (A열 영상ID로 행 찾기)
+app.post("/api/cell", async (req, res) => {
+  try {
+    const { pw, type, key, field, value } = req.body || {};
+    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    if (!key) return res.status(400).json({ ok: false, error: "key(날짜/영상ID)가 없습니다." });
+    if (field !== "impr" && field !== "ctr") return res.status(400).json({ ok: false, error: "field 오류" });
+
+    const sheets = getSheetsClient();
+    let tab, findCol, firstRow, col;
+    if (type === "daily") {
+      tab = DAILY_TAB; findCol = "B"; firstRow = DAILY_FIRST_ROW; col = field === "impr" ? "I" : "J";
+    } else if (type === "video") {
+      tab = VIDEO_TAB; findCol = "A"; firstRow = VIDEO_FIRST_ROW; col = field === "impr" ? "F" : "G";
+    } else {
+      return res.status(400).json({ ok: false, error: "type 오류" });
+    }
+
+    const { map } = await readColumn(sheets, tab, findCol, firstRow);
+    const row = map[String(key).trim()];
+    if (!row) return res.status(404).json({ ok: false, error: "해당 행을 시트에서 찾지 못했습니다: " + key });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${tab}!${col}${row}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[value === "" || value == null ? "" : value]] },
+    });
+    res.json({ ok: true, row, col });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 설정 읽기 (KPI·제목 등) — _설정 탭 A1의 JSON
+app.get("/api/config", async (req, res) => {
+  try {
+    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, config: null });
+    const sheets = getSheetsClient();
+    let config = null;
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CONFIG_TAB}!A1` });
+      const raw = r.data.values?.[0]?.[0];
+      if (raw) config = JSON.parse(raw);
+    } catch (_) { /* 탭 없거나 JSON 아님 → null */ }
+    res.json({ ok: true, config });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 설정 저장 (관리자) — _설정 탭 A1에 JSON 통째로
+app.post("/api/config", async (req, res) => {
+  try {
+    const { pw, config } = req.body || {};
+    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    const sheets = getSheetsClient();
+    await ensureTabExists(sheets, CONFIG_TAB);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${CONFIG_TAB}!A1`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[JSON.stringify(config)]] },
+    });
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

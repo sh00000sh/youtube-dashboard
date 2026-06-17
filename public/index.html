@@ -133,6 +133,13 @@
     #player .x{background:#222;border:0;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;}
     #player .frame{flex:1;}
     #player iframe{width:100%;height:100%;border:0;}
+    /* 관리자: 편집 가능한 셀 */
+    td.adm{cursor:pointer;position:relative;}
+    td.adm:hover{outline:2px solid var(--blue,#3182f6);outline-offset:-2px;border-radius:4px;}
+    td.adm::after{content:"✎";font-size:10px;opacity:.45;margin-left:4px;}
+    .cfg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;}
+    .cfg-f{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px;}
+    .cfg-f input{width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;}
   </style>
 </head>
 <body>
@@ -144,6 +151,7 @@
   <div class="wrap">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <h1 style="margin:0;flex:1">⚡ 유튜브 인게이지먼트 대시보드</h1>
+      <button id="adminBtn" onclick="toggleAdmin()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🔒 관리자</button>
       <button id="themeBtn" onclick="toggleTheme()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🌙 다크</button>
     </div>
     <div class="desc" style="margin-top:-10px">채널 성과를 한곳에서 봐요. 동기화를 누르면 유튜브에서 최신 숫자를 가져와 새로고침돼요.</div>
@@ -152,6 +160,23 @@
       <button id="syncBtn" onclick="sync()">🔄 동기화</button>
       <span class="delay-badge" id="delayBadge" style="display:none"></span>
       <span class="status" id="status">-</span>
+    </div>
+
+    <!-- 🔧 관리자 설정 패널 (관리자 모드일 때만 표시) -->
+    <div id="adminPanel" style="display:none;border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 18px;background:var(--chip)">
+      <div style="font-weight:700;margin-bottom:4px">🔧 관리자 설정 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 저장하면 모든 사용자 화면에 반영돼요</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 일별/영상별 상세 표에서 <b>노출수·CTR 셀을 클릭</b>하면 값을 직접 입력·저장할 수 있어요.</div>
+      <label style="display:block;font-size:13px;margin-bottom:12px">대시보드 제목
+        <input id="cfgTitle" style="display:block;width:100%;max-width:420px;margin-top:4px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px">
+      </label>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 KPI</div><div id="cfgDaily" class="cfg-grid"></div></div>
+        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI</div><div id="cfgVideo" class="cfg-grid"></div></div>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+        <button onclick="saveConfig()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">💾 설정 저장</button>
+        <span id="cfgStatus" style="font-size:13px;color:var(--muted)"></span>
+      </div>
     </div>
 
     <div class="channel" id="channelBox">
@@ -411,6 +436,7 @@
     const formLabel=(x)=> isShort(x) ? "숏폼" : "롱폼";
 
     let DAILY=[], VIDEOS=[], CHANNEL=null, chart=null, growth=null, activeMetric=6, activeGrowth=6;
+    let ADMIN=false, ADMIN_PW="", CONFIG=null;   // 관리자 모드 상태
 
     // 다크모드
     function toggleTheme(){
@@ -962,8 +988,8 @@
         return `<tr>
         <td>${x[0]??""}</td>
         <td class="${kCls(N(x[1]),KPI.daily.subs)}">${fmt(x[1])}</td>
-        <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}">${x[7]?fmt(x[7]):"-"}</td>
-        <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}">${x[8]?pctStr(x[8]):"-"}</td>
+        <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
+        <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?pctStr(x[8]):"-"}</td>
         <td class="${kCls(N(x[6]),KPI.daily.views)}">${fmt(x[6])}</td>
         <td class="${kCls(toPctNum(x[9]),KPI.daily.avp)}">${pctStr(x[9])}</td>
         <td class="muted">${x[11]??"-"}</td>
@@ -994,8 +1020,8 @@
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td class="muted">${x[4]??""}</td>
-        <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}">${x[5]?fmt(x[5]):"-"}</td>
-        <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}">${x[6]?pctStr(x[6]):"-"}</td>
+        <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('video','${x[0]}','impr','${x[5]??''}')"`:''}>${x[5]?fmt(x[5]):"-"}</td>
+        <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?pctStr(x[6]):"-"}</td>
         <td class="${kCls(toPctNum(x[7]),KPI.video.avp)}">${pctStr(x[7])}</td>
         <td class="${kCls(N(x[8]),KPI.video.views)}">${fmt(x[8])}</td>
         <td>${fmt(x[9])}</td>
@@ -1040,6 +1066,127 @@
       g.items.forEach(it=>document.getElementById(it.id).style.display=(it.id===id?"":"none"));
       document.getElementById(g.bar).querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
       const it=g.items.find(x=>x.id===id); if(it&&it.draw) it.draw();  // 보일 때 차트 다시 그림
+    }
+
+    // ===== 관리자 모드 =====
+    const KPI_FIELDS=[["views","조회수"],["impr","노출수"],["ctr","CTR(%)"],["avp","평균조회율(%)"],["subs","구독"],["eng","참여율(%)"]];
+
+    function updateAdminUI(){
+      const b=document.getElementById("adminBtn");
+      if(b) b.textContent = ADMIN ? "🔓 관리자 ON" : "🔒 관리자";
+      const p=document.getElementById("adminPanel");
+      if(p) p.style.display = ADMIN ? "" : "none";
+    }
+    function initAdmin(){
+      ADMIN_PW = sessionStorage.getItem("adminpw") || "";
+      ADMIN = !!ADMIN_PW;
+      buildConfigForm();
+      updateAdminUI();
+      if(ADMIN){ fillConfigForm(); renderDailyTable(); renderVideos(); }  // 새로고침 후 편집 셀 복원
+    }
+    async function toggleAdmin(){
+      if(ADMIN){   // 로그아웃
+        ADMIN=false; ADMIN_PW=""; sessionStorage.removeItem("adminpw");
+        updateAdminUI(); renderDailyTable(); renderVideos(); return;
+      }
+      const pw=prompt("관리자 비밀번호를 입력하세요");
+      if(pw===null||pw==="") return;
+      try{
+        const r=await fetch("/api/admin/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pw})}).then(r=>r.json());
+        if(r.ok){
+          ADMIN=true; ADMIN_PW=pw; sessionStorage.setItem("adminpw",pw);
+          updateAdminUI(); fillConfigForm(); renderDailyTable(); renderVideos();
+        }else{
+          alert(r.error||"비밀번호가 올바르지 않습니다.");
+        }
+      }catch(e){ alert("오류: "+e.message); }
+    }
+
+    // 표 안에서 배열에 안전하게 값 넣기 (길이 부족하면 패딩)
+    function setCell(arr,idx,val){ while(arr.length<=idx) arr.push(""); arr[idx]= val===""?"":String(val); }
+    function updateLocal(type,key,field,store){
+      const list = type==="daily" ? DAILY : VIDEOS;
+      const row=list.find(x=>String(x[0])===String(key));
+      if(!row) return;
+      const idx = type==="daily" ? (field==="impr"?7:8) : (field==="impr"?5:6);
+      setCell(row,idx,store);
+    }
+
+    // 노출수/CTR 셀 클릭 → 입력 → 시트 저장
+    async function editCell(type,key,field,curRaw){
+      if(!ADMIN) return;
+      const isCtr = field==="ctr";
+      const label = isCtr ? "CTR (%)" : "노출수";
+      const def = (curRaw===""||curRaw==null) ? "" : (isCtr ? toPctNum(curRaw) : N(curRaw));
+      const inp=prompt(`${label} 입력 (빈칸=삭제)`, def);
+      if(inp===null) return;
+      let store, sheetVal;
+      if(inp.trim()===""){ store=""; sheetVal=""; }
+      else{
+        const n=Number(inp.replace(/[^0-9.\-]/g,""));
+        if(isNaN(n)){ alert("숫자를 입력하세요."); return; }
+        // CTR은 % 입력 → 시트엔 비율(0.055)로 저장 (평균조회율과 동일 규칙)
+        store = isCtr ? n/100 : n;
+        sheetVal = store;
+      }
+      try{
+        const r=await fetch("/api/cell",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({pw:ADMIN_PW,type,key,field,value:sheetVal})}).then(r=>r.json());
+        if(!r.ok){ alert("저장 실패: "+r.error); return; }
+        updateLocal(type,key,field,store);
+        if(type==="daily") renderDailyTable(); else renderVideos();
+        // 색칠/달성률에도 반영
+        renderGauge();
+      }catch(e){ alert("오류: "+e.message); }
+    }
+
+    // 설정(KPI·제목) 불러와 적용 — 화면 그리기 전에 호출
+    async function loadConfig(){
+      try{
+        const r=await fetch("/api/config").then(r=>r.json());
+        if(r.ok && r.config){
+          CONFIG=r.config;
+          if(r.config.kpi){
+            if(r.config.kpi.daily) Object.assign(KPI.daily, r.config.kpi.daily);
+            if(r.config.kpi.video) Object.assign(KPI.video, r.config.kpi.video);
+          }
+          if(r.config.title){ const h=document.querySelector(".wrap h1"); if(h) h.textContent=r.config.title; }
+        }
+      }catch(_){}
+    }
+    function buildConfigForm(){
+      const mk=(grp)=>KPI_FIELDS.map(([k,l])=>`<label class="cfg-f">${l}<input type="number" step="any" data-grp="${grp}" data-k="${k}"></label>`).join("");
+      const d=document.getElementById("cfgDaily"), v=document.getElementById("cfgVideo");
+      if(d) d.innerHTML=mk("daily");
+      if(v) v.innerHTML=mk("video");
+    }
+    function fillConfigForm(){
+      const t=document.getElementById("cfgTitle");
+      if(t) t.value=(CONFIG&&CONFIG.title) || document.querySelector(".wrap h1").textContent.trim();
+      document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
+        inp.value=KPI[inp.dataset.grp][inp.dataset.k];
+      });
+    }
+    async function saveConfig(){
+      const st=document.getElementById("cfgStatus");
+      const kpi={daily:{},video:{}};
+      document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
+        kpi[inp.dataset.grp][inp.dataset.k]=Number(inp.value);
+      });
+      const title=document.getElementById("cfgTitle").value.trim();
+      const config={kpi,title};
+      st.textContent="저장 중...";
+      try{
+        const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({pw:ADMIN_PW,config})}).then(r=>r.json());
+        if(r.ok){
+          Object.assign(KPI.daily,kpi.daily); Object.assign(KPI.video,kpi.video);
+          CONFIG=config;
+          if(title){ const h=document.querySelector(".wrap h1"); if(h) h.textContent=title; }
+          renderDailyTable();renderVideos();renderGauge();renderCumulative();drawChart();drawGrowth();
+          st.textContent="✅ 저장됨 (모든 사용자에 반영)";
+        }else st.textContent="❌ "+(r.error||"저장 실패");
+      }catch(e){ st.textContent="❌ "+e.message; }
     }
 
     async function load(){
@@ -1093,7 +1240,7 @@
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
     document.getElementById("dailyPeriod").onchange=drawChart;
-    load();
+    (async()=>{ await loadConfig(); await load(); initAdmin(); })();
   </script>
 </body>
 </html>
