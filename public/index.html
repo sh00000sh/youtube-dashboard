@@ -14,10 +14,10 @@
       --g-bg:#eaf7f0;--g-tx:#1f9d57;--y-bg:#fdf4e3;--y-tx:#c79320;--r-bg:#fdeef0;--r-tx:#e15a72;
     }
     body.dark{
-      --bg:#0f1117;--card:#171a23;--line:#222633;--text:#e6e8ee;--sub:#8b95a1;
-      --blue:#4d92ff;--blue-soft:#1a2740;--th:#1b1f29;--zebra:#1b1f29;--hover:#1e2840;--chip:#1e2231;
-      --shadow:0 1px 4px rgba(0,0,0,.3);--shadow-h:0 4px 16px rgba(0,0,0,.4);
-      --g-bg:#11331f;--g-tx:#5fd99a;--y-bg:#332a10;--y-tx:#e6c860;--r-bg:#3a1414;--r-tx:#f08a8a;
+      --bg:#16171c;--card:#1e1f25;--line:#2a2c34;--text:#eaeaee;--sub:#8b8d96;
+      --blue:#5b9bf8;--blue-soft:#1a2740;--th:#22242c;--zebra:#202127;--hover:#24262f;--chip:#262830;
+      --shadow:0 1px 4px rgba(0,0,0,.4);--shadow-h:0 6px 20px rgba(0,0,0,.55);
+      --g-bg:#15301f;--g-tx:#52d18a;--y-bg:#2f2811;--y-tx:#e0bc5a;--r-bg:#341619;--r-tx:#ec8493;
     }
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--text);padding:24px;}
@@ -114,10 +114,10 @@
     /* 상단 고정 요약 바 */
     #stickyBar{position:sticky;top:0;z-index:40;background:var(--card);border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.05);transform:translateY(-100%);transition:transform .2s;}
     #stickyBar.show{transform:translateY(0);}
-    .sb-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:26px;padding:10px 24px;flex-wrap:wrap;}
-    .sb-item{display:flex;flex-direction:column;}
-    .sb-item .l{font-size:10px;color:var(--sub);}
-    .sb-item .v{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;}
+    .sb-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:24px;padding:13px 24px;flex-wrap:wrap;}
+    .sb-item{display:flex;align-items:baseline;gap:7px;}
+    .sb-item .l{font-size:12px;color:var(--sub);}
+    .sb-item .v{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;}
 
     #player{position:fixed;top:0;right:-520px;width:500px;height:100%;background:#0b0d12;box-shadow:-4px 0 24px rgba(0,0,0,.2);transition:right .25s;z-index:50;display:flex;flex-direction:column;}
     body.player-open #player{right:0;}
@@ -332,6 +332,11 @@
     const kCls=(a,t)=>{if(!t)return "";const r=a/t;return r>=1?"g":r>=0.5?"y":"r";};
     const eCls=(v)=>{v=N(v);return v>=ENG.green?"g":v>=ENG.yellow?"y":"r";};
     // 영상 길이(0:42 / 1:02:03) → 초. 180초(3분) 이하면 숏폼
+    // 차트 색 (다크모드 대응) — 격자선·눈금
+    const isDark=()=>document.body.classList.contains("dark");
+    const gridCol=()=>isDark()?"rgba(255,255,255,.06)":"#eef1f4";
+    const tickCol=()=>isDark()?"#8b8d96":"#8b95a1";
+    const tgtCol=()=>isDark()?"#ff8093":"#f0a8b4";  // KPI 목표선 (다크에서 더 선명)
     const durSec=(s)=>{const p=String(s||"").split(":").map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:(Number(s)||0);};
     const isShort=(x)=> durSec(x[4])<=180 ? 1 : 0;
     const formLabel=(x)=> isShort(x) ? "숏폼" : "롱폼";
@@ -343,6 +348,8 @@
       const dark=document.body.classList.toggle("dark");
       localStorage.setItem("theme",dark?"dark":"light");
       document.getElementById("themeBtn").textContent=dark?"☀️ 라이트":"🌙 다크";
+      // 차트 색이 테마따라 바뀌므로 다시 그림
+      if(DAILY.length){ drawChart();drawGrowth();drawScatter();drawWeekday(); if(vd.id)drawVd(); }
     }
     (function(){
       if(localStorage.getItem("theme")==="dark") document.body.classList.add("dark");
@@ -486,7 +493,7 @@
             title:(it)=>titles[it[0].dataIndex]||it[0].label,
             label:(c)=>met.label+": "+(met.k==="avp"? c.parsed.y.toFixed(1)+"%": c.parsed.y.toLocaleString("ko-KR"))
           }}},
-          scales:{x:{ticks:{color:"#8b95a1",autoSkip:true,maxTicksLimit:14},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
+          scales:{x:{ticks:{color:"#8b95a1",autoSkip:true,maxTicksLimit:14},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
     }
 
     function buildTabs(){
@@ -499,11 +506,11 @@
       const dr=periodRows(document.getElementById("dailyPeriod").value);
       const labels=dr.map(r=>r[0]); const data=dr.map(r=>N(r[m.key]));
       const ds=[{type:"bar",label:m.label,data,backgroundColor:m.color,borderRadius:6,maxBarThickness:30}];
-      if(m.kpi)ds.push({type:"line",label:"KPI",data:labels.map(()=>m.kpi),borderColor:"#191f28",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false});
+      if(m.kpi)ds.push({type:"line",label:"KPI",data:labels.map(()=>m.kpi),borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
       if(chart)chart.destroy();
       chart=new Chart(document.getElementById("chart"),{data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:!!m.kpi,labels:{color:"#8b95a1",boxWidth:12}}},
-        scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
+        scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
     }
     function buildGrowthTabs(){
       const box=document.getElementById("growthTabs");
@@ -529,7 +536,7 @@
         {label:"누적 "+m.label,data:actualPad,borderColor:m.color,backgroundColor:m.color+"22",borderWidth:2.5,pointRadius:0,fill:true,tension:.25},
         {label:"예측(현재 페이스)",data:fc,borderColor:m.color,borderDash:[2,3],borderWidth:1.5,pointRadius:0,fill:false,tension:.25}
       ];
-      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:allLabels.map((_,i)=>m.kpi*(i+1)),borderColor:"#f0a8b4",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false});
+      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:allLabels.map((_,i)=>m.kpi*(i+1)),borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
       if(growth)growth.destroy();
       growth=new Chart(document.getElementById("growthChart"),{type:"line",
         data:{labels:allLabels,datasets},
@@ -540,7 +547,7 @@
               title:(items)=>items[0].label+" 까지 누적",
               label:(c)=>c.dataset.label+": "+c.parsed.y.toLocaleString("ko-KR")
             }}},
-          scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
+          scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
     }
     function renderCumulative(){
       const now=new Date();
@@ -691,7 +698,7 @@
         data:{labels,datasets:[{label:"평균 조회수",data,backgroundColor:"#3182f6",borderRadius:6,maxBarThickness:46}]},
         options:{responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>`평균 ${c.parsed.y.toLocaleString("ko-KR")}회 (영상 ${counts[c.dataIndex]}개)`}}},
-          scales:{x:{ticks:{color:"#8b95a1"},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
+          scales:{x:{ticks:{color:"#8b95a1"},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
     }
 
     // CTR × 평균조회율 산점도
@@ -704,8 +711,8 @@
         options:{responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>`${c.raw.t}  |  CTR ${c.raw.x.toFixed(1)}% · 조회율 ${c.raw.y.toFixed(1)}%`}}},
           scales:{
-            x:{title:{display:true,text:"CTR (%) →  클릭이 잘 됨",color:"#8b95a1"},ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}},
-            y:{title:{display:true,text:"평균조회율 (%) →  끝까지 봄",color:"#8b95a1"},ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}
+            x:{title:{display:true,text:"CTR (%) →  클릭이 잘 됨",color:"#8b95a1"},ticks:{color:"#8b95a1"},grid:{color:gridCol()}},
+            y:{title:{display:true,text:"평균조회율 (%) →  끝까지 봄",color:"#8b95a1"},ticks:{color:"#8b95a1"},grid:{color:gridCol()}}
           }}});
     }
 
@@ -721,7 +728,7 @@
     }
 
     function renderDailyTable(){
-      document.getElementById("dailyKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·구독자 +${KPI.daily.subs}`;
+      document.getElementById("dailyKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·참여율 ${KPI.daily.eng}%·구독자 +${KPI.daily.subs}`;
       const el=document.getElementById("dailyRows");
       // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간 12특이사항
       const rows=sortRows(DAILY, document.getElementById("dailySortKey").value, document.getElementById("dailySortDir").value, 0);
@@ -745,7 +752,7 @@
       </tr>`;}).join("");
     }
     function renderVideos(){
-      document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·구독전환 ${KPI.video.subs}`;
+      document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·참여율 ${KPI.video.eng}%·구독전환 ${KPI.video.subs}`;
       const el=document.getElementById("videoRows");
       // 영상 컬럼(A~V): 0ID 1업로드일 2형태 3타이틀 4길이 5노출수 6CTR 7평균조회율 8조회수 9좋아요 10댓글 11공유 12구독전환 ... 21특이사항
       // 1) 형태 필터 → 2) 정렬
