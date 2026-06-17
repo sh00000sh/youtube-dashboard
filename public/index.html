@@ -27,14 +27,13 @@
     .channel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
     /* 배너: 유튜브 채널처럼 풀와이드 + 고해상도 소스로 선명하게 */
     .channel .banner{height:200px;background-color:#0b0d12;background-size:cover;background-position:center;background-repeat:no-repeat;}
-    .channel .info{display:flex;align-items:center;gap:16px;padding:0 22px 18px;margin-top:-32px;}
-    .channel .avatar{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:#fff;object-fit:cover;}
-    .channel .meta{flex:1;padding-top:34px;}
-    .channel .name{font-size:19px;font-weight:800;color:var(--text);text-decoration:none;}
+    .channel .info{display:flex;align-items:flex-end;gap:20px;padding:0 26px 20px;margin-top:-44px;}
+    .channel .avatar{width:110px;height:110px;border-radius:50%;border:4px solid #fff;background:#fff;object-fit:cover;box-shadow:0 2px 10px rgba(0,0,0,.12);}
+    .channel .meta{flex:1;padding-bottom:8px;}
+    .channel .name{font-size:27px;font-weight:800;color:var(--text);text-decoration:none;display:inline-block;letter-spacing:-.3px;}
     .channel .name:hover{color:var(--blue);}
-    .channel .stats{display:flex;gap:22px;margin-top:6px;}
-    .channel .stat .n{font-size:18px;font-weight:800;}
-    .channel .stat .l{font-size:12px;color:var(--sub);}
+    .channel .substat{font-size:14px;color:var(--sub);margin-top:7px;}
+    .channel .substat b{color:var(--text);font-weight:700;}
 
     .legend{display:flex;gap:14px;font-size:12px;color:var(--sub);margin:14px 0 0;flex-wrap:wrap;}
     .legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -43,9 +42,10 @@
 
     .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
     .cards5{grid-template-columns:repeat(5,1fr);}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);text-align:center;}
     .card .label{font-size:12px;color:var(--sub);margin-bottom:7px;}
     .card .value{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;}
+    .card .note{text-align:center;}
 
     .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
     .metric-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
@@ -55,11 +55,14 @@
 
     .tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);}
     .scroll{max-height:420px;overflow:auto;}
-    table{width:100%;border-collapse:collapse;font-size:13px;}
-    th,td{padding:11px 12px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
-    th{background:#f8f9fa;color:var(--sub);font-size:11px;font-weight:700;position:sticky;top:0;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;}
+    th,td{padding:13px 12px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
+    th{background:#f1f3f5;color:var(--sub);font-size:11px;font-weight:700;position:sticky;top:0;}
+    tbody tr:nth-child(even){background:#fafbfc;}      /* 얼룩무늬 */
     tr:last-child td{border-bottom:0;}
-    tbody tr:hover{background:#f8fbff;}
+    tbody tr:hover{background:#eef5ff;}
+    td.muted{color:#aeb6bf;}                            /* 보조 지표는 연하게 */
+    td.strong{font-weight:700;}
     .empty{padding:30px;text-align:center;color:var(--sub);}
     .note{font-size:12px;color:var(--sub);margin-top:8px;}
     .vtitle{color:var(--blue);cursor:pointer;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle;}
@@ -113,10 +116,7 @@
         <img class="avatar" id="ch_avatar" alt="" />
         <div class="meta">
           <a class="name" id="ch_name" href="#" target="_blank">채널 불러오는 중…</a>
-          <div class="stats">
-            <div class="stat"><div class="n" id="ch_subs">-</div><div class="l">구독자</div></div>
-            <div class="stat"><div class="n" id="ch_views">-</div><div class="l">전체 누적 조회수</div></div>
-          </div>
+          <div class="substat" id="ch_stat">-</div>
         </div>
       </div>
     </div>
@@ -132,8 +132,13 @@
       <span><i class="dot dr"></i>50%미만 / 참여 10미만</span>
     </div>
 
-    <h2>🎯 KPI 달성률 <span class="kpi-badge">(기간 평균 ÷ KPI)</span>
-      <select id="gaugePeriod" style="margin-left:auto">
+    <h2>🎯 KPI 달성률
+      <select id="gaugeType" style="margin-left:auto">
+        <option value="daily">일별</option>
+        <option value="video">영상별</option>
+        <option value="cumulative">누적</option>
+      </select>
+      <select id="gaugePeriod">
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
@@ -320,8 +325,7 @@
       }
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
-      document.getElementById("ch_subs").textContent=fmt(c.subscribers)+"명";
-      document.getElementById("ch_views").textContent=fmt(c.totalViews);
+      document.getElementById("ch_stat").innerHTML=`구독자 <b>${fmt(c.subscribers)}명</b> · 전체 누적 조회수 <b>${fmt(c.totalViews)}회</b>`;
       const b=document.getElementById("ch_banner"); b.style.cursor="pointer"; b.onclick=()=>c.url&&window.open(c.url,"_blank");
     }
 
@@ -477,28 +481,63 @@
         el.textContent=`최근일 ${fmt(c)} ${arrow}${Math.abs(pct)}%`;
       });
     }
-    // KPI 달성률 게이지 (기간 선택)
+    // KPI 달성률 (일별 / 영상별 / 누적 × 기간)
     function renderGauge(){
+      const type=document.getElementById("gaugeType").value;
       const sel=document.getElementById("gaugePeriod").value;
-      let rows=DAILY.filter(r=>r[0]>=SINCE);          // 기본: 5/11 이후
-      if(sel!=="all") rows=rows.slice(-Number(sel));  // 최근 N일
-      const avg=(i)=>rows.length?rows.reduce((a,r)=>a+N(r[i]),0)/rows.length:0;
-      const avgP=(i)=>rows.length?rows.reduce((a,r)=>a+toPctNum(r[i]),0)/rows.length:0;
-      const items=[
-        {l:"조회수",v:avg(6),k:KPI.daily.views,p:false},
-        {l:"평균조회율",v:avgP(9),k:KPI.daily.avp,p:true},
-        {l:"구독자",v:avg(1),k:KPI.daily.subs,p:false},
-      ];
+      let items=[], basis="";
+
+      if(type==="video"){
+        // 영상별: 업로드일이 기간 안에 든 영상 평균 vs 영상 KPI
+        let vids=VIDEOS;
+        if(sel!=="all"){
+          const cut=new Date(); cut.setDate(cut.getDate()-Number(sel));
+          const cs=cut.toISOString().slice(2,10); // YY-MM-DD
+          vids=VIDEOS.filter(v=>(v[1]||"")>=cs);
+        }
+        const a=(i)=>vids.length?vids.reduce((s,r)=>s+N(r[i]),0)/vids.length:0;
+        const ap=(i)=>vids.length?vids.reduce((s,r)=>s+toPctNum(r[i]),0)/vids.length:0;
+        items=[
+          {l:"조회수",v:a(8),k:KPI.video.views,p:false},
+          {l:"평균조회율",v:ap(7),k:KPI.video.avp,p:true},
+          {l:"구독전환",v:a(12),k:KPI.video.subs,p:false},
+        ];
+        basis=`영상 ${vids.length}개 평균`;
+      } else if(type==="cumulative"){
+        const rows=periodRows(sel), d=rows.length;
+        const sum=(i)=>rows.reduce((s,r)=>s+N(r[i]),0);
+        items=[
+          {l:"누적 조회수",v:sum(6),k:KPI.daily.views*d,p:false},
+          {l:"누적 구독자",v:sum(1),k:KPI.daily.subs*d,p:false},
+          {l:"누적 좋아요",v:sum(3),k:0,p:false},
+        ];
+        basis=`${d}일 누적 (KPI=일KPI×${d}일)`;
+      } else {
+        const rows=periodRows(sel);
+        const a=(i)=>rows.length?rows.reduce((s,r)=>s+N(r[i]),0)/rows.length:0;
+        const ap=(i)=>rows.length?rows.reduce((s,r)=>s+toPctNum(r[i]),0)/rows.length:0;
+        items=[
+          {l:"조회수",v:a(6),k:KPI.daily.views,p:false},
+          {l:"평균조회율",v:ap(9),k:KPI.daily.avp,p:true},
+          {l:"구독자",v:a(1),k:KPI.daily.subs,p:false},
+        ];
+        basis=`${rows.length}일 평균`;
+      }
+
       const col=(r)=>r>=1?"#15803d":r>=0.5?"#b88600":"#e11d48";
-      const range=rows.length?`${rows[0][0]}~${rows[rows.length-1][0]} · ${rows.length}일 평균`:"데이터 없음";
       document.getElementById("gaugePanel").innerHTML=items.map(it=>{
-        const r=it.k?it.v/it.k:0, pct=Math.round(r*100);
         const vt=it.p?it.v.toFixed(1)+"%":Math.round(it.v).toLocaleString("ko-KR");
+        if(!it.k){ // KPI 없는 참고 지표
+          return `<div class="card"><div class="label">${it.l}</div>
+            <div class="value" style="font-size:34px">${vt}</div>
+            <div class="note" style="margin-top:6px">참고 · ${basis}</div></div>`;
+        }
+        const r=it.v/it.k, pct=Math.round(r*100);
         const kt=it.p?it.k+"%":fmt(it.k);
         return `<div class="card">
           <div class="label">${it.l} 달성률</div>
           <div class="value" style="color:${col(r)};font-size:34px">${pct}%</div>
-          <div class="note" style="margin-top:6px">평균 ${vt} / KPI ${kt} · ${range}</div>
+          <div class="note" style="margin-top:6px">${vt} / KPI ${kt} · ${basis}</div>
         </div>`;
       }).join("");
     }
@@ -565,12 +604,12 @@
         <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}">${x[8]?pctStr(x[8]):"-"}</td>
         <td class="${kCls(N(x[6]),KPI.daily.views)}">${fmt(x[6])}</td>
         <td class="${kCls(toPctNum(x[9]),KPI.daily.avp)}">${pctStr(x[9])}</td>
-        <td>${x[11]??"-"}</td>
-        <td class="${eCls(x[3])}">${fmt(x[3])}</td>
-        <td class="${eCls(x[4])}">${fmt(x[4])}</td>
-        <td class="${eCls(x[5])}">${fmt(x[5])}</td>
-        <td>${fmt(x[2])}</td>
-        <td><span class="memo">${x[12]??""}</span></td>
+        <td class="muted">${x[11]??"-"}</td>
+        <td>${fmt(x[3])}</td>
+        <td>${fmt(x[4])}</td>
+        <td>${fmt(x[5])}</td>
+        <td class="muted">${fmt(x[2])}</td>
+        <td class="muted"><span class="memo">${x[12]??""}</span></td>
       </tr>`).join("");
     }
     function renderVideos(){
@@ -588,16 +627,16 @@
         <td>${x[1]??""}</td>
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
-        <td>${x[4]??""}</td>
+        <td class="muted">${x[4]??""}</td>
         <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}">${x[5]?fmt(x[5]):"-"}</td>
         <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}">${x[6]?pctStr(x[6]):"-"}</td>
         <td class="${kCls(toPctNum(x[7]),KPI.video.avp)}">${pctStr(x[7])}</td>
         <td class="${kCls(N(x[8]),KPI.video.views)}">${fmt(x[8])}</td>
-        <td class="${eCls(x[9])}">${fmt(x[9])}</td>
-        <td class="${eCls(x[10])}">${fmt(x[10])}</td>
-        <td class="${eCls(x[11])}">${fmt(x[11])}</td>
+        <td>${fmt(x[9])}</td>
+        <td>${fmt(x[10])}</td>
+        <td>${fmt(x[11])}</td>
         <td class="${kCls(N(x[12]),KPI.video.subs)}">${fmt(x[12])}</td>
-        <td><span class="memo">${x[21]??""}</span></td>
+        <td class="muted"><span class="memo">${x[21]??""}</span></td>
       </tr>`).join("");
     }
 
@@ -645,6 +684,7 @@
     document.getElementById("videoSortKey").onchange=renderVideos;
     document.getElementById("videoSortDir").onchange=renderVideos;
     document.getElementById("videoForm").onchange=renderVideos;
+    document.getElementById("gaugeType").onchange=renderGauge;
     document.getElementById("gaugePeriod").onchange=renderGauge;
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
