@@ -147,10 +147,13 @@
     </div></div>
 
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
-      <select id="videoSort" style="margin-left:auto">
+      <select id="videoForm" style="margin-left:auto">
+        <option value="all">전체 형태</option>
+        <option value="short">숏폼만</option>
+        <option value="long">롱폼만</option>
+      </select>
+      <select id="videoSort">
         <option value="date">업로드 최신순</option>
-        <option value="short">숏폼 먼저</option>
-        <option value="long">롱폼 먼저</option>
         <option value="8">조회수 높은순</option>
         <option value="9">좋아요 높은순</option>
         <option value="10">댓글 높은순</option>
@@ -395,11 +398,12 @@
       document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·구독전환 ${KPI.video.subs}`;
       const el=document.getElementById("videoRows");
       // 영상 컬럼(A~V): 0ID 1업로드일 2형태 3타이틀 4길이 5노출수 6CTR 7평균조회율 8조회수 9좋아요 10댓글 11공유 12구독전환 ... 21특이사항
-      const sv=document.getElementById("videoSort").value;
-      let rows;
-      if(sv==="short") rows=[...VIDEOS].sort((a,b)=>(isShort(b)-isShort(a))||(a[1]<b[1]?1:-1));
-      else if(sv==="long") rows=[...VIDEOS].sort((a,b)=>(isShort(a)-isShort(b))||(a[1]<b[1]?1:-1));
-      else rows=sortRows(VIDEOS, sv, 1);
+      // 1) 형태 필터 → 2) 정렬
+      const ff=document.getElementById("videoForm").value;
+      let list=VIDEOS;
+      if(ff==="short") list=VIDEOS.filter(x=>isShort(x));
+      else if(ff==="long") list=VIDEOS.filter(x=>!isShort(x));
+      const rows=sortRows(list, document.getElementById("videoSort").value, 1);
       if(!rows.length){el.innerHTML='<tr><td colspan="13" class="empty">데이터 없음</td></tr>';return;}
       el.innerHTML=rows.map(x=>`<tr>
         <td>${x[1]??""}</td>
@@ -458,6 +462,7 @@
     }
     document.getElementById("dailySort").onchange=renderDailyTable;
     document.getElementById("videoSort").onchange=renderVideos;
+    document.getElementById("videoForm").onchange=renderVideos;
     load();
   </script>
 </body>
