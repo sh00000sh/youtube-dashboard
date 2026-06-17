@@ -417,29 +417,31 @@ app.post("/api/video", async (req, res) => {
   }
 });
 
-// 실시간 — Data API로 현재 시점 채널/영상 누적 지표(지연 없음)
+// 실시간 — 현재 시점 채널/영상 누적 지표(지연 없음). OAuth로 예약(공개예정) 영상도 포함
 app.get("/api/live", async (req, res) => {
   try {
-    if (!YOUTUBE_API_KEY || !CHANNEL_ID) return res.status(400).json({ ok: false, error: "YOUTUBE_API_KEY/CHANNEL_ID 누락" });
-    const ch = await (await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
-    if (ch.error) throw new Error(ch.error.message);
-    const st = ch.items?.[0]?.statistics || {};
-    const uploads = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!CHANNEL_ID) return res.status(400).json({ ok: false, error: "CHANNEL_ID 누락" });
+    const yt = google.youtube({ version: "v3", auth: getOAuth() }); // OAuth → 예약/비공개 영상도 조회 가능
+    const ch = await yt.channels.list({ part: "statistics,contentDetails", id: CHANNEL_ID });
+    const st = ch.data.items?.[0]?.statistics || {};
+    const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
     let videos = [];
     if (uploads) {
-      const pl = await (await fetch(
-        `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails,snippet&maxResults=10&playlistId=${uploads}&key=${YOUTUBE_API_KEY}`)).json();
-      const ids = (pl.items || []).map((it) => it.contentDetails.videoId);
+      const pl = await yt.playlistItems.list({ part: "contentDetails", maxResults: 15, playlistId: uploads });
+      const ids = (pl.data.items || []).map((it) => it.contentDetails.videoId);
       if (ids.length) {
-        const vs = await (await fetch(
-          `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
-        videos = (vs.items || []).map((it) => ({
-          id: it.id, title: it.snippet.title, publishedAt: it.snippet.publishedAt,
-          views: Number(it.statistics.viewCount || 0),
-          likes: Number(it.statistics.likeCount || 0),
-          comments: Number(it.statistics.commentCount || 0),
-        }));
+        const vs = await yt.videos.list({ part: "snippet,statistics,status", id: ids.join(",") });
+        videos = (vs.data.items || [])
+          // 공개 영상 OR 예약 영상(공개예정 시각 있음)만 — 그냥 비공개/일부공개는 제외
+          .filter((it) => it.status?.privacyStatus === "public" || it.status?.publishAt)
+          .map((it) => ({
+            id: it.id, title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+            views: Number(it.statistics?.viewCount || 0),
+            likes: Number(it.statistics?.likeCount || 0),
+            comments: Number(it.statistics?.commentCount || 0),
+            scheduled: it.status?.privacyStatus !== "public" && !!it.status?.publishAt,
+            publishAt: it.status?.publishAt || null,
+          }));
       }
     }
     res.json({

@@ -809,10 +809,19 @@
       const prev=livePrev||{};
       const el=document.getElementById("liveRows");
       el.innerHTML=(r.videos||[]).map(v=>{
+        const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.publishedAt||'').slice(2,10)}')`;
+        if(v.scheduled){ // 예약(공개예정) 영상 — 아직 미공개라 수치 0
+          const when=v.publishAt? new Date(v.publishAt).toLocaleString("ko-KR") : "";
+          return `<tr style="opacity:.75">
+            <td><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" class="thumb"></td>
+            <td><span style="color:var(--y-tx);font-weight:700">🕒 예약</span></td>
+            <td>${v.title}</td>
+            <td colspan="3" style="text-align:left;color:var(--sub)">공개 예정: ${when}</td>
+            <td>-</td></tr>`;
+        }
         const p=prev[v.id]; const dV=p?v.views-p.views:0, dL=p?v.likes-p.likes:0, dC=p?v.comments-p.comments:0;
         const chg=(d)=> d>0?`<span class="up2">▲${d}</span>`:d<0?`<span class="down2">▼${Math.abs(d)}</span>`:"";
         const delta=p? [chg(dV)&&`조회 ${chg(dV)}`,chg(dL)&&`좋아요 ${chg(dL)}`,chg(dC)&&`댓글 ${chg(dC)}`].filter(Boolean).join(" · ")||"-" : "기준 설정됨";
-        const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.publishedAt||'').slice(2,10)}')`;
         return `<tr>
           <td><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" class="thumb" onclick="${oc}"></td>
           <td>${(v.publishedAt||'').slice(0,10)}</td>
