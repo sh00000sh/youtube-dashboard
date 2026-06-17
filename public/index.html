@@ -148,9 +148,16 @@
 
     /* ===== 📱 모바일 반응형 (태블릿~폰) ===== */
     @media (max-width:760px){
-      body{padding:14px;}
-      h1{font-size:19px;}
-      h2{font-size:15px;margin:20px 0 10px;}
+      body{padding:14px;overflow-x:hidden;}   /* 페이지 전체가 옆으로 새는 것 방지 */
+      /* ① 타이틀 한 줄 고정 */
+      h1{font-size:16px;white-space:nowrap;}
+      /* ② 관리자·다크 버튼 더 작게 (인라인 스타일 덮어쓰기) */
+      #adminBtn,#themeBtn{padding:5px 9px!important;font-size:11px!important;border-radius:8px!important;}
+      /* 헤더 줄 간격 줄여 타이틀 공간 확보 */
+      #dashTitle{min-width:0;}
+      h2{font-size:14px;margin:20px 0 10px;gap:8px;}
+      /* ③ 부제(설명 카피) 폰트 축소 */
+      .desc{font-size:11.5px;line-height:1.45;margin:-2px 0 10px;}
       /* 카드 그리드: 4·5·3·2열 전부 2열로 (인라인 강제분은 !important) */
       .cards,.cards5,#gaugePanel,#cmpGrowthCards,#cmpKpiCards,#liveChannel{
         grid-template-columns:repeat(2,1fr)!important;gap:10px;
@@ -172,8 +179,19 @@
       /* 차트 높이 약간 축소 */
       .chart-box{height:240px;}
       .panel{padding:14px;border-radius:16px;}
-      /* 셀렉트 우측정렬 줄바꿈 여유 */
-      h2 select{margin-left:auto;}
+      /* ④ 표: 셀 축소 + 헤더 첫 줄(thead) 고정 + 첫 열(기준열) 고정 */
+      .scroll{max-height:340px;-webkit-overflow-scrolling:touch;}
+      th,td{padding:9px 7px;font-size:11.5px;}
+      th{font-size:10px;z-index:2;}
+      .vtitle{max-width:130px;}
+      .thumb{width:56px;height:32px;}
+      th:first-child,td:first-child{position:sticky;left:0;}
+      th:first-child{z-index:3;background:var(--th);}      /* 좌상단 모서리 */
+      td:first-child{z-index:1;background:var(--card);}
+      tbody tr:nth-child(even) td:first-child{background:var(--zebra);}
+      tbody tr:hover td:first-child{background:var(--hover);}
+      /* ⑤ 제목 옆 드롭다운: 우측밀기 해제하고 일정 간격으로 정렬 */
+      h2 select{margin-left:0!important;font-size:12px;padding:5px 8px;}
       /* 영상 재생 패널: 전체화면, 본문 밀지 않음 */
       #player{width:100vw;right:-100vw;}
       body.player-open .wrap{margin-right:0;}
