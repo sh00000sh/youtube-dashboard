@@ -145,6 +145,49 @@
     /* 제목 인라인 편집 */
     #dashTitle.title-edit{outline:1.5px dashed var(--blue,#3182f6);outline-offset:4px;border-radius:6px;cursor:text;}
     #dashTitle.just-saved{outline:1.5px solid #30a46c;}
+
+    /* ===== 📱 모바일 반응형 (태블릿~폰) ===== */
+    @media (max-width:760px){
+      body{padding:14px;}
+      h1{font-size:19px;}
+      h2{font-size:15px;margin:20px 0 10px;}
+      /* 카드 그리드: 4·5·3·2열 전부 2열로 (인라인 강제분은 !important) */
+      .cards,.cards5,#gaugePanel,#cmpGrowthCards,#cmpKpiCards,#liveChannel{
+        grid-template-columns:repeat(2,1fr)!important;gap:10px;
+      }
+      .card{padding:15px;border-radius:16px;}
+      .card .value{font-size:22px;}
+      .compare{grid-template-columns:1fr;}     /* 과거vs현재: 1열 세로 */
+      /* 채널 헤더 축소 */
+      .channel .banner{height:110px;}
+      .channel .info{padding:14px 16px;gap:12px;flex-wrap:wrap;}
+      .channel .avatar{width:56px;height:56px;}
+      .channel .name{font-size:19px;}
+      .channel .substat{font-size:13px;}
+      .channel .dday{font-size:22px;}
+      /* KPI 게이지: 고정폭 제거 */
+      .gauge-row{gap:8px;}
+      .gauge-row .gl{width:auto;min-width:62px;font-size:12px;}
+      .gauge-row .gv{width:auto;font-size:12px;}
+      /* 차트 높이 약간 축소 */
+      .chart-box{height:240px;}
+      .panel{padding:14px;border-radius:16px;}
+      /* 셀렉트 우측정렬 줄바꿈 여유 */
+      h2 select{margin-left:auto;}
+      /* 영상 재생 패널: 전체화면, 본문 밀지 않음 */
+      #player{width:100vw;right:-100vw;}
+      body.player-open .wrap{margin-right:0;}
+      /* 상단 고정 요약바 간격 축소 */
+      .sb-inner{gap:14px;padding:11px 14px;}
+      .sb-item .v{font-size:14px;}
+    }
+    /* 아주 좁은 폰 */
+    @media (max-width:430px){
+      body{padding:11px;}
+      .cards5{gap:8px;}
+      .card .value{font-size:20px;}
+      .channel .info{gap:10px;}
+    }
   </style>
 </head>
 <body>
