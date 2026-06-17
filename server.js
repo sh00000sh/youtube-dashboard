@@ -434,17 +434,25 @@ app.get("/api/compare", async (req, res) => {
     const totals = {};
     (totalRes.data.rows || []).forEach((r) => totals[r[0]] = { views: +r[1] || 0, avp: +r[2] || 0, subs: +r[3] || 0 });
 
-    // 2) 영상별 "광고(ADVERTISING)" 유입 조회수
-    const adRes = await ya.reports.query({
-      ids: "channel==MINE", startDate: start, endDate: end,
-      dimensions: "video", metrics: "views",
-      filters: "insightTrafficSourceType==ADVERTISING", maxResults: 200,
-    });
+    // 영상 ID 목록 (조회수 있는 것만, 최대 80개)
+    const ids = Object.keys(totals).filter((id) => totals[id].views > 0).slice(0, 80);
+
+    // 2) 영상별 "광고(ADVERTISING)" 유입 — 영상마다 트래픽소스를 따로 조회(지원되는 쿼리)
     const ads = {};
-    (adRes.data.rows || []).forEach((r) => ads[r[0]] = +r[1] || 0);
+    for (const id of ids) {
+      try {
+        const tr = await ya.reports.query({
+          ids: "channel==MINE", startDate: start, endDate: end,
+          dimensions: "insightTrafficSourceType", metrics: "views",
+          filters: "video==" + id,
+        });
+        let adv = 0;
+        (tr.data.rows || []).forEach((row) => { if (row[0] === "ADVERTISING") adv = +row[1] || 0; });
+        ads[id] = adv;
+      } catch (_) { ads[id] = 0; }
+    }
 
     // 3) 제목·게시일 (OAuth Data API → 비공개 포함)
-    const ids = Object.keys(totals);
     const meta = {};
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
