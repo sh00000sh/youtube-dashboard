@@ -434,8 +434,8 @@ app.get("/api/compare", async (req, res) => {
     const totals = {};
     (totalRes.data.rows || []).forEach((r) => totals[r[0]] = { views: +r[1] || 0, avp: +r[2] || 0, subs: +r[3] || 0 });
 
-    // 영상 ID 목록 (조회수 있는 것만, 최대 60개)
-    const ids = Object.keys(totals).filter((id) => totals[id].views > 0).slice(0, 60);
+    // 영상 ID 목록 (조회수 있는 것만 — 사실상 전체)
+    const ids = Object.keys(totals).filter((id) => totals[id].views > 0).slice(0, 200);
 
     // 2) 영상별 "광고(ADVERTISING)" 유입 — 트래픽소스 개별 조회를 병렬(10개씩)로 처리해 속도 개선
     const ads = {};
@@ -467,7 +467,7 @@ app.get("/api/compare", async (req, res) => {
       });
     }
 
-    const ADSHARE = Number(req.query.threshold || 0.3); // 광고 유입 30% 이상이면 광고영상
+    const ADSHARE = Number(req.query.threshold || 0.7); // 광고 유입 70% 이상이면 광고영상(제외)
     const videos = ids.map((id) => {
       const t = totals[id], ad = ads[id] || 0;
       const organic = Math.max(0, t.views - ad);
