@@ -417,6 +417,63 @@ app.post("/api/video", async (req, res) => {
   }
 });
 
+// 과거 vs 현재 비교 (광고 유입 자동 제외) — 트래픽 소스 기반
+app.get("/api/compare", async (req, res) => {
+  try {
+    const auth = getOAuth();
+    const ya = google.youtubeAnalytics({ version: "v2", auth });
+    const yt = google.youtube({ version: "v3", auth }); // youtube.readonly 필요(비공개 영상)
+    const start = "2017-01-01", end = ymd(new Date());
+
+    // 1) 영상별 전체(생애) 합계
+    const totalRes = await ya.reports.query({
+      ids: "channel==MINE", startDate: start, endDate: end,
+      dimensions: "video", metrics: "views,averageViewPercentage,subscribersGained",
+      sort: "-views", maxResults: 200,
+    });
+    const totals = {};
+    (totalRes.data.rows || []).forEach((r) => totals[r[0]] = { views: +r[1] || 0, avp: +r[2] || 0, subs: +r[3] || 0 });
+
+    // 2) 영상별 "광고(ADVERTISING)" 유입 조회수
+    const adRes = await ya.reports.query({
+      ids: "channel==MINE", startDate: start, endDate: end,
+      dimensions: "video", metrics: "views",
+      filters: "insightTrafficSourceType==ADVERTISING", maxResults: 200,
+    });
+    const ads = {};
+    (adRes.data.rows || []).forEach((r) => ads[r[0]] = +r[1] || 0);
+
+    // 3) 제목·게시일 (OAuth Data API → 비공개 포함)
+    const ids = Object.keys(totals);
+    const meta = {};
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const v = await yt.videos.list({ part: "snippet,contentDetails", id: chunk.join(",") });
+      (v.data.items || []).forEach((it) => meta[it.id] = {
+        title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+        duration: isoDurToMMSS(it.contentDetails.duration),
+      });
+    }
+
+    const ADSHARE = Number(req.query.threshold || 0.3); // 광고 유입 30% 이상이면 광고영상
+    const videos = ids.map((id) => {
+      const t = totals[id], ad = ads[id] || 0;
+      const organic = Math.max(0, t.views - ad);
+      const adShare = t.views ? ad / t.views : 0;
+      const m = meta[id] || {};
+      return {
+        id, title: m.title || id, publishedAt: m.publishedAt || "", duration: m.duration || "",
+        views: t.views, ad, organic, adShare, avp: t.avp, subs: t.subs,
+        isAd: adShare >= ADSHARE,
+      };
+    }).filter((v) => v.publishedAt);
+
+    res.json({ ok: true, videos });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/api/data", async (req, res) => {
   try {
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) {

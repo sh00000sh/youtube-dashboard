@@ -227,6 +227,15 @@
     </div>
 
     </div>
+    <div class="sec" id="sec-compare" style="display:none">
+    <h2>📊 과거 vs 현재 (광고 제외) <span class="kpi-badge">유튜브 광고 유입을 뺀 순수 성과 비교</span></h2>
+    <div class="desc">외주로 돌린 광고 유입(트래픽 소스=광고)이 30% 이상인 영상은 자동 제외했어요. 자연 유입 기준으로 과거 영상과 6월 이후 영상의 성과를 비교해요.</div>
+    <div class="bar"><button onclick="loadCompare()" id="cmpBtn" style="padding:9px 16px;font-size:14px">🔍 비교 불러오기</button> <span class="status" id="cmpStatus">버튼을 눌러 분석을 시작하세요</span></div>
+    <div class="compare" id="cmpCards"></div>
+    <h2 style="font-size:15px;margin-top:22px">📈 월별 유기적 평균 조회수</h2>
+    <div class="panel"><div class="chart-box"><canvas id="cmpChart"></canvas></div></div>
+    </div>
+
     <div class="seg" id="seg2"></div>
     <div class="sec" id="sec-dchart">
     <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span>
@@ -743,6 +752,49 @@
           scales:{x:{ticks:{color:"#8b95a1"},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
     }
 
+    // 과거 vs 현재 비교 (광고 제외)
+    let cmpData=null, cmpChart=null;
+    async function loadCompare(){
+      const st=document.getElementById("cmpStatus"), btn=document.getElementById("cmpBtn");
+      st.textContent="분석 중... (과거 데이터라 20~40초 걸릴 수 있어요)"; btn.disabled=true;
+      try{
+        const r=await fetch("/api/compare").then(r=>r.json());
+        if(!r.ok){ st.textContent="❌ 오류: "+r.error; btn.disabled=false; return; }
+        cmpData=r.videos||[]; renderCompare();
+        st.textContent=`✅ 영상 ${cmpData.length}개 분석 · 광고영상 ${cmpData.filter(v=>v.isAd).length}개 제외`;
+      }catch(e){ st.textContent="❌ 오류: "+e.message; }
+      btn.disabled=false;
+    }
+    function renderCompare(){
+      if(!cmpData)return;
+      const organic=cmpData.filter(v=>!v.isAd);
+      const past=organic.filter(v=>v.publishedAt.slice(0,10)<"2026-06-01");
+      const now=organic.filter(v=>v.publishedAt.slice(0,10)>="2026-06-01");
+      const avg=(arr,f)=>arr.length?arr.reduce((a,v)=>a+f(v),0)/arr.length:0;
+      const card=(t,arr)=>`<div class="cmp"><h3>${t} (${arr.length}개)</h3>
+        <div class="crow"><span>평균 유기적 조회수</span><b>${fmt(Math.round(avg(arr,v=>v.organic)))}</b></div>
+        <div class="crow"><span>평균 조회율</span><b>${avg(arr,v=>v.avp).toFixed(1)}%</b></div>
+        <div class="crow"><span>평균 구독전환</span><b>${avg(arr,v=>v.subs).toFixed(1)}</b></div></div>`;
+      const pv=avg(past,v=>v.organic), nv=avg(now,v=>v.organic);
+      const g=pv?((nv/pv-1)*100):0;
+      const growthCard=`<div class="cmp"><h3>📈 성장률 (유기적 조회수)</h3>
+        <div style="font-size:32px;font-weight:900;color:${g>=0?'#1f9d57':'#e15a72'};margin:10px 0 4px">${g>=0?'+':''}${g.toFixed(0)}%</div>
+        <div class="note">과거 평균 ${fmt(Math.round(pv))} → 현재 ${fmt(Math.round(nv))}</div></div>`;
+      const box=document.getElementById("cmpCards");
+      box.style.gridTemplateColumns="repeat(3,1fr)";
+      box.innerHTML=card("📼 과거 (6월 이전)",past)+card("🆕 현재 (6월~)",now)+growthCard;
+      // 월별 유기적 평균
+      const byM={}; organic.forEach(v=>{const m=v.publishedAt.slice(0,7); (byM[m]=byM[m]||[]).push(v.organic);});
+      const months=Object.keys(byM).sort();
+      const data=months.map(m=>Math.round(byM[m].reduce((a,b)=>a+b,0)/byM[m].length));
+      if(cmpChart)cmpChart.destroy();
+      cmpChart=new Chart(document.getElementById("cmpChart"),{type:"bar",
+        data:{labels:months,datasets:[{label:"월별 유기적 평균 조회수",data,backgroundColor:"#3182f6",borderRadius:6,maxBarThickness:46}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:(c)=>`평균 ${c.parsed.y.toLocaleString("ko-KR")}회`}}},
+          scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
+    }
+
     // CTR × 평균조회율 산점도
     let scatter=null;
     function drawScatter(){
@@ -831,6 +883,7 @@
         {id:"sec-kpi",label:"KPI 달성률",draw:()=>renderGauge()},
         {id:"sec-cum",label:"누적 성과",draw:()=>renderCumulative()},
         {id:"sec-growth",label:"누적 성장 추이",draw:()=>drawGrowth()},
+        {id:"sec-compare",label:"과거 vs 현재",draw:()=>{ if(cmpData)renderCompare(); }},
       ]},
       {bar:"seg2", items:[
         {id:"sec-dchart",label:"일별 추이",draw:()=>drawChart()},
