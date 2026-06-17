@@ -353,7 +353,7 @@
       video:{ views:1000, impr:300, ctr:5, avp:50, subs:1, eng:3 },
     };
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
-    const SINCE = "26-05-11";
+    const SINCE = "26-06-01";              // 본격 업로드 시작일 (전체 기간 기준)
 
     // ===== 유틸 =====
     const N=(n)=>{const x=Number(String(n??"").replace(/[^0-9.-]/g,""));return isNaN(x)?0:x;};
@@ -439,8 +439,8 @@
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
       document.getElementById("ch_stat").innerHTML=`구독자 <b>${fmt(c.subscribers)}명</b> · 전체 누적 조회수 <b>${fmt(c.totalViews)}회</b>`;
-      // 리런칭(5/11) 후 운영일 D+NN
-      const days=Math.floor((Date.now()-new Date("2026-05-11").getTime())/86400000);
+      // 본격 업로드(6/1) 후 운영일 D+NN
+      const days=Math.floor((Date.now()-new Date("2026-06-01").getTime())/86400000);
       document.getElementById("ddayBadge").textContent="D+"+Math.max(0,days);
       const b=document.getElementById("ch_banner"); b.style.cursor="pointer"; b.onclick=()=>c.url&&window.open(c.url,"_blank");
     }
