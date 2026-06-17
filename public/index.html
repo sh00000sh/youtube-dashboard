@@ -149,6 +149,8 @@
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
       <select id="videoSort" style="margin-left:auto">
         <option value="date">업로드 최신순</option>
+        <option value="short">숏폼 먼저</option>
+        <option value="long">롱폼 먼저</option>
         <option value="8">조회수 높은순</option>
         <option value="9">좋아요 높은순</option>
         <option value="10">댓글 높은순</option>
@@ -172,7 +174,10 @@
       <div style="margin-bottom:12px"><select id="vd_select" style="width:100%;max-width:560px"><option value="">영상을 선택하세요</option></select></div>
       <div class="metric-tabs" id="vd_periodTabs"></div>
       <div class="metric-tabs" id="vd_metricTabs"></div>
-      <div class="chart-box"><canvas id="vdChart"></canvas></div>
+      <div class="chart-box" style="position:relative">
+        <canvas id="vdChart"></canvas>
+        <div id="vdMsg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#8b95a1;font-size:14px;padding:20px;white-space:pre-line;">영상을 선택하세요</div>
+      </div>
       <div class="note">※ 노출수·CTR·시간단위(24시간) 추이는 유튜브 API로 제공되지 않습니다(스튜디오 전용). 24시간은 업로드 후 로봇이 쌓은 스냅샷이 있을 때만 표시됩니다.</div>
     </div>
   </div>
@@ -199,6 +204,10 @@
     const pctStr=(n)=>{ if(n==null||n==="")return "-"; return toPctNum(n).toFixed(1)+"%"; };
     const kCls=(a,t)=>{if(!t)return "";const r=a/t;return r>=1?"g":r>=0.5?"y":"r";};
     const eCls=(v)=>{v=N(v);return v>=ENG.green?"g":v>=ENG.yellow?"y":"r";};
+    // 영상 길이(0:42 / 1:02:03) → 초. 180초(3분) 이하면 숏폼
+    const durSec=(s)=>{const p=String(s||"").split(":").map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:(Number(s)||0);};
+    const isShort=(x)=> durSec(x[4])<=180 ? 1 : 0;
+    const formLabel=(x)=> isShort(x) ? "숏폼" : "롱폼";
 
     let DAILY=[], VIDEOS=[], chart=null, growth=null, activeMetric=6, activeGrowth=6;
     const METRICS=[
@@ -273,41 +282,35 @@
       m.querySelectorAll(".mt").forEach(el=>el.onclick=()=>{vd.metric=el.dataset.k;buildVdTabs();drawVd();});
     }
     function drawVd(){
+      if(!vd.id){ vdShowMsg("영상을 선택하세요"); return; }
       const met=VD_METRICS.find(x=>x.k===vd.metric);
-      if(vd.chart)vd.chart.destroy();
-      let labels, data, titleFn;
+      let labels, data, titles;  // titles = 툴팁 제목 배열
 
       if(vd.period===24){
-        // 시간별 스냅샷 (조회수/참여만 가능, 누적값을 그대로 찍음)
         const hr=vd.hourly;
-        if(!hr.length){
-          vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",data:{labels:[],datasets:[]},
-            options:{plugins:{title:{display:true,text:"아직 시간별 데이터가 없어요. 이 영상이 업로드된 뒤 로봇이 1시간마다 쌓습니다.",color:"#8b95a1"}}}});
-          return;
-        }
+        if(!hr.length){ vdShowMsg("아직 시간별 데이터가 없어요.\n이 영상 업로드 후 로봇이 1시간마다 쌓습니다."); return; }
         labels=hr.map(h=>Math.round(h.hours)+"H");
         const v=(h)=> met.k==="eng"?(h.likes+h.comments): h.views;  // 24h는 조회수/참여만
         data=hr.map(v);
-        titleFn=(it)=>"게시 후 "+it[0].label;
+        titles=hr.map(h=>"게시 후 "+Math.round(h.hours)+"시간");
       } else {
         const rows=vd.rows.slice(0, vd.period===99999? vd.rows.length : vd.period);
-        if(!rows.length){
-          vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",data:{labels:[],datasets:[]},
-            options:{plugins:{title:{display:true,text:"데이터가 없습니다.",color:"#8b95a1"}}}});
-          return;
-        }
-        labels=rows.map((_,i)=>"D"+(i+1));
+        if(!rows.length){ vdShowMsg("데이터가 없습니다."); return; }
+        // 날짜 라벨 (예: 06-02), 툴팁엔 날짜 + 게시 후 N일
+        labels=rows.map(r=>(r.date||"").slice(5));
+        titles=rows.map((r,i)=>`${r.date} (게시 후 ${i+1}일)`);
         const valOf=(r)=> met.k==="eng"?(r.likes+r.comments+r.shares):met.k==="avp"?r.avp:met.k==="subs"?r.subs:r.views;
         if(met.cum){ let run=0; data=rows.map(r=>{run+=valOf(r);return run;}); }
         else data=rows.map(valOf);
-        titleFn=(it)=>"게시 후 "+it[0].label.replace("D","")+"일";
       }
 
+      vdShowMsg(null);
+      if(vd.chart)vd.chart.destroy();
       vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",
         data:{labels,datasets:[{label:met.label,data,borderColor:met.color,backgroundColor:met.color+"22",borderWidth:2.5,pointRadius:vd.period===24?3:0,fill:met.cum,tension:.25}]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
           plugins:{legend:{display:false},tooltip:{callbacks:{
-            title:titleFn,
+            title:(it)=>titles[it[0].dataIndex]||it[0].label,
             label:(c)=>met.label+": "+(met.k==="avp"? c.parsed.y.toFixed(1)+"%": c.parsed.y.toLocaleString("ko-KR"))
           }}},
           scales:{x:{ticks:{color:"#8b95a1",autoSkip:true,maxTicksLimit:14},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
@@ -392,11 +395,15 @@
       document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·구독전환 ${KPI.video.subs}`;
       const el=document.getElementById("videoRows");
       // 영상 컬럼(A~V): 0ID 1업로드일 2형태 3타이틀 4길이 5노출수 6CTR 7평균조회율 8조회수 9좋아요 10댓글 11공유 12구독전환 ... 21특이사항
-      const rows=sortRows(VIDEOS, document.getElementById("videoSort").value, 1);
+      const sv=document.getElementById("videoSort").value;
+      let rows;
+      if(sv==="short") rows=[...VIDEOS].sort((a,b)=>(isShort(b)-isShort(a))||(a[1]<b[1]?1:-1));
+      else if(sv==="long") rows=[...VIDEOS].sort((a,b)=>(isShort(a)-isShort(b))||(a[1]<b[1]?1:-1));
+      else rows=sortRows(VIDEOS, sv, 1);
       if(!rows.length){el.innerHTML='<tr><td colspan="13" class="empty">데이터 없음</td></tr>';return;}
       el.innerHTML=rows.map(x=>`<tr>
         <td>${x[1]??""}</td>
-        <td>${x[2]??""}</td>
+        <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td>${x[4]??""}</td>
         <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}">${x[5]?fmt(x[5]):"-"}</td>
@@ -428,11 +435,17 @@
         list.map(v=>`<option value="${v[0]}|${v[1]||''}">${(v[3]||'').replace(/"/g,'')}</option>`).join("");
     }
     document.getElementById("vd_select").onchange=function(){
-      if(!this.value)return;
+      if(!this.value){ vd.id=null; vd.rows=[]; vd.hourly=[]; vdShowMsg("영상을 선택하세요"); return; }
       const [id,upload]=this.value.split("|");
       const v=VIDEOS.find(x=>x[0]===id);
       openDetail(id, v?v[3]:"", upload);
     };
+    // 그래프 영역 중앙 메시지 표시/숨김
+    function vdShowMsg(text){
+      const m=document.getElementById("vdMsg");
+      if(text){ if(vd.chart){vd.chart.destroy();vd.chart=null;} m.textContent=text; m.style.display="flex"; }
+      else { m.style.display="none"; }
+    }
     async function sync(){
       const btn=document.getElementById("syncBtn"),st=document.getElementById("status");
       btn.disabled=true; st.textContent="동기화 중... (유튜브→시트, 10~30초)";
