@@ -116,6 +116,8 @@
     .bw .bwc .t{font-size:12px;color:var(--sub);margin-bottom:6px;}
     .bw .bwc .n{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .bw .bwc .v{font-size:13px;color:var(--blue);font-weight:800;margin-top:3px;}
+    .bw .bwc .bw-thumb{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;margin:8px 0;cursor:pointer;background:var(--line);}
+    .bw .bwc .n:hover{color:var(--blue);}
     /* 상단 고정 요약 바 */
     #stickyBar{position:fixed;top:0;left:0;right:0;z-index:40;background:var(--card);border-bottom:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08);transform:translateY(-100%);transition:transform .22s;}
     #stickyBar.show{transform:translateY(0);}
@@ -177,8 +179,8 @@
     <div class="sec" id="sec-kpi">
     <h2>🎯 KPI 달성률
       <select id="gaugeType" style="margin-left:auto">
-        <option value="video">영상별</option>
         <option value="daily">일별</option>
+        <option value="video">영상별</option>
         <option value="cumulative">누적</option>
       </select>
       <select id="gaugePeriod">
@@ -288,6 +290,22 @@
     </div></div>
 
     </div>
+    <div class="sec" id="sec-live" style="display:none">
+    <h2>⚡ 실시간 <span class="kpi-badge">유튜브 현재 시점 (지연 없음)</span>
+      <button id="liveAutoBtn" onclick="toggleLiveAuto()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">▶ 자동 갱신</button>
+      <button onclick="loadLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
+    </h2>
+    <div class="desc">업로드 직후 조회수·좋아요·댓글이 <b>실시간으로 쌓이는 걸</b> 봐요. (스튜디오·일반 동기화는 2~3일 지연되지만, 이건 현재 누적값이라 즉시 반영) 자동 갱신은 30초마다. <span id="liveAt"></span></div>
+    <div class="cards" id="liveChannel" style="grid-template-columns:repeat(3,1fr)"></div>
+    <h2 style="font-size:15px;margin-top:20px">🎬 최근 영상 실시간</h2>
+    <div class="tbl-wrap"><div class="scroll">
+      <table>
+        <thead><tr><th>썸네일</th><th>업로드일</th><th>타이틀</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>방금 변화</th></tr></thead>
+        <tbody id="liveRows"><tr><td colspan="7" class="empty">새로고침을 눌러주세요.</td></tr></tbody>
+      </table>
+    </div></div>
+    </div>
+
     <div class="seg" id="seg3"></div>
     <div class="sec" id="sec-hl">
     <h2>🏆 영상 하이라이트 & 포맷 비교</h2>
@@ -709,10 +727,17 @@
       const byV=[...VIDEOS].sort((a,b)=>N(b[8])-N(a[8]));
       const byA=[...VIDEOS].sort((a,b)=>toPctNum(b[7])-toPctNum(a[7]));
       const best=byV[0], worst=byV[byV.length-1], bestA=byA[0];
-      box.innerHTML=`
-        <div class="bwc"><div class="t">🏆 조회수 베스트</div><div class="n">${best[3]}</div><div class="v">${fmt(best[8])}회</div></div>
-        <div class="bwc"><div class="t">⚠️ 조회수 아쉬운</div><div class="n">${worst[3]}</div><div class="v">${fmt(worst[8])}회</div></div>
-        <div class="bwc"><div class="t">👀 끝까지 본 영상(평균조회율 1위)</div><div class="n">${bestA[3]}</div><div class="v">${pctStr(bestA[7])}</div></div>`;
+      const bwCard=(label,v,val)=>{
+        const oc=`openVideo('${v[0]}',\`${(v[3]||'').replace(/\`/g,'')}\`,'${v[1]||''}')`;
+        return `<div class="bwc">
+          <div class="t">${label}</div>
+          <img src="https://i.ytimg.com/vi/${v[0]}/mqdefault.jpg" class="bw-thumb" onclick="${oc}">
+          <div class="n" style="cursor:pointer" onclick="${oc}">${v[3]}</div>
+          <div class="v">${val}</div></div>`;
+      };
+      box.innerHTML=bwCard("🏆 조회수 베스트",best,fmt(best[8])+"회")
+        +bwCard("⚠️ 조회수 아쉬운",worst,fmt(worst[8])+"회")
+        +bwCard("👀 평균조회율 1위",bestA,pctStr(bestA[7]));
     }
     // 숏폼 vs 롱폼 비교
     function renderFormCompare(){
@@ -761,6 +786,47 @@
         options:{responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>`평균 ${c.parsed.y.toLocaleString("ko-KR")}회 (영상 ${counts[c.dataIndex]}개)`}}},
           scales:{x:{ticks:{color:"#8b95a1"},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
+    }
+
+    // ===== 실시간 (Data API 현재값) =====
+    let livePrev=null, liveTimer=null;
+    async function loadLive(){
+      const at=document.getElementById("liveAt");
+      at.textContent="(불러오는 중...)";
+      try{
+        const r=await fetch("/api/live").then(r=>r.json());
+        if(!r.ok){ at.textContent="❌ "+r.error; return; }
+        renderLive(r);
+        at.textContent="· 갱신: "+new Date(r.at).toLocaleTimeString("ko-KR");
+      }catch(e){ at.textContent="❌ "+e.message; }
+    }
+    function renderLive(r){
+      const c=r.channel;
+      document.getElementById("liveChannel").innerHTML=`
+        <div class="card"><div class="label">구독자</div><div class="value">${fmt(c.subscribers)}</div></div>
+        <div class="card"><div class="label">전체 누적 조회수</div><div class="value">${fmt(c.totalViews)}</div></div>
+        <div class="card"><div class="label">총 영상 수</div><div class="value">${fmt(c.videoCount)}</div></div>`;
+      const prev=livePrev||{};
+      const el=document.getElementById("liveRows");
+      el.innerHTML=(r.videos||[]).map(v=>{
+        const p=prev[v.id]; const dV=p?v.views-p.views:0, dL=p?v.likes-p.likes:0, dC=p?v.comments-p.comments:0;
+        const chg=(d)=> d>0?`<span class="up2">▲${d}</span>`:d<0?`<span class="down2">▼${Math.abs(d)}</span>`:"";
+        const delta=p? [chg(dV)&&`조회 ${chg(dV)}`,chg(dL)&&`좋아요 ${chg(dL)}`,chg(dC)&&`댓글 ${chg(dC)}`].filter(Boolean).join(" · ")||"-" : "기준 설정됨";
+        const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.publishedAt||'').slice(2,10)}')`;
+        return `<tr>
+          <td><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" class="thumb" onclick="${oc}"></td>
+          <td>${(v.publishedAt||'').slice(0,10)}</td>
+          <td><span class="vtitle" onclick="${oc}">${v.title}</span></td>
+          <td class="strong">${fmt(v.views)}</td><td>${fmt(v.likes)}</td><td>${fmt(v.comments)}</td>
+          <td>${delta}</td></tr>`;
+      }).join("");
+      // 다음 비교용 스냅샷 저장
+      livePrev={}; (r.videos||[]).forEach(v=>livePrev[v.id]={views:v.views,likes:v.likes,comments:v.comments});
+    }
+    function toggleLiveAuto(){
+      const btn=document.getElementById("liveAutoBtn");
+      if(liveTimer){ clearInterval(liveTimer); liveTimer=null; btn.textContent="▶ 자동 갱신"; btn.style.background="var(--chip)"; btn.style.color="var(--text)"; }
+      else { loadLive(); liveTimer=setInterval(loadLive,30000); btn.textContent="⏸ 자동 갱신 중"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
     }
 
     // 과거 vs 현재 비교 (광고 제외)
@@ -943,6 +1009,7 @@
       {bar:"seg2", items:[
         {id:"sec-dchart",label:"일별 추이",draw:()=>drawChart()},
         {id:"sec-dtable",label:"일별 상세",draw:()=>renderDailyTable()},
+        {id:"sec-live",label:"⚡ 실시간",draw:()=>{ if(!livePrev) loadLive(); }},
       ]},
       {bar:"seg3", items:[
         {id:"sec-hl",label:"영상 하이라이트",draw:()=>{renderBestWorst();renderFormCompare();}},

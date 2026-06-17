@@ -417,6 +417,41 @@ app.post("/api/video", async (req, res) => {
   }
 });
 
+// 실시간 — Data API로 현재 시점 채널/영상 누적 지표(지연 없음)
+app.get("/api/live", async (req, res) => {
+  try {
+    if (!YOUTUBE_API_KEY || !CHANNEL_ID) return res.status(400).json({ ok: false, error: "YOUTUBE_API_KEY/CHANNEL_ID 누락" });
+    const ch = await (await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
+    if (ch.error) throw new Error(ch.error.message);
+    const st = ch.items?.[0]?.statistics || {};
+    const uploads = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    let videos = [];
+    if (uploads) {
+      const pl = await (await fetch(
+        `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails,snippet&maxResults=10&playlistId=${uploads}&key=${YOUTUBE_API_KEY}`)).json();
+      const ids = (pl.items || []).map((it) => it.contentDetails.videoId);
+      if (ids.length) {
+        const vs = await (await fetch(
+          `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
+        videos = (vs.items || []).map((it) => ({
+          id: it.id, title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+          views: Number(it.statistics.viewCount || 0),
+          likes: Number(it.statistics.likeCount || 0),
+          comments: Number(it.statistics.commentCount || 0),
+        }));
+      }
+    }
+    res.json({
+      ok: true, at: new Date().toISOString(),
+      channel: { subscribers: Number(st.subscriberCount || 0), totalViews: Number(st.viewCount || 0), videoCount: Number(st.videoCount || 0) },
+      videos,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // 과거 vs 현재 비교 (광고 유입 자동 제외) — 트래픽 소스 기반
 app.get("/api/compare", async (req, res) => {
   try {
