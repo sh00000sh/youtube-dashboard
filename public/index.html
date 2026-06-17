@@ -127,19 +127,17 @@
     </div>
 
     <h2>📅 일별 상세 <span class="kpi-badge" id="dailyKpiBadge"></span>
-      <select id="dailySort" style="margin-left:auto">
-        <option value="date">날짜 최신순</option>
-        <option value="date_asc">날짜 오래된순</option>
-        <option value="6">조회수 높은순</option>
-        <option value="6_asc">조회수 낮은순</option>
-        <option value="1">구독자 높은순</option>
-        <option value="1_asc">구독자 낮은순</option>
-        <option value="3">좋아요 높은순</option>
-        <option value="3_asc">좋아요 낮은순</option>
-        <option value="4">댓글 높은순</option>
-        <option value="4_asc">댓글 낮은순</option>
-        <option value="5">공유 높은순</option>
-        <option value="5_asc">공유 낮은순</option>
+      <select id="dailySortKey" style="margin-left:auto">
+        <option value="date">날짜</option>
+        <option value="6">조회수</option>
+        <option value="1">구독자</option>
+        <option value="3">좋아요</option>
+        <option value="4">댓글</option>
+        <option value="5">공유</option>
+      </select>
+      <select id="dailySortDir">
+        <option value="desc">최신/높은순</option>
+        <option value="asc">오래된/낮은순</option>
       </select>
     </h2>
     <div class="tbl-wrap"><div class="scroll">
@@ -155,22 +153,20 @@
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
       <select id="videoForm" style="margin-left:auto">
         <option value="all">전체 형태</option>
-        <option value="short">숏폼만</option>
-        <option value="long">롱폼만</option>
+        <option value="short">숏폼</option>
+        <option value="long">롱폼</option>
       </select>
-      <select id="videoSort">
-        <option value="date">업로드 최신순</option>
-        <option value="date_asc">업로드 오래된순</option>
-        <option value="8">조회수 높은순</option>
-        <option value="8_asc">조회수 낮은순</option>
-        <option value="9">좋아요 높은순</option>
-        <option value="9_asc">좋아요 낮은순</option>
-        <option value="10">댓글 높은순</option>
-        <option value="10_asc">댓글 낮은순</option>
-        <option value="11">공유 높은순</option>
-        <option value="11_asc">공유 낮은순</option>
-        <option value="12">구독전환 높은순</option>
-        <option value="12_asc">구독전환 낮은순</option>
+      <select id="videoSortKey">
+        <option value="date">업로드일</option>
+        <option value="8">조회수</option>
+        <option value="9">좋아요</option>
+        <option value="10">댓글</option>
+        <option value="11">공유</option>
+        <option value="12">구독전환</option>
+      </select>
+      <select id="videoSortDir">
+        <option value="desc">최신/높은순</option>
+        <option value="asc">오래된/낮은순</option>
       </select>
     </h2>
     <div class="tbl-wrap"><div class="scroll">
@@ -382,18 +378,22 @@
       document.getElementById("cum_shares").textContent=fmt(sum(5));
     }
 
-    function sortRows(rows, val, dateIdx){
-      if(val==="date") return [...rows].sort((a,b)=>(a[dateIdx]<b[dateIdx]?1:a[dateIdx]>b[dateIdx]?-1:0));   // 최신순
-      if(val==="date_asc") return [...rows].sort((a,b)=>(a[dateIdx]<b[dateIdx]?-1:a[dateIdx]>b[dateIdx]?1:0)); // 오래된순
-      if(val.endsWith("_asc")){ const i=Number(val.replace("_asc","")); return [...rows].sort((a,b)=>N(a[i])-N(b[i])); } // 낮은순
-      const i=Number(val); return [...rows].sort((a,b)=>N(b[i])-N(a[i]));  // 높은순
+    // key=정렬 항목("date" 또는 컬럼번호), dir="desc"(최신/높은) | "asc"(오래된/낮은)
+    function sortRows(rows, key, dir, dateIdx){
+      if(key==="date"){
+        return [...rows].sort((a,b)=> dir==="asc"
+          ? (a[dateIdx]<b[dateIdx]?-1:a[dateIdx]>b[dateIdx]?1:0)
+          : (a[dateIdx]<b[dateIdx]?1:a[dateIdx]>b[dateIdx]?-1:0));
+      }
+      const i=Number(key);
+      return [...rows].sort((a,b)=> dir==="asc" ? N(a[i])-N(b[i]) : N(b[i])-N(a[i]));
     }
 
     function renderDailyTable(){
       document.getElementById("dailyKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·구독자 +${KPI.daily.subs}`;
       const el=document.getElementById("dailyRows");
       // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간 12특이사항
-      const rows=sortRows(DAILY, document.getElementById("dailySort").value, 0);
+      const rows=sortRows(DAILY, document.getElementById("dailySortKey").value, document.getElementById("dailySortDir").value, 0);
       if(!rows.length){el.innerHTML='<tr><td colspan="12" class="empty">데이터 없음</td></tr>';return;}
       el.innerHTML=rows.map(x=>`<tr>
         <td>${x[0]??""}</td>
@@ -419,7 +419,7 @@
       let list=VIDEOS;
       if(ff==="short") list=VIDEOS.filter(x=>isShort(x));
       else if(ff==="long") list=VIDEOS.filter(x=>!isShort(x));
-      const rows=sortRows(list, document.getElementById("videoSort").value, 1);
+      const rows=sortRows(list, document.getElementById("videoSortKey").value, document.getElementById("videoSortDir").value, 1);
       if(!rows.length){el.innerHTML='<tr><td colspan="13" class="empty">데이터 없음</td></tr>';return;}
       el.innerHTML=rows.map(x=>`<tr>
         <td>${x[1]??""}</td>
@@ -476,8 +476,10 @@
       }catch(e){st.textContent="❌ 오류: "+e.message;}
       finally{btn.disabled=false;}
     }
-    document.getElementById("dailySort").onchange=renderDailyTable;
-    document.getElementById("videoSort").onchange=renderVideos;
+    document.getElementById("dailySortKey").onchange=renderDailyTable;
+    document.getElementById("dailySortDir").onchange=renderDailyTable;
+    document.getElementById("videoSortKey").onchange=renderVideos;
+    document.getElementById("videoSortDir").onchange=renderVideos;
     document.getElementById("videoForm").onchange=renderVideos;
     load();
   </script>
