@@ -7,9 +7,17 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     :root{
-      --bg:#f2f4f6;--card:#fff;--line:#e5e8eb;--text:#191f28;--sub:#8b95a1;
-      --blue:#3182f6;--blue-soft:#e8f1fe;
-      --g-bg:#e7f7ee;--g-tx:#15803d;--y-bg:#fff7e0;--y-tx:#b88600;--r-bg:#ffecec;--r-tx:#e11d48;
+      --bg:#f7f8fa;--card:#fff;--line:#eef0f3;--text:#191f28;--sub:#8b95a1;
+      --blue:#3182f6;--blue-soft:#e8f1fe;--th:#f7f8fa;--zebra:#fbfcfd;--hover:#f1f6ff;--chip:#f2f4f6;
+      --shadow:0 1px 4px rgba(0,0,0,.06);--shadow-h:0 4px 16px rgba(0,0,0,.09);
+      /* KPI 색 — 채도 낮춘 파스텔 */
+      --g-bg:#eaf7f0;--g-tx:#1f9d57;--y-bg:#fdf4e3;--y-tx:#c79320;--r-bg:#fdeef0;--r-tx:#e15a72;
+    }
+    body.dark{
+      --bg:#0f1117;--card:#171a23;--line:#222633;--text:#e6e8ee;--sub:#8b95a1;
+      --blue:#4d92ff;--blue-soft:#1a2740;--th:#1b1f29;--zebra:#1b1f29;--hover:#1e2840;--chip:#1e2231;
+      --shadow:0 1px 4px rgba(0,0,0,.3);--shadow-h:0 4px 16px rgba(0,0,0,.4);
+      --g-bg:#11331f;--g-tx:#5fd99a;--y-bg:#332a10;--y-tx:#e6c860;--r-bg:#3a1414;--r-tx:#f08a8a;
     }
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--text);padding:24px;}
@@ -18,13 +26,14 @@
     h1{font-size:22px;margin-bottom:16px;font-weight:800;}
     h2{font-size:16px;margin:26px 0 12px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
     .kpi-badge{font-size:11px;color:var(--sub);font-weight:500;}
+    .desc{font-size:13px;color:var(--sub);margin:-4px 0 14px;line-height:1.5;}
     .bar{display:flex;align-items:center;gap:12px;margin:16px 0;flex-wrap:wrap;}
     button{background:var(--blue);color:#fff;border:0;padding:11px 20px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;}
     button:disabled{opacity:.5;cursor:wait;}
     .status{font-size:13px;color:var(--sub);}
-    select{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer;}
+    select{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer;}
 
-    .channel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+    .channel{background:var(--card);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);}
     /* 배너: 유튜브 채널처럼 풀와이드 + 고해상도 소스로 선명하게 */
     .channel .banner{height:200px;background-color:#0b0d12;background-size:cover;background-position:center;background-repeat:no-repeat;}
     /* 배너 아래 프로필 행 (유튜브처럼 위/아래 분리) */
@@ -42,33 +51,35 @@
     .legend{display:flex;gap:14px;font-size:12px;color:var(--sub);margin:14px 0 0;flex-wrap:wrap;}
     .legend span{display:inline-flex;align-items:center;gap:5px;}
     .dot{width:10px;height:10px;border-radius:3px;display:inline-block;}
-    .dg{background:#3bce82}.dy{background:#f5c33b}.dr{background:#f56a7e}
+    .dg{background:#2bb673}.dy{background:#e0a92e}.dr{background:#e8697f}
 
     .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
     .cards5{grid-template-columns:repeat(5,1fr);}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);text-align:center;}
-    .card .label{font-size:12px;color:var(--sub);margin-bottom:7px;}
-    .card .value{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;}
+    .card{background:var(--card);border-radius:20px;padding:20px;box-shadow:var(--shadow);text-align:center;transition:box-shadow .15s,transform .15s;}
+    .card:hover{box-shadow:var(--shadow-h);}
+    .card .label{font-size:12px;color:var(--sub);margin-bottom:8px;}
+    .card .value{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
     .card .note{text-align:center;}
 
-    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .panel{background:var(--card);border-radius:20px;padding:20px;box-shadow:var(--shadow);}
     .metric-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
-    .mt{background:#f2f4f6;color:var(--sub);border:1px solid var(--line);padding:7px 14px;border-radius:9px;font-size:13px;cursor:pointer;font-weight:600;}
+    .mt{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:7px 14px;border-radius:9px;font-size:13px;cursor:pointer;font-weight:600;}
     .mt.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     .chart-box{height:300px;}
 
-    .tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .tbl-wrap{background:var(--card);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);}
     .scroll{max-height:420px;overflow:auto;}
     table{width:100%;border-collapse:collapse;font-size:13.5px;}
     th,td{padding:13px 12px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
-    th{background:#f1f3f5;color:var(--sub);font-size:11px;font-weight:700;position:sticky;top:0;}
-    tbody tr:nth-child(even){background:#fafbfc;}      /* 얼룩무늬 */
+    th{background:var(--th);color:var(--sub);font-size:11px;font-weight:700;position:sticky;top:0;}
+    tbody tr:nth-child(even){background:var(--zebra);}      /* 얼룩무늬 */
     tr:last-child td{border-bottom:0;}
-    tbody tr:hover{background:#eef5ff;}
+    tbody tr:hover{background:var(--hover);}
     td.muted{color:#aeb6bf;}                            /* 보조 지표는 연하게 */
     td.strong{font-weight:700;}
     .empty{padding:30px;text-align:center;color:var(--sub);}
     .note{font-size:12px;color:var(--sub);margin-top:8px;}
+    .thumb{width:72px;height:40px;object-fit:cover;border-radius:6px;cursor:pointer;vertical-align:middle;background:#e5e8eb;}
     .vtitle{color:var(--blue);cursor:pointer;font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle;}
     .vtitle:hover{text-decoration:underline;}
     .memo{color:var(--sub);max-width:160px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle;}
@@ -89,17 +100,24 @@
     .gauge-row .gv{width:120px;text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
     /* 숏롱 비교 */
     .compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-    .cmp{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .cmp{background:var(--card);border-radius:20px;padding:20px;box-shadow:var(--shadow);}
     .cmp h3{font-size:14px;margin-bottom:12px;}
     .cmp .crow{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--line);}
     .cmp .crow:last-child{border-bottom:0;}
     .cmp .crow b{font-variant-numeric:tabular-nums;}
     /* 베스트/워스트 */
     .bw{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
-    .bw .bwc{flex:1;min-width:280px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .bw .bwc{flex:1;min-width:280px;background:var(--card);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);}
     .bw .bwc .t{font-size:12px;color:var(--sub);margin-bottom:6px;}
     .bw .bwc .n{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .bw .bwc .v{font-size:13px;color:var(--blue);font-weight:800;margin-top:3px;}
+    /* 상단 고정 요약 바 */
+    #stickyBar{position:sticky;top:0;z-index:40;background:var(--card);border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.05);transform:translateY(-100%);transition:transform .2s;}
+    #stickyBar.show{transform:translateY(0);}
+    .sb-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:26px;padding:10px 24px;flex-wrap:wrap;}
+    .sb-item{display:flex;flex-direction:column;}
+    .sb-item .l{font-size:10px;color:var(--sub);}
+    .sb-item .v{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;}
 
     #player{position:fixed;top:0;right:-520px;width:500px;height:100%;background:#0b0d12;box-shadow:-4px 0 24px rgba(0,0,0,.2);transition:right .25s;z-index:50;display:flex;flex-direction:column;}
     body.player-open #player{right:0;}
@@ -111,8 +129,17 @@
   </style>
 </head>
 <body>
+  <!-- 상단 고정 요약 바 -->
+  <div id="stickyBar">
+    <div class="sb-inner" id="sbInner"></div>
+  </div>
+
   <div class="wrap">
-    <h1>⚡ 유튜브 인게이지먼트 대시보드</h1>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <h1 style="margin:0;flex:1">⚡ 유튜브 인게이지먼트 대시보드</h1>
+      <button id="themeBtn" onclick="toggleTheme()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🌙 다크</button>
+    </div>
+    <div class="desc" style="margin-top:-10px">채널 성과를 한곳에서 봐요. 동기화를 누르면 유튜브에서 최신 숫자를 가져와 새로고침돼요.</div>
 
     <div class="channel" id="channelBox">
       <div class="banner" id="ch_banner"></div>
@@ -140,27 +167,29 @@
 
     <h2>🎯 KPI 달성률
       <select id="gaugeType" style="margin-left:auto">
-        <option value="daily">일별</option>
         <option value="video">영상별</option>
+        <option value="daily">일별</option>
         <option value="cumulative">누적</option>
       </select>
       <select id="gaugePeriod">
+        <option value="all">전체</option>
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
-        <option value="all">5/11 이후 전체</option>
       </select>
     </h2>
+    <div class="desc">목표(KPI) 대비 지금 어디쯤 왔는지 한눈에 봐요. 100%를 넘으면 목표 달성이에요.</div>
     <div class="cards" id="gaugePanel" style="grid-template-columns:repeat(3,1fr)"></div>
 
     <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">누적 성과</span>
       <select id="cumPeriod" style="margin-left:auto">
-        <option value="all">5/11 이후 전체</option>
+        <option value="all">전체</option>
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
       </select>
     </h2>
+    <div class="desc">선택한 기간 동안 모은 총합이에요. 카드 아래 숫자는 가장 최근 날의 성과와 전일 대비 변화예요.</div>
     <div class="cards cards5">
       <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div><div class="delta" id="d_views"></div></div>
       <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div><div class="delta" id="d_subs"></div></div>
@@ -171,12 +200,13 @@
 
     <h2>📐 누적 성장 추이 <span class="kpi-badge">(점선 = 누적 KPI 목표선)</span>
       <select id="growthPeriod" style="margin-left:auto">
-        <option value="all">5/11 이후 전체</option>
+        <option value="all">전체</option>
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
       </select>
     </h2>
+    <div class="desc">숫자가 쌓여가는 흐름이에요. 파란 선이 빨간 점선(목표)을 넘으면 KPI 페이스를 앞서고 있는 거예요. 옅은 점선은 현재 속도로 갔을 때의 예측이에요.</div>
     <div class="panel">
       <div class="metric-tabs" id="growthTabs"></div>
       <div class="chart-box"><canvas id="growthChart"></canvas></div>
@@ -184,7 +214,7 @@
 
     <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span>
       <select id="dailyPeriod" style="margin-left:auto">
-        <option value="all">5/11 이후 전체</option>
+        <option value="all">전체</option>
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
@@ -213,9 +243,9 @@
       <table>
         <thead><tr>
           <th>날짜</th><th>구독자</th><th>노출수</th><th>CTR</th><th>조회수</th>
-          <th>평균조회율</th><th>평균시청시간</th><th>좋아요</th><th>댓글</th><th>공유</th><th>추가영상</th><th>특이사항</th>
+          <th>평균조회율</th><th>평균시청시간</th><th>좋아요</th><th>댓글</th><th>공유</th><th>참여율</th><th>추가영상</th><th>특이사항</th>
         </tr></thead>
-        <tbody id="dailyRows"><tr><td colspan="12" class="empty">동기화를 눌러주세요.</td></tr></tbody>
+        <tbody id="dailyRows"><tr><td colspan="13" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
 
@@ -224,7 +254,17 @@
     <div class="compare" id="formCompare"></div>
 
     <h2>🎯 CTR × 평균조회율 (낚시 감별) <span class="kpi-badge">오른쪽 위 = 좋은 영상 / 오른쪽 아래 = 낚시 주의</span></h2>
+    <div class="desc">클릭은 잘 됐는데(오른쪽) 끝까지 안 본(아래쪽) 영상은 제목·썸네일이 내용과 안 맞을 수 있어요. 점에 마우스를 올리면 어떤 영상인지 나와요.</div>
     <div class="panel"><div class="chart-box"><canvas id="scatterChart"></canvas></div></div>
+
+    <h2>📅 업로드 성과 <span class="kpi-badge">(평균 조회수 · 데이터 적으면 참고용)</span>
+      <select id="uploadMode" style="margin-left:auto">
+        <option value="weekday">요일별</option>
+        <option value="hour">시간대별</option>
+      </select>
+    </h2>
+    <div class="desc">어느 요일·시간에 올렸을 때 조회수가 잘 나왔는지 보여줘요. 잘 나온 시간대에 업로드하면 유리해요. (영상이 적으면 참고용)</div>
+    <div class="panel"><div class="chart-box"><canvas id="weekdayChart"></canvas></div></div>
 
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
       <select id="videoForm" style="margin-left:auto">
@@ -248,10 +288,10 @@
     <div class="tbl-wrap"><div class="scroll">
       <table>
         <thead><tr>
-          <th>업로드일</th><th>형태</th><th>타이틀</th><th>길이</th><th>노출수</th><th>CTR</th>
-          <th>평균조회율</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>공유</th><th>구독전환</th><th>특이사항</th>
+          <th>썸네일</th><th>업로드일</th><th>형태</th><th>타이틀</th><th>길이</th><th>노출수</th><th>CTR</th>
+          <th>평균조회율</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>공유</th><th>참여율</th><th>구독전환</th><th>특이사항</th>
         </tr></thead>
-        <tbody id="videoRows"><tr><td colspan="13" class="empty">동기화를 눌러주세요.</td></tr></tbody>
+        <tbody id="videoRows"><tr><td colspan="15" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
 
@@ -278,8 +318,8 @@
     // ===== 설정 =====
     // impr=노출수, ctr=노출클릭률(%) KPI 추가
     const KPI = {
-      daily:{ views:500, impr:400, ctr:5.5, avp:55, subs:1 },
-      video:{ views:1000, impr:300, ctr:5, avp:50, subs:1 },
+      daily:{ views:500, impr:400, ctr:5.5, avp:55, subs:1, eng:3 },   // eng=참여율(%)
+      video:{ views:1000, impr:300, ctr:5, avp:50, subs:1, eng:3 },
     };
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
     const SINCE = "26-05-11";
@@ -296,21 +336,50 @@
     const isShort=(x)=> durSec(x[4])<=180 ? 1 : 0;
     const formLabel=(x)=> isShort(x) ? "숏폼" : "롱폼";
 
-    let DAILY=[], VIDEOS=[], chart=null, growth=null, activeMetric=6, activeGrowth=6;
+    let DAILY=[], VIDEOS=[], CHANNEL=null, chart=null, growth=null, activeMetric=6, activeGrowth=6;
+
+    // 다크모드
+    function toggleTheme(){
+      const dark=document.body.classList.toggle("dark");
+      localStorage.setItem("theme",dark?"dark":"light");
+      document.getElementById("themeBtn").textContent=dark?"☀️ 라이트":"🌙 다크";
+    }
+    (function(){
+      if(localStorage.getItem("theme")==="dark") document.body.classList.add("dark");
+      window.addEventListener("DOMContentLoaded",()=>{
+        const btn=document.getElementById("themeBtn");
+        if(btn) btn.textContent=document.body.classList.contains("dark")?"☀️ 라이트":"🌙 다크";
+      });
+    })();
+
+    // 상단 고정 요약 바
+    function renderSticky(){
+      if(!DAILY.length) return;
+      const last=DAILY[DAILY.length-1], c=CHANNEL||{};
+      document.getElementById("sbInner").innerHTML=`
+        <div class="sb-item"><span class="l">채널</span><span class="v" style="font-size:14px">${c.title||"-"}</span></div>
+        <div class="sb-item"><span class="l">구독자</span><span class="v">${fmt(c.subscribers||0)}</span></div>
+        <div class="sb-item"><span class="l">최신일 조회수</span><span class="v">${fmt(last[6])}</span></div>
+        <div class="sb-item"><span class="l">최신일 평균조회율</span><span class="v">${pctStr(last[9])}</span></div>
+        <div class="sb-item"><span class="l">최신 데이터</span><span class="v" style="font-size:13px">${last[0]}</span></div>`;
+    }
+    window.addEventListener("scroll",()=>{
+      const sb=document.getElementById("stickyBar"); if(sb) sb.classList.toggle("show", window.scrollY>340);
+    });
+    // 토스풍: 블루 단색 계열로 통일 (명도 차이로 구분)
     const METRICS=[
       {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
-      {key:1,label:"구독자",color:"#3bce82",kpi:KPI.daily.subs},
-      {key:3,label:"좋아요",color:"#f5c33b",kpi:0},
-      {key:4,label:"댓글",color:"#a78bfa",kpi:0},
-      {key:5,label:"공유",color:"#f56a7e",kpi:0},
+      {key:1,label:"구독자",color:"#1b64da",kpi:KPI.daily.subs},
+      {key:3,label:"좋아요",color:"#5b9bf8",kpi:0},
+      {key:4,label:"댓글",color:"#86b7ff",kpi:0},
+      {key:5,label:"공유",color:"#2f6fd6",kpi:0},
     ];
-    // 누적 그래프용 (점선 KPI는 일별 KPI가 있는 조회수·구독자만)
     const GROWTH=[
       {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
-      {key:1,label:"구독자",color:"#3bce82",kpi:KPI.daily.subs},
-      {key:3,label:"좋아요",color:"#f5c33b",kpi:0},
-      {key:4,label:"댓글",color:"#a78bfa",kpi:0},
-      {key:5,label:"공유",color:"#f56a7e",kpi:0},
+      {key:1,label:"구독자",color:"#1b64da",kpi:KPI.daily.subs},
+      {key:3,label:"좋아요",color:"#5b9bf8",kpi:0},
+      {key:4,label:"댓글",color:"#86b7ff",kpi:0},
+      {key:5,label:"공유",color:"#2f6fd6",kpi:0},
     ];
 
     // 기간 필터 헬퍼: "all"=5/11 이후 전체, 그 외=최근 N일
@@ -347,9 +416,9 @@
     const VD_PERIODS=[{k:24,label:"게시 후 24시간"},{k:7,label:"게시 후 7일"},{k:28,label:"게시 후 28일"},{k:99999,label:"전체"}];
     const VD_METRICS=[
       {k:"views",label:"조회수",color:"#3182f6",cum:true},
-      {k:"avp",label:"평균조회율",color:"#22c55e",cum:false},
-      {k:"eng",label:"참여(좋아요+댓글+공유)",color:"#f5c33b",cum:true},
-      {k:"subs",label:"구독자",color:"#a78bfa",cum:true},
+      {k:"avp",label:"평균조회율",color:"#1b64da",cum:false},
+      {k:"eng",label:"참여(좋아요+댓글+공유)",color:"#5b9bf8",cum:true},
+      {k:"subs",label:"구독자",color:"#2f6fd6",cum:true},
     ];
     let vd={id:null,rows:[],hourly:[],period:99999,metric:"views",chart:null};
 
@@ -404,11 +473,16 @@
       }
 
       vdShowMsg(null);
+      // 채널 평균 벤치마크 (전체 영상 평균 최종값 — 가로 점선)
+      const benchOf=(v)=> met.k==="eng"?(N(v[9])+N(v[10])+N(v[11])):met.k==="avp"?toPctNum(v[7]):met.k==="subs"?N(v[12]):N(v[8]);
+      const benchVal=VIDEOS.length? VIDEOS.reduce((a,v)=>a+benchOf(v),0)/VIDEOS.length : 0;
+      const datasets=[{label:met.label,data,borderColor:met.color,backgroundColor:met.color+"22",borderWidth:2.5,pointRadius:vd.period===24?3:0,fill:met.cum,tension:.25}];
+      if(benchVal>0) datasets.push({label:"채널 평균",data:labels.map(()=>Math.round(benchVal)),borderColor:"#8b95a1",borderDash:[5,4],borderWidth:1.3,pointRadius:0,fill:false});
       if(vd.chart)vd.chart.destroy();
       vd.chart=new Chart(document.getElementById("vdChart"),{type:"line",
-        data:{labels,datasets:[{label:met.label,data,borderColor:met.color,backgroundColor:met.color+"22",borderWidth:2.5,pointRadius:vd.period===24?3:0,fill:met.cum,tension:.25}]},
+        data:{labels,datasets},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
-          plugins:{legend:{display:false},tooltip:{callbacks:{
+          plugins:{legend:{display:true,labels:{color:"#8b95a1",boxWidth:12}},tooltip:{callbacks:{
             title:(it)=>titles[it[0].dataIndex]||it[0].label,
             label:(c)=>met.label+": "+(met.k==="avp"? c.parsed.y.toFixed(1)+"%": c.parsed.y.toLocaleString("ko-KR"))
           }}},
@@ -442,11 +516,23 @@
       const rows=periodRows(document.getElementById("growthPeriod").value);
       const labels=rows.map(r=>r[0]);
       let run=0; const actual=rows.map(r=>{run+=N(r[m.key]);return run;});      // 선택 지표 누적
-      const datasets=[{label:"누적 "+m.label,data:actual,borderColor:m.color,backgroundColor:m.color+"22",borderWidth:2.5,pointRadius:0,fill:true,tension:.25}];
-      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:rows.map((_,i)=>m.kpi*(i+1)),borderColor:"#f56a7e",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false});
+      // 예측: 최근 7일 평균 증가분으로 +14일 연장
+      const FUT=14, recent=rows.slice(-7).map(r=>N(r[m.key]));
+      const slope=recent.length?recent.reduce((a,b)=>a+b,0)/recent.length:0;
+      const futLabels=[]; for(let i=1;i<=FUT;i++) futLabels.push("+"+i+"일");
+      const allLabels=[...labels,...futLabels];
+      const lastVal=actual.length?actual[actual.length-1]:0;
+      const actualPad=[...actual,...Array(FUT).fill(null)];
+      const fc=Array(Math.max(0,actual.length-1)).fill(null); fc.push(lastVal);
+      let r2=lastVal; for(let i=0;i<FUT;i++){ r2+=slope; fc.push(Math.round(r2)); }
+      const datasets=[
+        {label:"누적 "+m.label,data:actualPad,borderColor:m.color,backgroundColor:m.color+"22",borderWidth:2.5,pointRadius:0,fill:true,tension:.25},
+        {label:"예측(현재 페이스)",data:fc,borderColor:m.color,borderDash:[2,3],borderWidth:1.5,pointRadius:0,fill:false,tension:.25}
+      ];
+      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:allLabels.map((_,i)=>m.kpi*(i+1)),borderColor:"#f0a8b4",borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false});
       if(growth)growth.destroy();
       growth=new Chart(document.getElementById("growthChart"),{type:"line",
-        data:{labels,datasets},
+        data:{labels:allLabels,datasets},
         options:{responsive:true,maintainAspectRatio:false,
           interaction:{mode:"index",intersect:false},
           plugins:{legend:{labels:{color:"#8b95a1",boxWidth:12}},
@@ -498,7 +584,7 @@
         let vids=VIDEOS;
         if(sel!=="all"){
           const cut=new Date(); cut.setDate(cut.getDate()-Number(sel));
-          const cs=cut.toISOString().slice(2,10); // YY-MM-DD
+          const cs=cut.toISOString().slice(2,10);
           vids=VIDEOS.filter(v=>(v[1]||"")>=cs);
         }
         const a=(i)=>vids.length?vids.reduce((s,r)=>s+N(r[i]),0)/vids.length:0;
@@ -571,6 +657,43 @@
         <div class="crow"><span>평균 구독전환</span><b>${fmt(avg(arr,12))}</b></div></div>`;
       document.getElementById("formCompare").innerHTML=blk("🎬 숏폼",sh)+blk("🎞️ 롱폼",lo);
     }
+    // 업로드 성과 (요일별 / 시간대별 평균 조회수)
+    let weekday=null;
+    function drawWeekday(){
+      const mode=document.getElementById("uploadMode").value;
+      let labels, data, counts;
+      if(mode==="hour"){
+        // 시간대별 (W열=index22 전체 게시시각 ISO → 브라우저 로컬=KST 기준 시각)
+        const sums=Array(24).fill(0), cnts=Array(24).fill(0);
+        VIDEOS.forEach(v=>{
+          const iso=v[22]; if(!iso)return;
+          const dt=new Date(iso); if(isNaN(dt))return;
+          const h=dt.getHours(); sums[h]+=N(v[8]); cnts[h]++;
+        });
+        labels=Array.from({length:24},(_,h)=>h+"시");
+        data=sums.map((s,h)=>cnts[h]?Math.round(s/cnts[h]):0);
+        counts=cnts;
+      } else {
+        const names=["일","월","화","수","목","금","토"];
+        const sums=Array(7).fill(0), cnts=Array(7).fill(0);
+        VIDEOS.forEach(v=>{
+          const d=v[1]; if(!d)return;
+          const dt=new Date("20"+d); if(isNaN(dt))return;
+          const w=dt.getDay(); sums[w]+=N(v[8]); cnts[w]++;
+        });
+        const order=[1,2,3,4,5,6,0];
+        labels=order.map(i=>names[i]);
+        data=order.map(i=>cnts[i]?Math.round(sums[i]/cnts[i]):0);
+        counts=order.map(i=>cnts[i]);
+      }
+      if(weekday)weekday.destroy();
+      weekday=new Chart(document.getElementById("weekdayChart"),{type:"bar",
+        data:{labels,datasets:[{label:"평균 조회수",data,backgroundColor:"#3182f6",borderRadius:6,maxBarThickness:46}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>`평균 ${c.parsed.y.toLocaleString("ko-KR")}회 (영상 ${counts[c.dataIndex]}개)`}}},
+          scales:{x:{ticks:{color:"#8b95a1"},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}}}});
+    }
+
     // CTR × 평균조회율 산점도
     let scatter=null;
     function drawScatter(){
@@ -602,8 +725,10 @@
       const el=document.getElementById("dailyRows");
       // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간 12특이사항
       const rows=sortRows(DAILY, document.getElementById("dailySortKey").value, document.getElementById("dailySortDir").value, 0);
-      if(!rows.length){el.innerHTML='<tr><td colspan="12" class="empty">데이터 없음</td></tr>';return;}
-      el.innerHTML=rows.map(x=>`<tr>
+      if(!rows.length){el.innerHTML='<tr><td colspan="13" class="empty">데이터 없음</td></tr>';return;}
+      el.innerHTML=rows.map(x=>{
+        const engR=N(x[6])?(N(x[3])+N(x[4])+N(x[5]))/N(x[6])*100:0;
+        return `<tr>
         <td>${x[0]??""}</td>
         <td class="${kCls(N(x[1]),KPI.daily.subs)}">${fmt(x[1])}</td>
         <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}">${x[7]?fmt(x[7]):"-"}</td>
@@ -614,9 +739,10 @@
         <td>${fmt(x[3])}</td>
         <td>${fmt(x[4])}</td>
         <td>${fmt(x[5])}</td>
+        <td class="${kCls(engR,KPI.daily.eng)}">${engR.toFixed(1)}%</td>
         <td class="muted">${fmt(x[2])}</td>
         <td class="muted"><span class="memo">${x[12]??""}</span></td>
-      </tr>`).join("");
+      </tr>`;}).join("");
     }
     function renderVideos(){
       document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·구독전환 ${KPI.video.subs}`;
@@ -628,8 +754,11 @@
       if(ff==="short") list=VIDEOS.filter(x=>isShort(x));
       else if(ff==="long") list=VIDEOS.filter(x=>!isShort(x));
       const rows=sortRows(list, document.getElementById("videoSortKey").value, document.getElementById("videoSortDir").value, 1);
-      if(!rows.length){el.innerHTML='<tr><td colspan="13" class="empty">데이터 없음</td></tr>';return;}
-      el.innerHTML=rows.map(x=>`<tr>
+      if(!rows.length){el.innerHTML='<tr><td colspan="15" class="empty">데이터 없음</td></tr>';return;}
+      el.innerHTML=rows.map(x=>{
+        const engR=N(x[8])?(N(x[9])+N(x[10])+N(x[11]))/N(x[8])*100:0;
+        return `<tr>
+        <td><img src="https://i.ytimg.com/vi/${x[0]}/mqdefault.jpg" class="thumb" loading="lazy" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')"></td>
         <td>${x[1]??""}</td>
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
@@ -641,20 +770,22 @@
         <td>${fmt(x[9])}</td>
         <td>${fmt(x[10])}</td>
         <td>${fmt(x[11])}</td>
+        <td class="${kCls(engR,KPI.video.eng)}">${engR.toFixed(1)}%</td>
         <td class="${kCls(N(x[12]),KPI.video.subs)}">${fmt(x[12])}</td>
-        <td class="muted"><span class="memo">${x[21]??""}</span></td>
-      </tr>`).join("");
+        <td class="muted"><span class="memo">${x[21]??""}</span></td></tr>`;
+      }).join("");
     }
 
     async function load(){
       const r=await fetch("/api/data").then(r=>r.json());
       if(!r.ok)return;
+      CHANNEL=r.channel;
       renderChannel(r.channel);
       DAILY=(r.daily||[]).filter(x=>x[0]&&N(x[6])>0).sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0));
       VIDEOS=(r.videos||[]).filter(x=>x[3]&&x[3]!==x[0]);
       buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
-      renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();
-      populateVideoSelect();
+      renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();drawWeekday();
+      renderSticky();populateVideoSelect();
     }
     // 추이 영상 선택 드롭다운 채우기 (업로드 최신순)
     function populateVideoSelect(){
@@ -691,6 +822,7 @@
     document.getElementById("videoSortDir").onchange=renderVideos;
     document.getElementById("videoForm").onchange=renderVideos;
     document.getElementById("gaugeType").onchange=renderGauge;
+    document.getElementById("uploadMode").onchange=drawWeekday;
     document.getElementById("gaugePeriod").onchange=renderGauge;
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
