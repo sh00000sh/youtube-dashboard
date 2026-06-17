@@ -68,6 +68,31 @@
     td.y{background:var(--y-bg);color:var(--y-tx);font-weight:700;}
     td.r{background:var(--r-bg);color:var(--r-tx);font-weight:700;}
 
+    /* 데이터 지연 배지 */
+    .delay-badge{display:inline-flex;align-items:center;gap:6px;background:#fff7e0;color:#b88600;border:1px solid #ffe9a8;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;}
+    /* 카드 증감 */
+    .delta{font-size:12px;margin-top:5px;font-weight:700;}
+    .up2{color:#15803d}.down2{color:#e11d48}.flat{color:#8b95a1}
+    /* KPI 게이지 */
+    .gauge-row{display:flex;align-items:center;gap:12px;margin:10px 0;}
+    .gauge-row .gl{width:90px;font-size:13px;color:var(--sub);}
+    .gauge-bar{flex:1;height:14px;background:#eef1f4;border-radius:8px;overflow:hidden;}
+    .gauge-fill{height:100%;border-radius:8px;}
+    .gauge-row .gv{width:120px;text-align:right;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
+    /* 숏롱 비교 */
+    .compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .cmp{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .cmp h3{font-size:14px;margin-bottom:12px;}
+    .cmp .crow{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--line);}
+    .cmp .crow:last-child{border-bottom:0;}
+    .cmp .crow b{font-variant-numeric:tabular-nums;}
+    /* 베스트/워스트 */
+    .bw{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
+    .bw .bwc{flex:1;min-width:280px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    .bw .bwc .t{font-size:12px;color:var(--sub);margin-bottom:6px;}
+    .bw .bwc .n{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .bw .bwc .v{font-size:13px;color:var(--blue);font-weight:800;margin-top:3px;}
+
     #player{position:fixed;top:0;right:-520px;width:500px;height:100%;background:#0b0d12;box-shadow:-4px 0 24px rgba(0,0,0,.2);transition:right .25s;z-index:50;display:flex;flex-direction:column;}
     body.player-open #player{right:0;}
     #player .ph{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;color:#fff;}
@@ -97,6 +122,7 @@
 
     <div class="bar">
       <button id="syncBtn" onclick="sync()">🔄 동기화</button>
+      <span class="delay-badge" id="delayBadge" style="display:none"></span>
       <span class="status" id="status">-</span>
     </div>
     <div class="legend">
@@ -105,13 +131,16 @@
       <span><i class="dot dr"></i>50%미만 / 참여 10미만</span>
     </div>
 
+    <h2>🎯 KPI 달성률 <span class="kpi-badge">(기간 평균 ÷ KPI)</span></h2>
+    <div class="panel" id="gaugePanel"></div>
+
     <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">5/11 이후 누적 성장</span></h2>
     <div class="cards cards5">
-      <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div></div>
-      <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div></div>
-      <div class="card"><div class="label">누적 좋아요</div><div class="value" id="cum_likes">-</div></div>
-      <div class="card"><div class="label">누적 댓글</div><div class="value" id="cum_comments">-</div></div>
-      <div class="card"><div class="label">누적 공유</div><div class="value" id="cum_shares">-</div></div>
+      <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div><div class="delta" id="d_views"></div></div>
+      <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div><div class="delta" id="d_subs"></div></div>
+      <div class="card"><div class="label">누적 좋아요</div><div class="value" id="cum_likes">-</div><div class="delta" id="d_likes"></div></div>
+      <div class="card"><div class="label">누적 댓글</div><div class="value" id="cum_comments">-</div><div class="delta" id="d_comments"></div></div>
+      <div class="card"><div class="label">누적 공유</div><div class="value" id="cum_shares">-</div><div class="delta" id="d_shares"></div></div>
     </div>
 
     <h2>📐 누적 성장 추이 <span class="kpi-badge">(점선 = 누적 KPI 목표선)</span></h2>
@@ -149,6 +178,13 @@
         <tbody id="dailyRows"><tr><td colspan="12" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
+
+    <h2>🏆 영상 하이라이트 & 포맷 비교</h2>
+    <div class="bw" id="bestWorst"></div>
+    <div class="compare" id="formCompare"></div>
+
+    <h2>🎯 CTR × 평균조회율 (낚시 감별) <span class="kpi-badge">오른쪽 위 = 좋은 영상 / 오른쪽 아래 = 낚시 주의</span></h2>
+    <div class="panel"><div class="chart-box"><canvas id="scatterChart"></canvas></div></div>
 
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
       <select id="videoForm" style="margin-left:auto">
@@ -378,6 +414,85 @@
       document.getElementById("cum_shares").textContent=fmt(sum(5));
     }
 
+    // 데이터 지연 배지 (마지막 데이터 날짜)
+    function renderDelayBadge(){
+      const b=document.getElementById("delayBadge");
+      if(!DAILY.length){ b.style.display="none"; return; }
+      b.textContent="📊 최신 데이터: "+DAILY[DAILY.length-1][0]+" (유튜브 확정 기준, 약 2~3일 지연)";
+      b.style.display="inline-flex";
+    }
+    // 카드 증감 (최근일 값 + 전일 대비 %)
+    function renderDeltas(){
+      const n=DAILY.length, last=n?DAILY[n-1]:null, prev=n>1?DAILY[n-2]:null;
+      [["d_views",6],["d_subs",1],["d_likes",3],["d_comments",4],["d_shares",5]].forEach(([id,i])=>{
+        const el=document.getElementById(id);
+        if(!last){ el.textContent=""; return; }
+        const c=N(last[i]), p=prev?N(prev[i]):0, diff=c-p;
+        const arrow=diff>0?"▲":diff<0?"▼":"–", cls=diff>0?"up2":diff<0?"down2":"flat";
+        const pct=p!==0?Math.round(diff/Math.abs(p)*100):(c!==0?100:0);
+        el.className="delta "+cls;
+        el.textContent=`최근일 ${fmt(c)} ${arrow}${Math.abs(pct)}%`;
+      });
+    }
+    // KPI 달성률 게이지
+    function renderGauge(){
+      const rows=DAILY.filter(r=>r[0]>=SINCE);
+      const avg=(i)=>rows.length?rows.reduce((a,r)=>a+N(r[i]),0)/rows.length:0;
+      const avgP=(i)=>rows.length?rows.reduce((a,r)=>a+toPctNum(r[i]),0)/rows.length:0;
+      const items=[
+        {l:"조회수",v:avg(6),k:KPI.daily.views,p:false},
+        {l:"평균조회율",v:avgP(9),k:KPI.daily.avp,p:true},
+        {l:"구독자",v:avg(1),k:KPI.daily.subs,p:false},
+      ];
+      const col=(r)=>r>=1?"#3bce82":r>=0.5?"#f5c33b":"#f56a7e";
+      document.getElementById("gaugePanel").innerHTML=items.map(it=>{
+        const r=it.k?it.v/it.k:0, pct=Math.round(r*100), w=Math.min(100,pct);
+        const vt=it.p?it.v.toFixed(1)+"%":Math.round(it.v).toLocaleString("ko-KR");
+        const kt=it.p?it.k+"%":fmt(it.k);
+        return `<div class="gauge-row"><div class="gl">${it.l}</div>
+          <div class="gauge-bar"><div class="gauge-fill" style="width:${w}%;background:${col(r)}"></div></div>
+          <div class="gv" style="color:${col(r)}">${pct}% <span style="color:var(--sub);font-weight:400">(${vt}/${kt})</span></div></div>`;
+      }).join("");
+    }
+    // 베스트/워스트 영상
+    function renderBestWorst(){
+      const box=document.getElementById("bestWorst");
+      if(!VIDEOS.length){ box.innerHTML=""; return; }
+      const byV=[...VIDEOS].sort((a,b)=>N(b[8])-N(a[8]));
+      const byA=[...VIDEOS].sort((a,b)=>toPctNum(b[7])-toPctNum(a[7]));
+      const best=byV[0], worst=byV[byV.length-1], bestA=byA[0];
+      box.innerHTML=`
+        <div class="bwc"><div class="t">🏆 조회수 베스트</div><div class="n">${best[3]}</div><div class="v">${fmt(best[8])}회</div></div>
+        <div class="bwc"><div class="t">⚠️ 조회수 아쉬운</div><div class="n">${worst[3]}</div><div class="v">${fmt(worst[8])}회</div></div>
+        <div class="bwc"><div class="t">👀 끝까지 본 영상(평균조회율 1위)</div><div class="n">${bestA[3]}</div><div class="v">${pctStr(bestA[7])}</div></div>`;
+    }
+    // 숏폼 vs 롱폼 비교
+    function renderFormCompare(){
+      const sh=VIDEOS.filter(x=>isShort(x)), lo=VIDEOS.filter(x=>!isShort(x));
+      const avg=(arr,i)=>arr.length?Math.round(arr.reduce((a,r)=>a+N(r[i]),0)/arr.length):0;
+      const avgP=(arr,i)=>arr.length?(arr.reduce((a,r)=>a+toPctNum(r[i]),0)/arr.length):0;
+      const blk=(t,arr)=>`<div class="cmp"><h3>${t} (${arr.length}개)</h3>
+        <div class="crow"><span>평균 조회수</span><b>${fmt(avg(arr,8))}</b></div>
+        <div class="crow"><span>평균 조회율</span><b>${avgP(arr,7).toFixed(1)}%</b></div>
+        <div class="crow"><span>평균 좋아요</span><b>${fmt(avg(arr,9))}</b></div>
+        <div class="crow"><span>평균 구독전환</span><b>${fmt(avg(arr,12))}</b></div></div>`;
+      document.getElementById("formCompare").innerHTML=blk("🎬 숏폼",sh)+blk("🎞️ 롱폼",lo);
+    }
+    // CTR × 평균조회율 산점도
+    let scatter=null;
+    function drawScatter(){
+      const pts=VIDEOS.filter(x=>x[6]).map(x=>({x:toPctNum(x[6]),y:toPctNum(x[7]),t:x[3]}));
+      if(scatter)scatter.destroy();
+      scatter=new Chart(document.getElementById("scatterChart"),{type:"scatter",
+        data:{datasets:[{label:"영상",data:pts,backgroundColor:"#3182f6",pointRadius:6,pointHoverRadius:9}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>`${c.raw.t}  |  CTR ${c.raw.x.toFixed(1)}% · 조회율 ${c.raw.y.toFixed(1)}%`}}},
+          scales:{
+            x:{title:{display:true,text:"CTR (%) →  클릭이 잘 됨",color:"#8b95a1"},ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}},
+            y:{title:{display:true,text:"평균조회율 (%) →  끝까지 봄",color:"#8b95a1"},ticks:{color:"#8b95a1"},grid:{color:"#eef1f4"}}
+          }}});
+    }
+
     // key=정렬 항목("date" 또는 컬럼번호), dir="desc"(최신/높은) | "asc"(오래된/낮은)
     function sortRows(rows, key, dir, dateIdx){
       if(key==="date"){
@@ -445,6 +560,7 @@
       DAILY=(r.daily||[]).filter(x=>x[0]&&N(x[6])>0).sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0));
       VIDEOS=(r.videos||[]).filter(x=>x[3]&&x[3]!==x[0]);
       buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
+      renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();
       populateVideoSelect();
     }
     // 추이 영상 선택 드롭다운 채우기 (업로드 최신순)
