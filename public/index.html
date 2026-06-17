@@ -25,7 +25,8 @@
     select{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:9px;padding:6px 10px;font-size:13px;cursor:pointer;}
 
     .channel{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
-    .channel .banner{height:120px;background:linear-gradient(135deg,#3182f6,#6aa8ff);background-size:cover;background-position:center;}
+    /* 배너: 늘리지 않고 원본 비율 유지 + 검은 배경 (해상도 깨짐 방지) */
+    .channel .banner{height:150px;background-color:#0b0d12;background-size:contain;background-position:center;background-repeat:no-repeat;}
     .channel .info{display:flex;align-items:center;gap:16px;padding:0 22px 18px;margin-top:-32px;}
     .channel .avatar{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:#fff;object-fit:cover;}
     .channel .meta{flex:1;padding-top:34px;}
@@ -131,7 +132,14 @@
       <span><i class="dot dr"></i>50%미만 / 참여 10미만</span>
     </div>
 
-    <h2>🎯 KPI 달성률 <span class="kpi-badge">(기간 평균 ÷ KPI)</span></h2>
+    <h2>🎯 KPI 달성률 <span class="kpi-badge">(기간 평균 ÷ KPI)</span>
+      <select id="gaugePeriod" style="margin-left:auto">
+        <option value="7">최근 7일</option>
+        <option value="28">최근 28일</option>
+        <option value="90">최근 90일</option>
+        <option value="all">5/11 이후 전체</option>
+      </select>
+    </h2>
     <div class="panel" id="gaugePanel"></div>
 
     <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">5/11 이후 누적 성장</span></h2>
@@ -275,7 +283,14 @@
 
     function renderChannel(c){
       if(!c)return;
-      if(c.banner)document.getElementById("ch_banner").style.backgroundImage=`url("${c.banner}")`;
+      if(c.banner){
+        const b=document.getElementById("ch_banner");
+        const big=c.banner.includes("=")?c.banner:c.banner+"=w2120";  // 더 선명한 버전 시도
+        const test=new Image();
+        test.onload=()=>b.style.backgroundImage=`url("${big}")`;
+        test.onerror=()=>b.style.backgroundImage=`url("${c.banner}")`;
+        test.src=big;
+      }
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
       document.getElementById("ch_subs").textContent=fmt(c.subscribers)+"명";
@@ -434,9 +449,11 @@
         el.textContent=`최근일 ${fmt(c)} ${arrow}${Math.abs(pct)}%`;
       });
     }
-    // KPI 달성률 게이지
+    // KPI 달성률 게이지 (기간 선택)
     function renderGauge(){
-      const rows=DAILY.filter(r=>r[0]>=SINCE);
+      const sel=document.getElementById("gaugePeriod").value;
+      let rows=DAILY.filter(r=>r[0]>=SINCE);          // 기본: 5/11 이후
+      if(sel!=="all") rows=rows.slice(-Number(sel));  // 최근 N일
       const avg=(i)=>rows.length?rows.reduce((a,r)=>a+N(r[i]),0)/rows.length:0;
       const avgP=(i)=>rows.length?rows.reduce((a,r)=>a+toPctNum(r[i]),0)/rows.length:0;
       const items=[
@@ -445,7 +462,8 @@
         {l:"구독자",v:avg(1),k:KPI.daily.subs,p:false},
       ];
       const col=(r)=>r>=1?"#3bce82":r>=0.5?"#f5c33b":"#f56a7e";
-      document.getElementById("gaugePanel").innerHTML=items.map(it=>{
+      const range=rows.length?`${rows[0][0]} ~ ${rows[rows.length-1][0]} · ${rows.length}일 평균`:"데이터 없음";
+      const bars=items.map(it=>{
         const r=it.k?it.v/it.k:0, pct=Math.round(r*100), w=Math.min(100,pct);
         const vt=it.p?it.v.toFixed(1)+"%":Math.round(it.v).toLocaleString("ko-KR");
         const kt=it.p?it.k+"%":fmt(it.k);
@@ -453,6 +471,7 @@
           <div class="gauge-bar"><div class="gauge-fill" style="width:${w}%;background:${col(r)}"></div></div>
           <div class="gv" style="color:${col(r)}">${pct}% <span style="color:var(--sub);font-weight:400">(${vt}/${kt})</span></div></div>`;
       }).join("");
+      document.getElementById("gaugePanel").innerHTML=`<div class="note" style="margin:0 0 10px">기준 기간: ${range}</div>`+bars;
     }
     // 베스트/워스트 영상
     function renderBestWorst(){
@@ -597,6 +616,7 @@
     document.getElementById("videoSortKey").onchange=renderVideos;
     document.getElementById("videoSortDir").onchange=renderVideos;
     document.getElementById("videoForm").onchange=renderVideos;
+    document.getElementById("gaugePeriod").onchange=renderGauge;
     load();
   </script>
 </body>
