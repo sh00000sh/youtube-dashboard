@@ -140,6 +140,11 @@
     .cfg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;}
     .cfg-f{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px;}
     .cfg-f input{width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;}
+    /* 셀 인라인 편집 입력칸 */
+    .cell-inp{width:72px;max-width:100%;box-sizing:border-box;padding:3px 6px;border:1.5px solid var(--blue,#3182f6);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;text-align:right;}
+    /* 제목 인라인 편집 */
+    #dashTitle.title-edit{outline:1.5px dashed var(--blue,#3182f6);outline-offset:4px;border-radius:6px;cursor:text;}
+    #dashTitle.just-saved{outline:1.5px solid #30a46c;}
   </style>
 </head>
 <body>
@@ -150,7 +155,7 @@
 
   <div class="wrap">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <h1 style="margin:0;flex:1">⚡ 유튜브 인게이지먼트 대시보드</h1>
+      <h1 id="dashTitle" spellcheck="false" style="margin:0;flex:1">⚡ 유튜브 인게이지먼트 대시보드</h1>
       <button id="adminBtn" onclick="toggleAdmin()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🔒 관리자</button>
       <button id="themeBtn" onclick="toggleTheme()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🌙 다크</button>
     </div>
@@ -164,11 +169,8 @@
 
     <!-- 🔧 관리자 설정 패널 (관리자 모드일 때만 표시) -->
     <div id="adminPanel" style="display:none;border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 18px;background:var(--chip)">
-      <div style="font-weight:700;margin-bottom:4px">🔧 관리자 설정 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 저장하면 모든 사용자 화면에 반영돼요</span></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 일별/영상별 상세 표에서 <b>노출수·CTR 셀을 클릭</b>하면 값을 직접 입력·저장할 수 있어요.</div>
-      <label style="display:block;font-size:13px;margin-bottom:12px">대시보드 제목
-        <input id="cfgTitle" style="display:block;width:100%;max-width:420px;margin-top:4px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px">
-      </label>
+      <div style="font-weight:700;margin-bottom:4px">🔧 KPI 설정 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 저장하면 모든 사용자 화면에 반영돼요</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 <b>노출수·CTR</b>은 상세 표에서 셀을 클릭해 바로 수정, <b>대시보드 제목</b>은 상단 제목을 클릭해 바로 수정할 수 있어요. KPI 값만 아래에서 수정하고 저장하세요.</div>
       <div style="display:flex;gap:24px;flex-wrap:wrap">
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 KPI</div><div id="cfgDaily" class="cfg-grid"></div></div>
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI</div><div id="cfgVideo" class="cfg-grid"></div></div>
@@ -1004,8 +1006,8 @@
         return `<tr>
         <td>${x[0]??""}</td>
         <td class="${kCls(N(x[1]),KPI.daily.subs)}">${fmt(x[1])}</td>
-        <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
-        <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?pctStr(x[8]):"-"}</td>
+        <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
+        <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?pctStr(x[8]):"-"}</td>
         <td class="${kCls(N(x[6]),KPI.daily.views)}">${fmt(x[6])}</td>
         <td class="${kCls(toPctNum(x[9]),KPI.daily.avp)}">${pctStr(x[9])}</td>
         <td class="muted">${x[11]??"-"}</td>
@@ -1036,8 +1038,8 @@
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td class="muted">${x[4]??""}</td>
-        <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('video','${x[0]}','impr','${x[5]??''}')"`:''}>${x[5]?fmt(x[5]):"-"}</td>
-        <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="editCell('video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?pctStr(x[6]):"-"}</td>
+        <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','impr','${x[5]??''}')"`:''}>${x[5]?fmt(x[5]):"-"}</td>
+        <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?pctStr(x[6]):"-"}</td>
         <td class="${kCls(toPctNum(x[7]),KPI.video.avp)}">${pctStr(x[7])}</td>
         <td class="${kCls(N(x[8]),KPI.video.views)}">${fmt(x[8])}</td>
         <td>${fmt(x[9])}</td>
@@ -1092,11 +1094,18 @@
       if(b) b.textContent = ADMIN ? "🔓 관리자 ON" : "🔒 관리자";
       const p=document.getElementById("adminPanel");
       if(p) p.style.display = ADMIN ? "" : "none";
+      setupTitleEdit();   // 제목 편집 가능/불가 토글
     }
     function initAdmin(){
       // 새로고침하면 항상 로그아웃 상태에서 시작 (관리자 모드 유지 안 함)
       ADMIN=false; ADMIN_PW="";
       buildConfigForm();
+      // 제목 인라인 편집 핸들러 (한 번만 연결)
+      const h=document.getElementById("dashTitle");
+      if(h){
+        h.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();h.blur();} if(e.key==="Escape"){h.textContent=(CONFIG&&CONFIG.title)||h.textContent;h.blur();} });
+        h.addEventListener("blur",()=>{ if(ADMIN) saveTitle(); });
+      }
       updateAdminUI();
     }
     function toggleAdmin(){
@@ -1141,32 +1150,71 @@
       setCell(row,idx,store);
     }
 
-    // 노출수/CTR 셀 클릭 → 입력 → 시트 저장
-    async function editCell(type,key,field,curRaw){
-      if(!ADMIN) return;
-      const isCtr = field==="ctr";
-      const label = isCtr ? "CTR (%)" : "노출수";
-      const def = (curRaw===""||curRaw==null) ? "" : (isCtr ? toPctNum(curRaw) : N(curRaw));
-      const inp=prompt(`${label} 입력 (빈칸=삭제)`, def);
-      if(inp===null) return;
-      let store, sheetVal;
-      if(inp.trim()===""){ store=""; sheetVal=""; }
-      else{
-        const n=Number(inp.replace(/[^0-9.\-]/g,""));
-        if(isNaN(n)){ alert("숫자를 입력하세요."); return; }
-        // CTR은 % 입력 → 시트엔 비율(0.055)로 저장 (평균조회율과 동일 규칙)
-        store = isCtr ? n/100 : n;
-        sheetVal = store;
-      }
+    // 노출수/CTR 셀 클릭 → 그 자리에서 인라인 편집 → 시트 저장
+    let cellEditing=false;
+    function startCellEdit(td,type,key,field,curRaw){
+      if(!ADMIN||cellEditing) return;
+      cellEditing=true;
+      const isCtr=field==="ctr";
+      const cur=(curRaw===""||curRaw==null)?"":(isCtr?toPctNum(curRaw):N(curRaw));
+      td.innerHTML=`<input class="cell-inp" type="text" inputmode="decimal" value="${cur}">`;
+      const inp=td.querySelector("input");
+      inp.focus(); inp.select();
+      let done=false;
+      const finish=async(save)=>{
+        if(done) return; done=true; cellEditing=false;
+        if(!save){ if(type==="daily")renderDailyTable(); else renderVideos(); return; }
+        const raw=inp.value.trim();
+        let store, sheetVal;
+        if(raw===""){ store=""; sheetVal=""; }
+        else{
+          const n=Number(raw.replace(/[^0-9.\-]/g,""));
+          if(isNaN(n)){ if(type==="daily")renderDailyTable(); else renderVideos(); return; }
+          // CTR은 % 입력 → 시트엔 비율(0.055)로 저장 (평균조회율과 동일 규칙)
+          store = isCtr ? n/100 : n; sheetVal = store;
+        }
+        try{
+          const r=await fetch("/api/cell",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({pw:ADMIN_PW,type,key,field,value:sheetVal})}).then(r=>r.json());
+          if(!r.ok) alert("저장 실패: "+r.error);
+          else updateLocal(type,key,field,store);
+        }catch(e){ alert("오류: "+e.message); }
+        if(type==="daily")renderDailyTable(); else renderVideos();
+        renderGauge();   // 색칠/달성률 반영
+      };
+      inp.onkeydown=(e)=>{ if(e.key==="Enter"){e.preventDefault();finish(true);} else if(e.key==="Escape"){e.preventDefault();finish(false);} };
+      inp.onblur=()=>finish(true);
+    }
+
+    // 현재 화면의 KPI·제목을 합친 설정 객체 (부분 저장 시 서로 안 덮어쓰게)
+    function getCurrentConfig(){
+      return { kpi:{ daily:{...KPI.daily}, video:{...KPI.video} },
+               title: document.getElementById("dashTitle").textContent.trim() };
+    }
+    // 제목 인라인 편집: 관리자일 때 상단 제목을 클릭해 바로 수정 → blur/Enter 시 저장
+    function setupTitleEdit(){
+      const h=document.getElementById("dashTitle");
+      if(!h) return;
+      h.contentEditable = ADMIN ? "true" : "false";
+      h.classList.toggle("title-edit", ADMIN);
+      h.title = ADMIN ? "클릭해서 제목을 수정하세요" : "";
+    }
+    let savingTitle=false;
+    async function saveTitle(){
+      if(!ADMIN||savingTitle) return;
+      const h=document.getElementById("dashTitle");
+      const title=h.textContent.trim();
+      if(!title){ h.textContent=(CONFIG&&CONFIG.title)||"⚡ 유튜브 인게이지먼트 대시보드"; return; }
+      if(CONFIG && CONFIG.title===title) return;   // 변화 없으면 저장 안 함
+      savingTitle=true;
+      const config=getCurrentConfig();
       try{
-        const r=await fetch("/api/cell",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({pw:ADMIN_PW,type,key,field,value:sheetVal})}).then(r=>r.json());
-        if(!r.ok){ alert("저장 실패: "+r.error); return; }
-        updateLocal(type,key,field,store);
-        if(type==="daily") renderDailyTable(); else renderVideos();
-        // 색칠/달성률에도 반영
-        renderGauge();
+        const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({pw:ADMIN_PW,config})}).then(r=>r.json());
+        if(r.ok){ CONFIG=config; h.classList.add("just-saved"); setTimeout(()=>h.classList.remove("just-saved"),900); }
+        else alert("제목 저장 실패: "+r.error);
       }catch(e){ alert("오류: "+e.message); }
+      finally{ savingTitle=false; }
     }
 
     // 설정(KPI·제목) 불러와 적용 — 화면 그리기 전에 호출
@@ -1179,7 +1227,7 @@
             if(r.config.kpi.daily) Object.assign(KPI.daily, r.config.kpi.daily);
             if(r.config.kpi.video) Object.assign(KPI.video, r.config.kpi.video);
           }
-          if(r.config.title){ const h=document.querySelector(".wrap h1"); if(h) h.textContent=r.config.title; }
+          if(r.config.title){ const h=document.getElementById("dashTitle"); if(h) h.textContent=r.config.title; }
         }
       }catch(_){}
     }
@@ -1190,28 +1238,25 @@
       if(v) v.innerHTML=mk("video");
     }
     function fillConfigForm(){
-      const t=document.getElementById("cfgTitle");
-      if(t) t.value=(CONFIG&&CONFIG.title) || document.querySelector(".wrap h1").textContent.trim();
       document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
         inp.value=KPI[inp.dataset.grp][inp.dataset.k];
       });
     }
+    // KPI만 저장 (제목은 상단에서 따로 인라인 저장)
     async function saveConfig(){
       const st=document.getElementById("cfgStatus");
       const kpi={daily:{},video:{}};
       document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
         kpi[inp.dataset.grp][inp.dataset.k]=Number(inp.value);
       });
-      const title=document.getElementById("cfgTitle").value.trim();
-      const config={kpi,title};
+      Object.assign(KPI.daily,kpi.daily); Object.assign(KPI.video,kpi.video);
+      const config=getCurrentConfig();   // 현재 제목 유지 + 새 KPI
       st.textContent="저장 중...";
       try{
         const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({pw:ADMIN_PW,config})}).then(r=>r.json());
         if(r.ok){
-          Object.assign(KPI.daily,kpi.daily); Object.assign(KPI.video,kpi.video);
           CONFIG=config;
-          if(title){ const h=document.querySelector(".wrap h1"); if(h) h.textContent=title; }
           renderDailyTable();renderVideos();renderGauge();renderCumulative();drawChart();drawGrowth();
           st.textContent="✅ 저장됨 (모든 사용자에 반영)";
         }else st.textContent="❌ "+(r.error||"저장 실패");
