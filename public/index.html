@@ -610,11 +610,12 @@
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
       document.getElementById("ch_stat").innerHTML=`구독자 ${fmt(c.subscribers)}명<br>전체 누적 조회수 ${fmt(c.totalViews)}회`;
-      // 본격 업로드(6/1) 후 운영일 D+NN — 로컬 자정 기준으로 계산(UTC 파싱 오차 제거, 매일 자동 증가)
+      // 본격 업로드(6/1) 후 운영일 D+NN — 로컬 자정 기준(UTC 파싱 오차 제거, 매일 자동 증가)
+      // 6/1을 1일차로 셈 → 오늘이 6/18이면 D+18
       const _start=new Date(2026,5,1,0,0,0,0);           // 2026-06-01 로컬
       const _now=new Date(); _now.setHours(0,0,0,0);     // 오늘 로컬 자정
-      const days=Math.round((_now-_start)/86400000);     // 6/1=D+0, 다음날부터 +1
-      document.getElementById("ddayBadge").textContent="D+"+Math.max(0,days);
+      const days=Math.round((_now-_start)/86400000)+1;   // 6/1=D+1
+      document.getElementById("ddayBadge").textContent="D+"+Math.max(1,days);
       const b=document.getElementById("ch_banner"); b.style.cursor="pointer"; b.onclick=()=>c.url&&window.open(c.url,"_blank");
     }
 
