@@ -31,8 +31,13 @@
     .seg{display:flex;gap:8px;margin:30px 0 6px;flex-wrap:wrap;}
     .seg .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .12s;}
     .seg .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
-    /* 토글 그룹 사이 구분선 (group2·group3 위쪽) — 통짜 방지 */
-    #seg2,#seg3{border-top:1px solid var(--line);margin-top:42px;padding-top:30px;}
+    /* 2단 네비게이션 — 최상위 카테고리(큰 탭) + 하위 탭(작은 탭) */
+    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:1px solid var(--line);padding-top:26px;}
+    .navcat .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:11px 24px;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:all .12s;}
+    .navcat .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .navsub{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 6px;}
+    .navsub .st{background:transparent;color:var(--sub);border:1px solid var(--line);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;}
+    .navsub .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     .bar{display:flex;align-items:center;gap:12px;margin:16px 0;flex-wrap:wrap;}
     button{background:var(--blue);color:#fff;border:0;padding:11px 20px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;}
     button:disabled{opacity:.5;cursor:wait;}
@@ -161,7 +166,7 @@
       /* ③ 부제(설명 카피) 폰트 축소 */
       .desc{font-size:11.5px;line-height:1.45;margin:-2px 0 10px;}
       /* 카드 그리드: 4·5·3·2열 전부 2열로 (인라인 강제분은 !important) */
-      .cards,.cards5,#gaugePanel,#cmpGrowthCards,#cmpKpiCards,#liveChannel{
+      .cards,.cards5,#gaugePanel,#cmpGrowthCards,#cmpKpiCards,#dlCards{
         grid-template-columns:repeat(2,1fr)!important;gap:10px;
       }
       .card{padding:15px;border-radius:16px;}
@@ -272,7 +277,7 @@
       <span><i class="dot dr"></i>50%미만 / 참여 10미만</span>
     </div>
 
-    <div class="seg" id="seg1"></div>
+    <!-- KPI 달성률: 헤더 밑 고정 단독 메뉴 (항상 표시) -->
     <div class="sec" id="sec-kpi">
     <h2>🎯 KPI 달성률
       <select id="gaugeType" style="margin-left:auto">
@@ -291,6 +296,11 @@
     <div class="cards" id="gaugePanel" style="grid-template-columns:repeat(3,1fr)"></div>
 
     </div>
+
+    <!-- 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 -->
+    <div class="navcat" id="navCat"></div>
+    <div class="navsub" id="navSub"></div>
+
     <div class="sec" id="sec-cum" style="display:none">
     <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">누적 성과</span>
       <select id="cumPeriod" style="margin-left:auto">
@@ -345,7 +355,6 @@
     <div class="panel"><div class="chart-box"><canvas id="cmpChart"></canvas></div></div>
     </div>
 
-    <div class="seg" id="seg2"></div>
     <div class="sec" id="sec-dchart">
     <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span>
       <select id="dailyPeriod" style="margin-left:auto">
@@ -388,12 +397,22 @@
 
     </div>
     <div class="sec" id="sec-live" style="display:none">
-    <h2>⚡ 실시간 <span class="kpi-badge">유튜브 현재 시점 (지연 없음)</span>
+    <h2>⚡ 실시간 <span class="kpi-badge">지연 없는 어제·오늘 조회수</span>
       <button id="liveAutoBtn" onclick="toggleLiveAuto()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">▶ 자동 갱신</button>
-      <button onclick="loadLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
+      <button onclick="loadDailyLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
     </h2>
-    <div class="desc">업로드 직후 조회수·좋아요·댓글이 <b>실시간으로 쌓이는 걸</b> 봐요. (스튜디오·일반 동기화는 2~3일 지연되지만, 이건 현재 누적값이라 즉시 반영) 자동 갱신은 30초마다. <span id="liveAt"></span></div>
-    <div class="cards" id="liveChannel" style="grid-template-columns:repeat(3,1fr)"></div>
+    <div class="desc">스튜디오·일반 동기화는 2~3일 지연되지만, 여기는 채널 누적치를 즉시 차감해 <b>어제·오늘 조회수를 지연 없이</b> 보여줘요. 자동 갱신은 30초마다. <span id="liveAt"></span></div>
+
+    <!-- 일일 실시간 카드 -->
+    <h2 style="font-size:15px">📊 일일 실시간</h2>
+    <div class="cards" id="dlCards" style="grid-template-columns:repeat(4,1fr)"></div>
+
+    <!-- 일일 그래프 (실시간) -->
+    <h2 style="font-size:15px;margin-top:20px">📈 일일 조회수 그래프 <span class="kpi-badge">진한 막대 = 오늘·어제(실시간) / 옅은 막대 = 확정</span></h2>
+    <div class="panel"><div class="chart-box"><canvas id="dlChart"></canvas></div></div>
+    <div class="note" id="dlNote" style="display:none">※ 어제·오늘 실시간 수치는 채널 스냅샷이 쌓이면서 정확해져요(배포 직후엔 0부터 시작해 하루가 지나면 완성).</div>
+
+    <!-- 최근 영상 실시간 -->
     <h2 style="font-size:15px;margin-top:20px">🎬 최근 영상 실시간</h2>
     <div class="tbl-wrap"><div class="scroll">
       <table>
@@ -403,7 +422,6 @@
     </div></div>
     </div>
 
-    <div class="seg" id="seg3"></div>
     <div class="sec" id="sec-hl">
     <h2>🏆 영상 하이라이트 & 포맷 비교</h2>
     <div class="bw" id="bestWorst"></div>
@@ -533,6 +551,7 @@
       document.getElementById("themeBtn").textContent=dark?"☀️ 라이트":"🌙 다크";
       // 차트 색이 테마따라 바뀌므로 다시 그림
       if(DAILY.length){ drawChart();drawGrowth();drawScatter();drawWeekday(); if(vd.id)drawVd(); }
+      if(lastDL)renderDailyLive(lastDL);
     }
     (function(){
       if(localStorage.getItem("theme")==="dark") document.body.classList.add("dark");
@@ -591,8 +610,10 @@
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
       document.getElementById("ch_stat").innerHTML=`구독자 ${fmt(c.subscribers)}명<br>전체 누적 조회수 ${fmt(c.totalViews)}회`;
-      // 본격 업로드(6/1) 후 운영일 D+NN
-      const days=Math.floor((Date.now()-new Date("2026-06-01").getTime())/86400000);
+      // 본격 업로드(6/1) 후 운영일 D+NN — 로컬 자정 기준으로 계산(UTC 파싱 오차 제거, 매일 자동 증가)
+      const _start=new Date(2026,5,1,0,0,0,0);           // 2026-06-01 로컬
+      const _now=new Date(); _now.setHours(0,0,0,0);     // 오늘 로컬 자정
+      const days=Math.round((_now-_start)/86400000);     // 6/1=D+0, 다음날부터 +1
       document.getElementById("ddayBadge").textContent="D+"+Math.max(0,days);
       const b=document.getElementById("ch_banner"); b.style.cursor="pointer"; b.onclick=()=>c.url&&window.open(c.url,"_blank");
     }
@@ -903,23 +924,46 @@
     }
 
     // ===== 실시간 (Data API 현재값) =====
-    let livePrev=null, liveTimer=null;
-    async function loadLive(){
+    let livePrev=null, liveTimer=null, dlChart=null, dlLoaded=false, lastDL=null;
+    // 일일 실시간 + 최근 영상 실시간을 함께 갱신
+    async function loadDailyLive(){
       const at=document.getElementById("liveAt");
       at.textContent="(불러오는 중...)";
       try{
-        const r=await fetch("/api/live").then(r=>r.json());
-        if(!r.ok){ at.textContent="❌ "+r.error; return; }
-        renderLive(r);
-        at.textContent="· 갱신: "+new Date(r.at).toLocaleTimeString("ko-KR");
+        const [dl,lv]=await Promise.all([
+          fetch("/api/daily-live").then(r=>r.json()).catch(()=>({ok:false})),
+          fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false})),
+        ]);
+        if(dl.ok){ lastDL=dl; renderDailyLive(dl); }
+        if(lv.ok){ renderLive(lv); }
+        dlLoaded=true;
+        at.textContent="· 갱신: "+new Date().toLocaleTimeString("ko-KR");
       }catch(e){ at.textContent="❌ "+e.message; }
     }
+    function renderDailyLive(d){
+      const nz=(v)=> (v==null) ? '<span style="color:var(--sub);font-size:15px">집계 중…</span>' : fmt(v);
+      const sgn=(v)=> (v==null) ? '<span style="color:var(--sub);font-size:15px">집계 중…</span>' : (v>=0?"+":"")+fmt(v);
+      document.getElementById("dlCards").innerHTML=`
+        <div class="card"><div class="label">오늘 조회수 <span style="font-size:10px;color:var(--sub)">실시간</span></div><div class="value">${nz(d.today&&d.today.views)}</div></div>
+        <div class="card"><div class="label">어제 조회수</div><div class="value">${nz(d.yesterday&&d.yesterday.views)}</div></div>
+        <div class="card"><div class="label">오늘 구독 증감</div><div class="value">${sgn(d.today&&d.today.subs)}</div></div>
+        <div class="card"><div class="label">현재 누적 조회수</div><div class="value">${fmt(d.now.totalViews)}</div><div class="note">구독자 ${fmt(d.now.subs)}명</div></div>`;
+      document.getElementById("dlNote").style.display = d.hasSnapshots ? "none" : "";
+      const days=(d.days||[]).slice(-14);
+      const labels=days.map(x=>x.date.slice(5));
+      const data=days.map(x=>x.views);
+      const colors=days.map(x=> x.source==="snapshot" ? "#3182f6" : "rgba(49,130,246,.4)");
+      if(dlChart)dlChart.destroy();
+      const ctx=document.getElementById("dlChart"); if(!ctx)return;
+      dlChart=new Chart(ctx,{type:"bar",
+        data:{labels,datasets:[{label:"일별 조회수",data,backgroundColor:colors,borderRadius:6,maxBarThickness:40}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`+(days[c.dataIndex].source==="snapshot"?" (실시간)":" (확정)")}}},
+          scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
+    }
+    // (호환용) 기존 호출부가 있을 수 있어 유지 — 일일 실시간 전체 갱신으로 위임
+    async function loadLive(){ return loadDailyLive(); }
     function renderLive(r){
-      const c=r.channel;
-      document.getElementById("liveChannel").innerHTML=`
-        <div class="card"><div class="label">구독자</div><div class="value">${fmt(c.subscribers)}</div></div>
-        <div class="card"><div class="label">전체 누적 조회수</div><div class="value">${fmt(c.totalViews)}</div></div>
-        <div class="card"><div class="label">총 영상 수</div><div class="value">${fmt(c.videoCount)}</div></div>`;
       const prev=livePrev||{};
       const el=document.getElementById("liveRows");
       el.innerHTML=(r.videos||[]).map(v=>{
@@ -956,7 +1000,7 @@
     let cmpData=null, cmpChart=null, cmpForm="all"; // all | long | short
     async function loadCompare(){
       const st=document.getElementById("cmpStatus"), btn=document.getElementById("cmpBtn");
-      st.textContent="분석 중... (과거 데이터라 20~40초 걸릴 수 있어요)"; btn.disabled=true;
+      st.textContent="분석 중... (현재 영상만 계산하므로 몇 초면 끝나요)"; btn.disabled=true;
       try{
         const r=await fetch("/api/compare").then(r=>r.json());
         if(!r.ok){ st.textContent="❌ 오류: "+r.error; btn.disabled=false; return; }
@@ -1121,53 +1165,55 @@
       }).join("");
     }
 
-    // ===== 섹션 토글 (3그룹) =====
-    const SEG=[
-      {bar:"seg1", items:[
-        {id:"sec-kpi",label:"KPI 달성률",draw:()=>renderGauge()},
-        {id:"sec-cum",label:"누적 성과",draw:()=>renderCumulative()},
-        {id:"sec-growth",label:"누적 성장 추이",draw:()=>drawGrowth()},
-        {id:"sec-compare",label:"과거 vs 현재",draw:()=>{ if(cmpData)renderCompare(); }},
+    // ===== 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 =====
+    // KPI 달성률(sec-kpi)은 헤더 밑 고정이라 여기 포함 안 함.
+    const NAV=[
+      {cat:"daily", label:"📅 일일", subs:[
+        {id:"sec-live",   label:"실시간",        draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
+        {id:"sec-dchart", label:"일일 그래프",   draw:()=>drawChart()},
+        {id:"sec-dtable", label:"일일 상세",     draw:()=>renderDailyTable()},
       ]},
-      {bar:"seg2", items:[
-        {id:"sec-dchart",label:"일별 추이",draw:()=>drawChart()},
-        {id:"sec-dtable",label:"일별 상세",draw:()=>renderDailyTable()},
-        {id:"sec-live",label:"⚡ 실시간",draw:()=>{ if(!livePrev) loadLive(); }},
+      {cat:"video", label:"🎬 영상", subs:[
+        {id:"sec-hl",      label:"영상 하이라이트", draw:()=>{renderBestWorst();renderFormCompare();}},
+        {id:"sec-vtable",  label:"영상 상세",       draw:()=>renderVideos()},
+        {id:"sec-vd",      label:"게시 후 성과",    draw:()=>{ if(vd.id)drawVd(); }},
+        {id:"sec-scatter", label:"CTR×평균조회율",  draw:()=>drawScatter()},
+        {id:"sec-upload",  label:"업로드 성과",     draw:()=>drawWeekday()},
       ]},
-      {bar:"seg3", items:[
-        {id:"sec-hl",label:"영상 하이라이트",draw:()=>{renderBestWorst();renderFormCompare();}},
-        {id:"sec-scatter",label:"CTR×평균조회율",draw:()=>drawScatter()},
-        {id:"sec-upload",label:"업로드 성과",draw:()=>drawWeekday()},
-        {id:"sec-vtable",label:"영상별 상세",draw:()=>renderVideos()},
-        {id:"sec-vd",label:"게시 후 추이",draw:()=>{ if(vd.id)drawVd(); }},
+      {cat:"kpi", label:"🎯 KPI", subs:[
+        {id:"sec-cum",     label:"누적 성과",        draw:()=>renderCumulative()},
+        {id:"sec-growth",  label:"누적 성장 그래프", draw:()=>drawGrowth()},
+        {id:"sec-compare", label:"과거 vs 현재",     draw:()=>{ if(cmpData)renderCompare(); }},
       ]},
     ];
-    function buildSegs(){
-      SEG.forEach(g=>{
-        const bar=document.getElementById(g.bar);
-        const cur=g.items.find(it=>document.getElementById(it.id).style.display!=="none")||g.items[0];
-        bar.innerHTML=g.items.map(it=>`<div class="st ${it.id===cur.id?'active':''}" data-id="${it.id}">${it.label}</div>`).join("");
-        bar.querySelectorAll(".st").forEach(b=>b.onclick=()=>showSec(g,b.dataset.id));
-      });
+    const ALL_SUBS=NAV.flatMap(c=>c.subs);
+    let activeCat="daily", activeSub={};   // activeSub[cat]=현재 선택된 하위 탭 id
+    NAV.forEach(c=>activeSub[c.cat]=c.subs[0].id);
+
+    function buildNav(){
+      const catBar=document.getElementById("navCat");
+      catBar.innerHTML=NAV.map(c=>`<div class="st ${c.cat===activeCat?'active':''}" data-cat="${c.cat}">${c.label}</div>`).join("");
+      catBar.querySelectorAll(".st").forEach(b=>b.onclick=()=>showCat(b.dataset.cat));
+      buildSubBar();
     }
-    // 과거vs현재(sec-compare) 볼 땐 아래 두 그룹(일별·영상) 전부 숨김
-    function setLowerVisible(vis){
-      [SEG[1],SEG[2]].forEach(g=>{
-        document.getElementById(g.bar).style.display = vis ? "" : "none";
-        if(vis){
-          const act=document.getElementById(g.bar).querySelector(".st.active");
-          const cid=act?act.dataset.id:g.items[0].id;
-          g.items.forEach(it=>document.getElementById(it.id).style.display=(it.id===cid?"":"none"));
-        }else{
-          g.items.forEach(it=>document.getElementById(it.id).style.display="none");
-        }
-      });
+    function buildSubBar(){
+      const cat=NAV.find(c=>c.cat===activeCat);
+      const subBar=document.getElementById("navSub");
+      subBar.innerHTML=cat.subs.map(s=>`<div class="st ${s.id===activeSub[activeCat]?'active':''}" data-id="${s.id}">${s.label}</div>`).join("");
+      subBar.querySelectorAll(".st").forEach(b=>b.onclick=()=>showSub(b.dataset.id));
     }
-    function showSec(g,id){
-      g.items.forEach(it=>document.getElementById(it.id).style.display=(it.id===id?"":"none"));
-      document.getElementById(g.bar).querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
-      if(g.bar==="seg1") setLowerVisible(id!=="sec-compare");   // 과거vs현재면 하단 그룹 숨김
-      const it=g.items.find(x=>x.id===id); if(it&&it.draw) it.draw();  // 보일 때 차트 다시 그림
+    function showCat(cat){
+      activeCat=cat;
+      document.getElementById("navCat").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.cat===cat));
+      buildSubBar();
+      showSub(activeSub[cat]);   // 그 카테고리에서 마지막으로 보던 하위 탭
+    }
+    function showSub(id){
+      activeSub[activeCat]=id;
+      // KPI 달성률(고정) 제외, 나머지 모든 섹션 중 선택된 것만 표시
+      ALL_SUBS.forEach(s=>{ const el=document.getElementById(s.id); if(el) el.style.display=(s.id===id?"":"none"); });
+      document.getElementById("navSub").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
+      const s=ALL_SUBS.find(x=>x.id===id); if(s&&s.draw) s.draw();
     }
 
     // ===== 관리자 모드 =====
@@ -1356,7 +1402,8 @@
       VIDEOS=(r.videos||[]).filter(x=>x[3]&&x[3]!==x[0]);
       buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
       renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();drawWeekday();
-      renderSticky();populateVideoSelect();buildSegs();
+      renderSticky();populateVideoSelect();
+      buildNav(); showSub(activeSub[activeCat]);   // 초기: 일일 → 실시간
     }
     // 추이 영상 선택 드롭다운 채우기 (업로드 최신순)
     function populateVideoSelect(){

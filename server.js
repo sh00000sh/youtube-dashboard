@@ -13,7 +13,14 @@
 
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const { google } = require("googleapis");
+
+// 과거(6/1 이전) 영상 비교 데이터 — 변동성이 낮아 한 번 계산해 고정(하드코딩). 현재 영상만 라이브 계산.
+const COMPARE_CUTOFF = "2026-06-01";
+let PAST_COMPARE = [];
+try { PAST_COMPARE = JSON.parse(fs.readFileSync(path.join(__dirname, "compare_past.json"), "utf8")); }
+catch (_) { console.log("compare_past.json 없음 — 과거 비교 데이터 비어있음"); }
 
 const app = express();
 app.use(express.json());
@@ -459,27 +466,39 @@ app.get("/api/live", async (req, res) => {
   }
 });
 
-// 과거 vs 현재 비교 (광고 유입 자동 제외) — 트래픽 소스 기반
+// 과거 vs 현재 비교 (광고 유입 자동 제외)
+//  - 과거(6/1 이전) 영상: compare_past.json 하드코딩 데이터 사용(변동성 낮음 → 즉시)
+//  - 현재(6/1 이후) 영상: 라이브 계산(개수 적어 트래픽소스 조회가 빠름)
 app.get("/api/compare", async (req, res) => {
   try {
     const auth = getOAuth();
     const ya = google.youtubeAnalytics({ version: "v2", auth });
     const yt = google.youtube({ version: "v3", auth }); // youtube.readonly 필요(비공개 영상)
-    const start = "2017-01-01", end = ymd(new Date());
+    const end = ymd(new Date());
 
-    // 1) 영상별 전체(생애) 합계
+    // 1) 6/1 이후 영상별 합계 (startDate를 컷오프로 좁혀 현재 활동만)
     const totalRes = await ya.reports.query({
-      ids: "channel==MINE", startDate: start, endDate: end,
+      ids: "channel==MINE", startDate: COMPARE_CUTOFF, endDate: end,
       dimensions: "video", metrics: "views,averageViewPercentage,subscribersGained",
       sort: "-views", maxResults: 200,
     });
     const totals = {};
     (totalRes.data.rows || []).forEach((r) => totals[r[0]] = { views: +r[1] || 0, avp: +r[2] || 0, subs: +r[3] || 0 });
 
-    // 영상 ID 목록 (조회수 있는 것만 — 사실상 전체)
-    const ids = Object.keys(totals).filter((id) => totals[id].views > 0).slice(0, 200);
+    // 2) 제목·게시일·길이 → 6/1 이후 업로드만 "현재"로 추림
+    let ids = Object.keys(totals);
+    const meta = {};
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const v = await yt.videos.list({ part: "snippet,contentDetails", id: chunk.join(",") });
+      (v.data.items || []).forEach((it) => meta[it.id] = {
+        title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+        duration: isoDurToMMSS(it.contentDetails.duration),
+      });
+    }
+    ids = ids.filter((id) => (meta[id]?.publishedAt || "") >= COMPARE_CUTOFF && totals[id].views > 0);
 
-    // 2) 영상별 "광고(ADVERTISING)" 유입 — 트래픽소스 개별 조회를 병렬(10개씩)로 처리해 속도 개선
+    // 3) 현재 영상만 광고(ADVERTISING) 유입 조회 (몇 개뿐이라 빠름)
     const ads = {};
     const CHUNK = 10;
     for (let i = 0; i < ids.length; i += CHUNK) {
@@ -487,7 +506,7 @@ app.get("/api/compare", async (req, res) => {
       await Promise.all(chunk.map(async (id) => {
         try {
           const tr = await ya.reports.query({
-            ids: "channel==MINE", startDate: start, endDate: end,
+            ids: "channel==MINE", startDate: COMPARE_CUTOFF, endDate: end,
             dimensions: "insightTrafficSourceType", metrics: "views",
             filters: "video==" + id,
           });
@@ -498,19 +517,8 @@ app.get("/api/compare", async (req, res) => {
       }));
     }
 
-    // 3) 제목·게시일 (OAuth Data API → 비공개 포함)
-    const meta = {};
-    for (let i = 0; i < ids.length; i += 50) {
-      const chunk = ids.slice(i, i + 50);
-      const v = await yt.videos.list({ part: "snippet,contentDetails", id: chunk.join(",") });
-      (v.data.items || []).forEach((it) => meta[it.id] = {
-        title: it.snippet.title, publishedAt: it.snippet.publishedAt,
-        duration: isoDurToMMSS(it.contentDetails.duration),
-      });
-    }
-
-    const ADSHARE = Number(req.query.threshold || 0.7); // 광고 유입 70% 이상이면 광고영상(제외)
-    const videos = ids.map((id) => {
+    const ADSHARE = Number(req.query.threshold || 0.7);
+    const current = ids.map((id) => {
       const t = totals[id], ad = ads[id] || 0;
       const organic = Math.max(0, t.views - ad);
       const adShare = t.views ? ad / t.views : 0;
@@ -522,7 +530,8 @@ app.get("/api/compare", async (req, res) => {
       };
     }).filter((v) => v.publishedAt);
 
-    res.json({ ok: true, videos });
+    // 과거(하드코딩) + 현재(라이브) 합치기
+    res.json({ ok: true, videos: [...PAST_COMPARE, ...current], pastCount: PAST_COMPARE.length, liveCount: current.length });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -726,9 +735,120 @@ app.get("/api/video-hourly", async (req, res) => {
   }
 });
 
+// ===================================================================
+//  채널 스냅샷 로봇 + 일일 실시간 (지연 없는 어제/오늘 조회수)
+//   - 유튜브 Analytics는 최근 1~2일이 미확정이라 "어제 조회수"를 못 봄
+//   - 채널 누적조회수(Data API)는 즉시 정확 → 1시간마다 기록 후 하루 경계 차감
+// ===================================================================
+const CHSNAP_TAB = process.env.CHSNAP_TAB || "채널스냅샷";
+
+// ms/ISO → KST(UTC+9) 기준 "YYYY-MM-DD"
+function kstDate(ts) {
+  return new Date(new Date(ts).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+}
+
+// 채널 누적 지표(구독자·누적조회수) 1줄 기록
+async function channelSnapshotJob() {
+  if (!CHANNEL_ID || !YOUTUBE_API_KEY || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return false;
+  const sheets = getSheetsClient();
+  const ch = await (await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
+  const st = ch.items?.[0]?.statistics;
+  if (!st) return false;
+  await ensureTab(sheets, CHSNAP_TAB, ["타임스탬프", "구독자", "누적조회수"]);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A:C`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[new Date().toISOString(), Number(st.subscriberCount || 0), Number(st.viewCount || 0)]] },
+  });
+  return true;
+}
+
+// 일일 실시간: 현재 누적 + 날짜별 조회수(오늘/어제는 스냅샷, 과거는 Analytics 백필)
+app.get("/api/daily-live", async (req, res) => {
+  try {
+    if (!CHANNEL_ID || !YOUTUBE_API_KEY) return res.status(400).json({ ok: false, error: "CHANNEL_ID/API_KEY 누락" });
+    // 1) 현재 누적 (즉시)
+    const ch = await (await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
+    const st = ch.items?.[0]?.statistics || {};
+    const nowViews = Number(st.viewCount || 0), nowSubs = Number(st.subscriberCount || 0);
+    const nowTs = Date.now();
+    const todayK = kstDate(nowTs), ydayK = kstDate(nowTs - 24 * 3600000);
+
+    // 2) 채널 스냅샷 → KST 날짜별 "그날 첫 스냅샷"(0시 기준점)
+    const sheets = getSheetsClient();
+    let snaps = [];
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:C` });
+      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[2] || 0) }))
+        .filter((s) => s.ts && s.views).sort((a, b) => a.ts - b.ts);
+    } catch (_) { /* 탭 없음 */ }
+    const firstOfDay = {};
+    for (const s of snaps) { const dk = kstDate(s.ts); if (!firstOfDay[dk]) firstOfDay[dk] = s; }
+
+    // 스냅샷 기반 일별 조회수 = (다음날 첫 스냅샷 누적) - (그날 첫 스냅샷 누적), 오늘은 now까지
+    const snapDaily = {};
+    const dks = Object.keys(firstOfDay).sort();
+    for (let i = 0; i < dks.length; i++) {
+      const startV = firstOfDay[dks[i]].views;
+      const nextV = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]].views : nowViews;
+      snapDaily[dks[i]] = Math.max(0, nextV - startV);
+    }
+
+    // 3) Analytics 확정 일별 (백필) — 최근 30일
+    const anaDaily = {};
+    try {
+      const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
+      const ar = await ya.reports.query({
+        ids: "channel==MINE", startDate: ymd(daysAgo(30)), endDate: ymd(new Date()),
+        dimensions: "day", metrics: "views,subscribersGained,subscribersLost", sort: "day",
+      });
+      (ar.data.rows || []).forEach((r) => { anaDaily[r[0]] = { views: Number(r[1] || 0), subsNet: Number(r[2] || 0) - Number(r[3] || 0) }; });
+    } catch (_) { /* Analytics 실패해도 스냅샷만으로 동작 */ }
+
+    // 4) 병합: 오늘/어제는 스냅샷 우선(지연 없음), 나머지는 Analytics 확정 우선
+    const dates = [...new Set([...Object.keys(anaDaily), ...Object.keys(snapDaily)])].sort();
+    const days = dates.map((d) => {
+      const hasSnap = snapDaily[d] != null, hasAna = anaDaily[d] != null;
+      let views, source;
+      if ((d === todayK || d === ydayK) && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
+      else if (hasAna) { views = anaDaily[d].views; source = "analytics"; }
+      else if (hasSnap) { views = snapDaily[d]; source = "snapshot"; }
+      else { views = 0; source = "none"; }
+      return { date: d, views, source };
+    });
+
+    const todayStart = firstOfDay[todayK];
+    const todayViews = todayStart ? Math.max(0, nowViews - todayStart.views) : null;
+    const todaySubs = todayStart ? (nowSubs - todayStart.subs) : (anaDaily[todayK] ? anaDaily[todayK].subsNet : null);
+    const yesterdayViews = (snapDaily[ydayK] != null) ? snapDaily[ydayK] : (anaDaily[ydayK] ? anaDaily[ydayK].views : null);
+
+    res.json({
+      ok: true, at: new Date(nowTs).toISOString(),
+      now: { subs: nowSubs, totalViews: nowViews },
+      today: { views: todayViews, subs: todaySubs },
+      yesterday: { views: yesterdayViews },
+      hasSnapshots: snaps.length > 0,
+      days,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 수동 채널 스냅샷 트리거
+app.post("/api/channel-snapshot", async (req, res) => {
+  try { const ok = await channelSnapshotJob(); res.json({ ok: true, recorded: ok }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // 1시간마다 자동 스냅샷 (서버 항상 켜져 있으니 별도 Cron 불필요)
 setInterval(() => snapshotJob().catch((e) => console.log("snapshot err:", e.message)), 60 * 60 * 1000);
 setTimeout(() => snapshotJob().catch(() => {}), 15000); // 서버 켜지고 15초 뒤 1회
+// 채널 스냅샷도 1시간마다 + 시작 직후 1회 (일일 실시간용)
+setInterval(() => channelSnapshotJob().catch((e) => console.log("ch-snapshot err:", e.message)), 60 * 60 * 1000);
+setTimeout(() => channelSnapshotJob().catch(() => {}), 20000);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 대시보드 실행 중: http://localhost:${PORT}`));
