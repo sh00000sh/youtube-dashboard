@@ -7,14 +7,14 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     :root{
-      --bg:#f7f8fa;--card:#fff;--line:#eef0f3;--text:#191f28;--sub:#8b95a1;
+      --bg:#f7f8fa;--card:#fff;--line:#eef0f3;--divider:#dde1e6;--text:#191f28;--sub:#8b95a1;
       --blue:#3182f6;--blue-soft:#e8f1fe;--th:#f7f8fa;--zebra:#fbfcfd;--hover:#f1f6ff;--chip:#f2f4f6;
       --shadow:0 1px 4px rgba(0,0,0,.06);--shadow-h:0 4px 16px rgba(0,0,0,.09);
       /* KPI 색 — 채도 낮춘 파스텔 */
       --g-bg:#eaf7f0;--g-tx:#1f9d57;--y-bg:#fdf4e3;--y-tx:#c79320;--r-bg:#fdeef0;--r-tx:#e15a72;
     }
     body.dark{
-      --bg:#16171c;--card:#1e1f25;--line:#2a2c34;--text:#eaeaee;--sub:#8b8d96;
+      --bg:#16171c;--card:#1e1f25;--line:#2a2c34;--divider:#3a3d46;--text:#eaeaee;--sub:#8b8d96;
       --blue:#5b9bf8;--blue-soft:#1a2740;--th:#22242c;--zebra:#202127;--hover:#24262f;--chip:#262830;
       --shadow:0 1px 4px rgba(0,0,0,.4);--shadow-h:0 6px 20px rgba(0,0,0,.55);
       --g-bg:#15301f;--g-tx:#52d18a;--y-bg:#2f2811;--y-tx:#e0bc5a;--r-bg:#341619;--r-tx:#ec8493;
@@ -32,7 +32,7 @@
     .seg .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .12s;}
     .seg .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     /* 2단 네비게이션 — 최상위 카테고리(큰 탭) + 하위 탭(작은 탭) */
-    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:2px solid var(--sub);padding-top:26px;}
+    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:1.5px solid var(--divider);padding-top:26px;}
     .navcat .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:11px 24px;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:all .12s;}
     .navcat .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     .navsub{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 6px;}
@@ -149,6 +149,9 @@
     .cfg-f input{width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;}
     /* 셀 인라인 편집 입력칸 */
     .cell-inp{width:72px;max-width:100%;box-sizing:border-box;padding:3px 6px;border:1.5px solid var(--blue,#3182f6);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;text-align:right;}
+    /* 일일 실시간 카드 등락 */
+    .dl-d{font-size:11.5px;font-weight:700;margin-top:6px;color:var(--sub);}
+    .dl-d.up{color:var(--g-tx);} .dl-d.down{color:var(--r-tx);}
     /* 제목 인라인 편집 */
     #dashTitle.title-edit{outline:1.5px dashed var(--blue,#3182f6);outline-offset:4px;border-radius:6px;cursor:text;}
     #dashTitle.just-saved{outline:1.5px solid #30a46c;}
@@ -944,9 +947,22 @@
     function renderDailyLive(d){
       const nz=(v)=> (v==null) ? '<span style="color:var(--sub);font-size:15px">집계 중…</span>' : fmt(v);
       const sgn=(v)=> (v==null) ? '<span style="color:var(--sub);font-size:15px">집계 중…</span>' : (v>=0?"+":"")+fmt(v);
+      // 날짜별 조회수 맵 → 그저께 값 조회 (KST 기준)
+      const kstD=(ms)=> new Date(ms+9*3600000).toISOString().slice(0,10);
+      const map={}; (d.days||[]).forEach(x=>map[x.date]=x.views);
+      const todayV=(d.today&&d.today.views), ydayV=(d.yesterday&&d.yesterday.views);
+      const d2V=map[kstD(Date.now()-2*86400000)];   // 그저께
+      // 등락 화살표 (전일 대비)
+      const arrow=(cur,prev,lbl)=>{
+        if(cur==null||prev==null) return `<div class="dl-d">${lbl} 비교 데이터 없음</div>`;
+        const diff=cur-prev, pct=prev>0?Math.round(Math.abs(diff)/prev*100):null, pctS=pct!=null?` ${pct}%`:"";
+        if(diff>0) return `<div class="dl-d up">${lbl} ▲ ${fmt(diff)}${pctS}</div>`;
+        if(diff<0) return `<div class="dl-d down">${lbl} ▼ ${fmt(Math.abs(diff))}${pctS}</div>`;
+        return `<div class="dl-d">${lbl} 변화 없음</div>`;
+      };
       document.getElementById("dlCards").innerHTML=`
-        <div class="card"><div class="label">오늘 조회수 <span style="font-size:10px;color:var(--sub)">실시간</span></div><div class="value">${nz(d.today&&d.today.views)}</div></div>
-        <div class="card"><div class="label">어제 조회수</div><div class="value">${nz(d.yesterday&&d.yesterday.views)}</div></div>
+        <div class="card"><div class="label">오늘 조회수 <span style="font-size:10px;color:var(--sub)">실시간</span></div><div class="value">${nz(todayV)}</div>${arrow(todayV,ydayV,"어제 대비")}</div>
+        <div class="card"><div class="label">어제 조회수</div><div class="value">${nz(ydayV)}</div>${arrow(ydayV,d2V,"그저께 대비")}</div>
         <div class="card"><div class="label">오늘 구독 증감</div><div class="value">${sgn(d.today&&d.today.subs)}</div></div>
         <div class="card"><div class="label">현재 누적 조회수</div><div class="value">${fmt(d.now.totalViews)}</div><div class="note">구독자 ${fmt(d.now.subs)}명</div></div>`;
       document.getElementById("dlNote").style.display = d.hasSnapshots ? "none" : "";
