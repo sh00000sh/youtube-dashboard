@@ -39,8 +39,8 @@ const {
 
 const DAYS = Number(process.env.SYNC_DAYS || 30);     // 며칠치 가져올지 (기본 30일)
 const MAX_VIDEOS = Number(process.env.MAX_VIDEOS || 50);
-// 초기 반응 측정 윈도우(시간): 게시 후 이 시간까지의 시간당 조회수로 초기 반응력을 비교(모든 영상 동일 기준)
-const EARLY_WINDOW_H = Number(process.env.EARLY_WINDOW_H || 6);
+// 초기 반응 측정 윈도우(일): 게시 후 첫 N일 조회수로 초기 반응력을 비교(모든 영상 동일 기준, 일 단위는 과거 영상도 소급 가능)
+const EARLY_DAYS = Number(process.env.EARLY_DAYS || 1);
 
 // ----- 관리자 모드 -----
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";   // Railway 환경변수로 설정
@@ -458,34 +458,53 @@ app.get("/api/live", async (req, res) => {
           }));
       }
     }
-
-    // 초기 반응 속도: 게시 후 EARLY_WINDOW_H 시간 시점의 누적조회수 / 시간 (모든 영상 동일 기준)
-    // 시간별 스냅샷(업로드 후 24h, 1h 간격 기록)에서 윈도우에 가장 근접한 값을 사용
-    try {
-      if (GOOGLE_SERVICE_ACCOUNT && SHEET_ID && videos.length) {
-        const sheets = getSheetsClient();
-        const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:G` });
-        const byVid = {};
-        (r.data.values || []).forEach((x) => {
-          const id = x[1], hrs = Number(x[3]), views = Number(x[4] || 0);
-          if (!id || isNaN(hrs)) return;
-          (byVid[id] = byVid[id] || []).push({ hrs, views });
-        });
-        videos = videos.map((v) => {
-          const rows = (byVid[v.id] || []).filter((s) => s.hrs <= EARLY_WINDOW_H + 0.75).sort((a, b) => a.hrs - b.hrs);
-          if (!rows.length) return { ...v, early: null };
-          const basis = rows[rows.length - 1]; // 윈도우 이하에서 가장 6h에 근접한 스냅샷
-          const perHour = basis.hrs > 0 ? Math.round(basis.views / basis.hrs) : null;
-          return { ...v, early: { window: EARLY_WINDOW_H, basisHours: Number(basis.hrs.toFixed(1)), views: basis.views, perHour, complete: basis.hrs >= EARLY_WINDOW_H - 0.75 } };
-        });
-      }
-    } catch (_) { /* 스냅샷 없으면 early 생략 */ }
-
     res.json({
-      ok: true, at: new Date().toISOString(), earlyWindow: EARLY_WINDOW_H,
+      ok: true, at: new Date().toISOString(),
       channel: { subscribers: Number(st.subscriberCount || 0), totalViews: Number(st.viewCount || 0), videoCount: Number(st.videoCount || 0) },
       videos,
     });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 초기 반응 속도: 게시 후 첫 EARLY_DAYS일 조회수 / (일×24) = 초기 시간당 조회수
+//  - 유튜브는 시(hour) 단위 소급은 안 주지만 일(day) 단위는 과거 영상도 제공 → 기존 영상도 계산 가능
+//  - 모든 영상 동일 기준(첫 N일). 결과는 변동성 낮으므로 20분 캐시
+let earlyCache = { at: 0, data: {} };
+app.get("/api/early", async (req, res) => {
+  try {
+    if (!CHANNEL_ID) return res.status(400).json({ ok: false, error: "CHANNEL_ID 누락" });
+    if (Date.now() - earlyCache.at < 20 * 60 * 1000 && Object.keys(earlyCache.data).length) {
+      return res.json({ ok: true, days: EARLY_DAYS, cached: true, early: earlyCache.data });
+    }
+    const yt = google.youtube({ version: "v3", auth: getOAuth() });
+    const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
+    const ch = await yt.channels.list({ part: "contentDetails", id: CHANNEL_ID });
+    const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploads) return res.json({ ok: true, days: EARLY_DAYS, early: {} });
+    const pl = await yt.playlistItems.list({ part: "contentDetails,snippet", maxResults: 25, playlistId: uploads });
+    const items = (pl.data.items || []).map((it) => ({ id: it.contentDetails.videoId, publishedAt: it.contentDetails.videoPublishedAt || it.snippet.publishedAt }));
+    const early = {};
+    const CH = 6;
+    for (let i = 0; i < items.length; i += CH) {
+      const chunk = items.slice(i, i + CH);
+      await Promise.all(chunk.map(async (it) => {
+        try {
+          const pub = new Date(it.publishedAt);
+          const start = ymd(pub);
+          const end = ymd(new Date(pub.getTime() + (EARLY_DAYS - 1) * 86400000));
+          const r = await ya.reports.query({
+            ids: "channel==MINE", startDate: start, endDate: end,
+            dimensions: "day", metrics: "views", filters: "video==" + it.id,
+          });
+          let sum = 0; (r.data.rows || []).forEach((row) => sum += Number(row[1] || 0));
+          early[it.id] = { views: sum, perHour: Math.round(sum / (EARLY_DAYS * 24)), days: EARLY_DAYS };
+        } catch (_) { /* 영상별 실패는 건너뜀 */ }
+      }));
+    }
+    earlyCache = { at: Date.now(), data: early };
+    res.json({ ok: true, days: EARLY_DAYS, early });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
