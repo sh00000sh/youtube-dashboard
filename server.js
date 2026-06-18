@@ -39,8 +39,10 @@ const {
 
 const DAYS = Number(process.env.SYNC_DAYS || 30);     // 며칠치 가져올지 (기본 30일)
 const MAX_VIDEOS = Number(process.env.MAX_VIDEOS || 50);
-// 초기 반응 측정 윈도우(일): 게시 후 첫 N일 조회수로 초기 반응력을 비교(모든 영상 동일 기준, 일 단위는 과거 영상도 소급 가능)
-const EARLY_DAYS = Number(process.env.EARLY_DAYS || 1);
+// 초기 반응 측정: ①수동 입력(영상초기반응 탭, 시간 단위 — 최우선) ②없으면 Analytics 첫 N일(소급)
+const EARLY_DAYS = Number(process.env.EARLY_DAYS || 1);       // 자동 폴백: 게시 첫 N일
+const EARLY_WINDOW_H = Number(process.env.EARLY_WINDOW_H || 6); // 수동 입력 기준 시간(6h)
+const HOURFIX_TAB = process.env.HOURFIX_TAB || "영상초기반응";  // 영상별 1~6h 누적조회수 직접 입력
 
 // ----- 관리자 모드 -----
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";   // Railway 환경변수로 설정
@@ -504,7 +506,57 @@ app.get("/api/early", async (req, res) => {
       }));
     }
     earlyCache = { at: Date.now(), data: early };
-    res.json({ ok: true, days: EARLY_DAYS, early });
+
+    // ② 수동 입력(영상초기반응 탭) 덮어쓰기 — 최우선, 매번 최신 반영(캐시 안 함)
+    const merged = { ...early };
+    try {
+      const sheets = getSheetsClient();
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${HOURFIX_TAB}!A2:H` });
+      (r.data.values || []).forEach((x) => {
+        const id = String(x[0] || "").trim(); if (!id) return;
+        // x[2..7] = 1h..6h 누적조회수. 윈도우 이하에서 채워진 가장 큰 시간 사용
+        let best = null;
+        for (let hh = 1; hh <= EARLY_WINDOW_H; hh++) {
+          const cell = String(x[1 + hh] || "").trim();
+          const val = Number(cell.replace(/[^0-9.-]/g, ""));
+          if (cell !== "" && !isNaN(val)) best = { hour: hh, views: val };
+        }
+        if (best) merged[id] = { views: best.views, perHour: Math.round(best.views / best.hour), hours: best.hour, window: EARLY_WINDOW_H, source: "manual", complete: best.hour >= EARLY_WINDOW_H };
+      });
+    } catch (_) { /* 탭 없음 */ }
+
+    res.json({ ok: true, days: EARLY_DAYS, window: EARLY_WINDOW_H, early: merged });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 영상초기반응 탭에 현재 공개 영상 목록을 채워줌(ID·제목) → 사용자는 1~6h 칸만 입력
+app.post("/api/init-hourfix", async (req, res) => {
+  try {
+    if (!CHANNEL_ID) return res.status(400).json({ ok: false, error: "CHANNEL_ID 누락" });
+    const sheets = getSheetsClient();
+    await ensureTab(sheets, HOURFIX_TAB, ["영상ID", "제목", "1h", "2h", "3h", "4h", "5h", "6h"]);
+    const exist = new Set();
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${HOURFIX_TAB}!A2:A` });
+      (r.data.values || []).forEach((x) => x[0] && exist.add(String(x[0]).trim()));
+    } catch (_) {}
+    const yt = google.youtube({ version: "v3", auth: getOAuth() });
+    const ch = await yt.channels.list({ part: "contentDetails", id: CHANNEL_ID });
+    const up = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!up) return res.json({ ok: true, added: 0 });
+    const pl = await yt.playlistItems.list({ part: "contentDetails", maxResults: 25, playlistId: up });
+    const ids = (pl.data.items || []).map((it) => it.contentDetails.videoId);
+    const vs = await yt.videos.list({ part: "snippet,status", id: ids.join(",") });
+    const rows = (vs.data.items || [])
+      .filter((it) => it.status?.privacyStatus === "public" && !exist.has(it.id))
+      .map((it) => [it.id, it.snippet.title, "", "", "", "", "", ""]);
+    if (rows.length) await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${HOURFIX_TAB}!A:H`,
+      valueInputOption: "USER_ENTERED", requestBody: { values: rows },
+    });
+    res.json({ ok: true, added: rows.length });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
