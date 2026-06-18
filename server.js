@@ -446,12 +446,13 @@ app.get("/api/live", async (req, res) => {
       const pl = await yt.playlistItems.list({ part: "contentDetails", maxResults: 15, playlistId: uploads });
       const ids = (pl.data.items || []).map((it) => it.contentDetails.videoId);
       if (ids.length) {
-        const vs = await yt.videos.list({ part: "snippet,statistics,status", id: ids.join(",") });
+        const vs = await yt.videos.list({ part: "snippet,statistics,status,contentDetails", id: ids.join(",") });
         videos = (vs.data.items || [])
           // 공개 영상 OR 예약 영상(공개예정 시각 있음)만 — 그냥 비공개/일부공개는 제외
           .filter((it) => it.status?.privacyStatus === "public" || it.status?.publishAt)
           .map((it) => ({
             id: it.id, title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+            duration: isoDurToMMSS(it.contentDetails?.duration),   // 숏폼/롱폼 구분용
             views: Number(it.statistics?.viewCount || 0),
             likes: Number(it.statistics?.likeCount || 0),
             comments: Number(it.statistics?.commentCount || 0),
