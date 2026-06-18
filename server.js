@@ -485,18 +485,20 @@ app.get("/api/compare", async (req, res) => {
     const totals = {};
     (totalRes.data.rows || []).forEach((r) => totals[r[0]] = { views: +r[1] || 0, avp: +r[2] || 0, subs: +r[3] || 0 });
 
-    // 2) 제목·게시일·길이 → 6/1 이후 업로드만 "현재"로 추림
+    // 2) 제목·게시일·길이·공개상태 → 6/1 이후 업로드 & "공개" 영상만 "현재"로 추림
     let ids = Object.keys(totals);
     const meta = {};
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
-      const v = await yt.videos.list({ part: "snippet,contentDetails", id: chunk.join(",") });
+      const v = await yt.videos.list({ part: "snippet,contentDetails,status", id: chunk.join(",") });
       (v.data.items || []).forEach((it) => meta[it.id] = {
         title: it.snippet.title, publishedAt: it.snippet.publishedAt,
         duration: isoDurToMMSS(it.contentDetails.duration),
+        privacy: it.status?.privacyStatus,   // public / unlisted / private(예약 포함)
       });
     }
-    ids = ids.filter((id) => (meta[id]?.publishedAt || "") >= COMPARE_CUTOFF && totals[id].views > 0);
+    // 공개(public)만 — 예약(미공개)·비공개·일부공개 제외
+    ids = ids.filter((id) => (meta[id]?.publishedAt || "") >= COMPARE_CUTOFF && totals[id].views > 0 && meta[id]?.privacy === "public");
 
     // 3) 현재 영상만 광고(ADVERTISING) 유입 조회 (몇 개뿐이라 빠름)
     const ads = {};
@@ -741,10 +743,19 @@ app.get("/api/video-hourly", async (req, res) => {
 //   - 채널 누적조회수(Data API)는 즉시 정확 → 1시간마다 기록 후 하루 경계 차감
 // ===================================================================
 const CHSNAP_TAB = process.env.CHSNAP_TAB || "채널스냅샷";
+const DAILYFIX_TAB = process.env.DAILYFIX_TAB || "일일조회수보정"; // 사용자가 시트에 직접 입력하는 날짜별 조회수(최우선)
 
 // ms/ISO → KST(UTC+9) 기준 "YYYY-MM-DD"
 function kstDate(ts) {
   return new Date(new Date(ts).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+}
+// 사용자 입력 날짜 정규화: "2026-06-16" / "26-06-16" 등 → "YYYY-MM-DD"
+function normDate(s) {
+  s = String(s || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{2}-\d{2}-\d{2}$/.test(s)) return "20" + s;
+  const d = new Date(s);
+  return isNaN(d) ? s : kstDate(d.getTime());
 }
 
 // 채널 누적 지표(구독자·누적조회수) 1줄 기록
@@ -756,6 +767,8 @@ async function channelSnapshotJob() {
   const st = ch.items?.[0]?.statistics;
   if (!st) return false;
   await ensureTab(sheets, CHSNAP_TAB, ["타임스탬프", "구독자", "누적조회수"]);
+  // 사용자 수동 보정 탭도 같이 준비(없으면 생성) — A:날짜 B:조회수
+  await ensureTab(sheets, DAILYFIX_TAB, ["날짜(2026-06-16 또는 26-06-16)", "조회수(스튜디오 고급분석 값)"]);
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A:C`,
     valueInputOption: "USER_ENTERED",
@@ -807,12 +820,23 @@ app.get("/api/daily-live", async (req, res) => {
       (ar.data.rows || []).forEach((r) => { anaDaily[r[0]] = { views: Number(r[1] || 0), subsNet: Number(r[2] || 0) - Number(r[3] || 0) }; });
     } catch (_) { /* Analytics 실패해도 스냅샷만으로 동작 */ }
 
-    // 4) 병합: 오늘/어제는 스냅샷 우선(지연 없음), 나머지는 Analytics 확정 우선
-    const dates = [...new Set([...Object.keys(anaDaily), ...Object.keys(snapDaily)])].sort();
+    // 3.5) 사용자 수동 보정 (시트 직접 입력) — 최우선. Analytics가 아직 안 준 6/16·17 등을 채움
+    const manualFix = {};
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${DAILYFIX_TAB}!A2:B` });
+      (r.data.values || []).forEach((x) => {
+        const d = normDate(x[0]); const v = Number(String(x[1] || "").replace(/[^0-9.-]/g, ""));
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(v) && String(x[1] || "").trim() !== "") manualFix[d] = v;
+      });
+    } catch (_) { /* 탭 없음 */ }
+
+    // 4) 병합: 수동 보정 > (오늘/어제) 스냅샷 > Analytics 확정 > 스냅샷
+    const dates = [...new Set([...Object.keys(anaDaily), ...Object.keys(snapDaily), ...Object.keys(manualFix)])].sort();
     const days = dates.map((d) => {
-      const hasSnap = snapDaily[d] != null, hasAna = anaDaily[d] != null;
+      const hasSnap = snapDaily[d] != null, hasAna = anaDaily[d] != null, hasFix = manualFix[d] != null;
       let views, source;
-      if ((d === todayK || d === ydayK) && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
+      if (hasFix) { views = manualFix[d]; source = "manual"; }
+      else if ((d === todayK || d === ydayK) && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
       else if (hasAna) { views = anaDaily[d].views; source = "analytics"; }
       else if (hasSnap) { views = snapDaily[d]; source = "snapshot"; }
       else { views = 0; source = "none"; }
@@ -820,9 +844,11 @@ app.get("/api/daily-live", async (req, res) => {
     });
 
     const todayStart = firstOfDay[todayK];
-    const todayViews = todayStart ? Math.max(0, nowViews - todayStart.views) : null;
+    const todayViews = (manualFix[todayK] != null) ? manualFix[todayK] : (todayStart ? Math.max(0, nowViews - todayStart.views) : null);
     const todaySubs = todayStart ? (nowSubs - todayStart.subs) : (anaDaily[todayK] ? anaDaily[todayK].subsNet : null);
-    const yesterdayViews = (snapDaily[ydayK] != null) ? snapDaily[ydayK] : (anaDaily[ydayK] ? anaDaily[ydayK].views : null);
+    const yesterdayViews = (manualFix[ydayK] != null) ? manualFix[ydayK]
+      : (snapDaily[ydayK] != null) ? snapDaily[ydayK]
+      : (anaDaily[ydayK] ? anaDaily[ydayK].views : null);
 
     res.json({
       ok: true, at: new Date(nowTs).toISOString(),

@@ -32,7 +32,7 @@
     .seg .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .12s;}
     .seg .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     /* 2단 네비게이션 — 최상위 카테고리(큰 탭) + 하위 탭(작은 탭) */
-    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:1px solid var(--line);padding-top:26px;}
+    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:2px solid var(--sub);padding-top:26px;}
     .navcat .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:11px 24px;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:all .12s;}
     .navcat .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     .navsub{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 6px;}
@@ -408,7 +408,7 @@
     <div class="cards" id="dlCards" style="grid-template-columns:repeat(4,1fr)"></div>
 
     <!-- 일일 그래프 (실시간) -->
-    <h2 style="font-size:15px;margin-top:20px">📈 일일 조회수 그래프 <span class="kpi-badge">진한 막대 = 오늘·어제(실시간) / 옅은 막대 = 확정</span></h2>
+    <h2 style="font-size:15px;margin-top:20px">📈 일일 조회수 그래프 <span class="kpi-badge">파랑=실시간 / 옅은파랑=확정 / 보라=수동입력</span></h2>
     <div class="panel"><div class="chart-box"><canvas id="dlChart"></canvas></div></div>
     <div class="note" id="dlNote" style="display:none">※ 어제·오늘 실시간 수치는 채널 스냅샷이 쌓이면서 정확해져요(배포 직후엔 0부터 시작해 하루가 지나면 완성).</div>
 
@@ -953,13 +953,14 @@
       const days=(d.days||[]).slice(-14);
       const labels=days.map(x=>x.date.slice(5));
       const data=days.map(x=>x.views);
-      const colors=days.map(x=> x.source==="snapshot" ? "#3182f6" : "rgba(49,130,246,.4)");
+      const colors=days.map(x=> x.source==="snapshot" ? "#3182f6" : x.source==="manual" ? "#8b5cf6" : "rgba(49,130,246,.4)");
+      const srcLabel=(s)=> s==="snapshot"?" (실시간)" : s==="manual"?" (수동입력)" : " (확정)";
       if(dlChart)dlChart.destroy();
       const ctx=document.getElementById("dlChart"); if(!ctx)return;
       dlChart=new Chart(ctx,{type:"bar",
         data:{labels,datasets:[{label:"일별 조회수",data,backgroundColor:colors,borderRadius:6,maxBarThickness:40}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
-          tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`+(days[c.dataIndex].source==="snapshot"?" (실시간)":" (확정)")}}},
+          tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`+srcLabel(days[c.dataIndex].source)}}},
           scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
     }
     // (호환용) 기존 호출부가 있을 수 있어 유지 — 일일 실시간 전체 갱신으로 위임
@@ -1168,26 +1169,27 @@
 
     // ===== 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 =====
     // KPI 달성률(sec-kpi)은 헤더 밑 고정이라 여기 포함 안 함.
+    // sub: id(탭 키) · label · secs(보여줄 섹션 id 배열) · draw
     const NAV=[
       {cat:"daily", label:"📅 일일", subs:[
-        {id:"sec-live",   label:"실시간",        draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
-        {id:"sec-dchart", label:"일일 그래프",   draw:()=>drawChart()},
-        {id:"sec-dtable", label:"일일 상세",     draw:()=>renderDailyTable()},
+        {id:"sec-live",   label:"실시간",        secs:["sec-live"],   draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
+        {id:"sec-dchart", label:"일일 그래프",   secs:["sec-dchart"], draw:()=>drawChart()},
+        {id:"sec-dtable", label:"일일 상세",     secs:["sec-dtable"], draw:()=>renderDailyTable()},
       ]},
       {cat:"video", label:"🎬 영상", subs:[
-        {id:"sec-hl",      label:"영상 하이라이트", draw:()=>{renderBestWorst();renderFormCompare();}},
-        {id:"sec-vtable",  label:"영상 상세",       draw:()=>renderVideos()},
-        {id:"sec-vd",      label:"게시 후 성과",    draw:()=>{ if(vd.id)drawVd(); }},
-        {id:"sec-scatter", label:"CTR×평균조회율",  draw:()=>drawScatter()},
-        {id:"sec-upload",  label:"업로드 성과",     draw:()=>drawWeekday()},
+        {id:"sec-hl",      label:"영상 하이라이트", secs:["sec-hl"],      draw:()=>{renderBestWorst();renderFormCompare();}},
+        {id:"sec-vtable",  label:"영상 상세",       secs:["sec-vtable"],  draw:()=>renderVideos()},
+        {id:"sec-vd",      label:"게시 후 성과",    secs:["sec-vd"],      draw:()=>{ if(vd.id)drawVd(); }},
+        {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
+        {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
       ]},
       {cat:"kpi", label:"🎯 KPI", subs:[
-        {id:"sec-cum",     label:"누적 성과",        draw:()=>renderCumulative()},
-        {id:"sec-growth",  label:"누적 성장 그래프", draw:()=>drawGrowth()},
-        {id:"sec-compare", label:"과거 vs 현재",     draw:()=>{ if(cmpData)renderCompare(); }},
+        {id:"sec-cum",     label:"누적 성과·성장", secs:["sec-cum","sec-growth"], draw:()=>{renderCumulative();drawGrowth();}},
+        {id:"sec-compare", label:"과거 vs 현재",   secs:["sec-compare"],          draw:()=>{ if(cmpData)renderCompare(); }},
       ]},
     ];
     const ALL_SUBS=NAV.flatMap(c=>c.subs);
+    const ALL_SECS=[...new Set(ALL_SUBS.flatMap(s=>s.secs))];  // 토글 대상 섹션 전체
     let activeCat="daily", activeSub={};   // activeSub[cat]=현재 선택된 하위 탭 id
     NAV.forEach(c=>activeSub[c.cat]=c.subs[0].id);
 
@@ -1211,10 +1213,11 @@
     }
     function showSub(id){
       activeSub[activeCat]=id;
-      // KPI 달성률(고정) 제외, 나머지 모든 섹션 중 선택된 것만 표시
-      ALL_SUBS.forEach(s=>{ const el=document.getElementById(s.id); if(el) el.style.display=(s.id===id?"":"none"); });
+      const sub=ALL_SUBS.find(x=>x.id===id); if(!sub) return;
+      // KPI 달성률(고정) 제외, 선택된 하위 탭의 섹션만 표시(여러 개 동시 가능)
+      ALL_SECS.forEach(secId=>{ const el=document.getElementById(secId); if(el) el.style.display=(sub.secs.includes(secId)?"":"none"); });
       document.getElementById("navSub").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
-      const s=ALL_SUBS.find(x=>x.id===id); if(s&&s.draw) s.draw();
+      if(sub.draw) sub.draw();
     }
 
     // ===== 관리자 모드 =====
