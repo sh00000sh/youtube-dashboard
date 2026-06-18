@@ -47,6 +47,12 @@
     /* 차트: 남는 높이만큼 채움. flex-basis는 auto(300px)로 둬야 Chart.js 높이 계산이 안 꼬임 */
     #secWrap > .sec .panel{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
     #secWrap > .sec .panel > .chart-box{flex:1 0 auto;height:auto;min-height:300px;}
+    /* 실시간 탭은 카드+그래프+표가 한 섹션에 다 있으므로 채움/캡 제외 → 전부 자연스럽게 표시 */
+    #secWrap > #sec-live{display:block;}
+    #secWrap > #sec-live .tbl-wrap{display:block;}
+    #secWrap > #sec-live .scroll{max-height:420px;}
+    #secWrap > #sec-live .panel{display:block;}
+    #secWrap > #sec-live .chart-box{height:300px;min-height:0;}
     /* 하단 푸터 (저작권·출처) */
     .site-footer{margin-top:44px;padding:26px 0 40px;border-top:1px solid var(--divider);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.75;}
     .site-footer .sub{font-size:11.5px;opacity:.85;margin-top:3px;}
