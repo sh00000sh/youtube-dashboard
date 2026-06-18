@@ -38,8 +38,15 @@
     .navsub{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 6px;}
     .navsub .st{background:transparent;color:var(--sub);border:1px solid var(--line);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;}
     .navsub .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
-    /* 토글 섹션 묶음: 최소 높이 고정 → 탭 전환 시 페이지 높이·스크롤 위치 출렁임 최소화 */
-    #secWrap{min-height:72vh;}
+    /* 토글 섹션 묶음: 최소 높이 고정 + 보이는 섹션의 표·차트를 하단까지 늘려 높이 통일 */
+    #secWrap{min-height:74vh;display:flex;flex-direction:column;}
+    #secWrap > .sec{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
+    /* 표: 스크롤 박스를 남는 높이만큼 확장 */
+    #secWrap > .sec .tbl-wrap{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
+    #secWrap > .sec .tbl-wrap > .scroll{flex:1 0 auto;max-height:none;}
+    /* 차트: 패널·차트박스를 남는 높이만큼 확장 */
+    #secWrap > .sec .panel{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
+    #secWrap > .sec .panel > .chart-box{flex:1 0 auto;height:auto;min-height:300px;}
     /* 하단 푸터 (저작권·출처) */
     .site-footer{margin-top:44px;padding:26px 0 40px;border-top:1px solid var(--divider);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.75;}
     .site-footer .sub{font-size:11.5px;opacity:.85;margin-top:3px;}
