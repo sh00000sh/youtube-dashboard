@@ -419,7 +419,7 @@
     <h2 style="font-size:15px;margin-top:20px">🎬 최근 영상 실시간</h2>
     <div class="tbl-wrap"><div class="scroll">
       <table>
-        <thead><tr><th>썸네일</th><th>업로드일</th><th>타이틀</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>업로드 후 · 시간당</th></tr></thead>
+        <thead><tr><th>썸네일</th><th>업로드일</th><th>타이틀</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>업로드 후 · 초기반응(시간당)</th></tr></thead>
         <tbody id="liveRows"><tr><td colspan="7" class="empty">새로고침을 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
@@ -981,10 +981,18 @@
     }
     // (호환용) 기존 호출부가 있을 수 있어 유지 — 일일 실시간 전체 갱신으로 위임
     async function loadLive(){ return loadDailyLive(); }
-    // 업로드 경과시간(예: 3시간 전) · 시간당 조회수(속도)
+    // 업로드 경과시간(예: 3시간 전)
     function hoursSince(iso){ return iso? (Date.now()-new Date(iso).getTime())/3600000 : null; }
     function agoStr(iso){ const h=hoursSince(iso); if(h==null) return "-"; if(h<1) return Math.max(1,Math.round(h*60))+"분 전"; if(h<48) return Math.round(h)+"시간 전"; return Math.round(h/24)+"일 전"; }
-    function perHourStr(views,iso){ const h=hoursSince(iso); if(h==null||h<=0) return "-"; return fmt(Math.round(N(views)/h))+"회/h"; }
+    // 초기 반응 속도: 게시 후 고정 윈도우(기본 6h) 시점의 시간당 조회수 — 모든 영상 동일 기준
+    function earlyCell(v){
+      const e=v.early;
+      if(!e||e.perHour==null) return '<span class="muted" style="font-size:12px">초기 데이터 없음</span>';
+      const w=e.window||6;
+      const tag = e.complete ? `<span class="muted" style="font-size:10px"> · ${w}h 기준</span>`
+                             : `<span style="color:var(--y-tx);font-size:10px"> · 집계중 ${e.basisHours}h</span>`;
+      return `<span style="font-weight:700">${fmt(e.perHour)}회/h</span>${tag}`;
+    }
     function renderLive(r){
       const el=document.getElementById("liveRows");
       el.innerHTML=(r.videos||[]).map(v=>{
@@ -1003,7 +1011,7 @@
           <td>${(v.publishedAt||'').slice(0,10)}</td>
           <td><span class="vtitle" onclick="${oc}">${v.title}</span></td>
           <td class="strong">${fmt(v.views)}</td><td>${fmt(v.likes)}</td><td>${fmt(v.comments)}</td>
-          <td><span style="font-weight:700">${agoStr(v.publishedAt)}</span><br><span class="muted" style="font-size:12px">${perHourStr(v.views,v.publishedAt)}</span></td></tr>`;
+          <td><span style="font-weight:700">${agoStr(v.publishedAt)}</span><br>${earlyCell(v)}</td></tr>`;
       }).join("");
     }
     function toggleLiveAuto(){

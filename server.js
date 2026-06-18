@@ -39,6 +39,8 @@ const {
 
 const DAYS = Number(process.env.SYNC_DAYS || 30);     // 며칠치 가져올지 (기본 30일)
 const MAX_VIDEOS = Number(process.env.MAX_VIDEOS || 50);
+// 초기 반응 측정 윈도우(시간): 게시 후 이 시간까지의 시간당 조회수로 초기 반응력을 비교(모든 영상 동일 기준)
+const EARLY_WINDOW_H = Number(process.env.EARLY_WINDOW_H || 6);
 
 // ----- 관리자 모드 -----
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";   // Railway 환경변수로 설정
@@ -456,8 +458,31 @@ app.get("/api/live", async (req, res) => {
           }));
       }
     }
+
+    // 초기 반응 속도: 게시 후 EARLY_WINDOW_H 시간 시점의 누적조회수 / 시간 (모든 영상 동일 기준)
+    // 시간별 스냅샷(업로드 후 24h, 1h 간격 기록)에서 윈도우에 가장 근접한 값을 사용
+    try {
+      if (GOOGLE_SERVICE_ACCOUNT && SHEET_ID && videos.length) {
+        const sheets = getSheetsClient();
+        const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:G` });
+        const byVid = {};
+        (r.data.values || []).forEach((x) => {
+          const id = x[1], hrs = Number(x[3]), views = Number(x[4] || 0);
+          if (!id || isNaN(hrs)) return;
+          (byVid[id] = byVid[id] || []).push({ hrs, views });
+        });
+        videos = videos.map((v) => {
+          const rows = (byVid[v.id] || []).filter((s) => s.hrs <= EARLY_WINDOW_H + 0.75).sort((a, b) => a.hrs - b.hrs);
+          if (!rows.length) return { ...v, early: null };
+          const basis = rows[rows.length - 1]; // 윈도우 이하에서 가장 6h에 근접한 스냅샷
+          const perHour = basis.hrs > 0 ? Math.round(basis.views / basis.hrs) : null;
+          return { ...v, early: { window: EARLY_WINDOW_H, basisHours: Number(basis.hrs.toFixed(1)), views: basis.views, perHour, complete: basis.hrs >= EARLY_WINDOW_H - 0.75 } };
+        });
+      }
+    } catch (_) { /* 스냅샷 없으면 early 생략 */ }
+
     res.json({
-      ok: true, at: new Date().toISOString(),
+      ok: true, at: new Date().toISOString(), earlyWindow: EARLY_WINDOW_H,
       channel: { subscribers: Number(st.subscriberCount || 0), totalViews: Number(st.viewCount || 0), videoCount: Number(st.videoCount || 0) },
       videos,
     });
