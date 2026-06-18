@@ -38,6 +38,11 @@
     .navsub{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 6px;}
     .navsub .st{background:transparent;color:var(--sub);border:1px solid var(--line);padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;}
     .navsub .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    /* 토글 섹션 묶음: 최소 높이 고정 → 탭 전환 시 페이지 높이·스크롤 위치 출렁임 최소화 */
+    #secWrap{min-height:72vh;}
+    /* 하단 푸터 (저작권·출처) */
+    .site-footer{margin-top:44px;padding:26px 0 40px;border-top:1px solid var(--divider);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.75;}
+    .site-footer .sub{font-size:11.5px;opacity:.85;margin-top:3px;}
     .bar{display:flex;align-items:center;gap:12px;margin:16px 0;flex-wrap:wrap;}
     button{background:var(--blue);color:#fff;border:0;padding:11px 20px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;}
     button:disabled{opacity:.5;cursor:wait;}
@@ -304,6 +309,8 @@
     <div class="navcat" id="navCat"></div>
     <div class="navsub" id="navSub"></div>
 
+    <!-- 토글 섹션 묶음: 최소 높이를 고정해 탭 전환 시 스크롤 위치가 출렁이지 않게 함 -->
+    <div id="secWrap">
     <div class="sec" id="sec-cum" style="display:none">
     <h2>🚀 <span id="cumDate">-</span> <span class="kpi-badge">누적 성과</span>
       <select id="cumPeriod" style="margin-left:auto">
@@ -493,6 +500,12 @@
       <div class="note">※ 노출수·CTR·시간단위(24시간) 추이는 유튜브 API로 제공되지 않습니다(스튜디오 전용). 24시간은 업로드 후 로봇이 쌓은 스냅샷이 있을 때만 표시됩니다.</div>
     </div>
     </div>
+    </div><!-- /secWrap -->
+
+    <footer class="site-footer">
+      <div>⚡ 유튜브 인게이지먼트 대시보드 · 유진투자선물 채널 내부 운영용</div>
+      <div class="sub">데이터 출처: YouTube Data · Analytics API · © 2026 유진투자선물. All rights reserved.</div>
+    </footer>
   </div>
 
   <div id="player">
