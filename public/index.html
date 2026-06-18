@@ -419,7 +419,7 @@
     <h2 style="font-size:15px;margin-top:20px">🎬 최근 영상 실시간</h2>
     <div class="tbl-wrap"><div class="scroll">
       <table>
-        <thead><tr><th>썸네일</th><th>업로드일</th><th>타이틀</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>방금 변화</th></tr></thead>
+        <thead><tr><th>썸네일</th><th>업로드일</th><th>타이틀</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>업로드 후 · 시간당</th></tr></thead>
         <tbody id="liveRows"><tr><td colspan="7" class="empty">새로고침을 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
@@ -981,8 +981,11 @@
     }
     // (호환용) 기존 호출부가 있을 수 있어 유지 — 일일 실시간 전체 갱신으로 위임
     async function loadLive(){ return loadDailyLive(); }
+    // 업로드 경과시간(예: 3시간 전) · 시간당 조회수(속도)
+    function hoursSince(iso){ return iso? (Date.now()-new Date(iso).getTime())/3600000 : null; }
+    function agoStr(iso){ const h=hoursSince(iso); if(h==null) return "-"; if(h<1) return Math.max(1,Math.round(h*60))+"분 전"; if(h<48) return Math.round(h)+"시간 전"; return Math.round(h/24)+"일 전"; }
+    function perHourStr(views,iso){ const h=hoursSince(iso); if(h==null||h<=0) return "-"; return fmt(Math.round(N(views)/h))+"회/h"; }
     function renderLive(r){
-      const prev=livePrev||{};
       const el=document.getElementById("liveRows");
       el.innerHTML=(r.videos||[]).map(v=>{
         const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.publishedAt||'').slice(2,10)}')`;
@@ -995,18 +998,13 @@
             <td colspan="3" style="text-align:left;color:var(--sub)">공개 예정: ${when}</td>
             <td>-</td></tr>`;
         }
-        const p=prev[v.id]; const dV=p?v.views-p.views:0, dL=p?v.likes-p.likes:0, dC=p?v.comments-p.comments:0;
-        const chg=(d)=> d>0?`<span class="up2">▲${d}</span>`:d<0?`<span class="down2">▼${Math.abs(d)}</span>`:"";
-        const delta=p? [chg(dV)&&`조회 ${chg(dV)}`,chg(dL)&&`좋아요 ${chg(dL)}`,chg(dC)&&`댓글 ${chg(dC)}`].filter(Boolean).join(" · ")||"-" : "기준 설정됨";
         return `<tr>
           <td><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" class="thumb" onclick="${oc}"></td>
           <td>${(v.publishedAt||'').slice(0,10)}</td>
           <td><span class="vtitle" onclick="${oc}">${v.title}</span></td>
           <td class="strong">${fmt(v.views)}</td><td>${fmt(v.likes)}</td><td>${fmt(v.comments)}</td>
-          <td>${delta}</td></tr>`;
+          <td><span style="font-weight:700">${agoStr(v.publishedAt)}</span><br><span class="muted" style="font-size:12px">${perHourStr(v.views,v.publishedAt)}</span></td></tr>`;
       }).join("");
-      // 다음 비교용 스냅샷 저장
-      livePrev={}; (r.videos||[]).forEach(v=>livePrev[v.id]={views:v.views,likes:v.likes,comments:v.comments});
     }
     function toggleLiveAuto(){
       const btn=document.getElementById("liveAutoBtn");
