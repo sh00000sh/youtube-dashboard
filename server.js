@@ -477,35 +477,40 @@ let earlyCache = { at: 0, data: {} };
 app.get("/api/early", async (req, res) => {
   try {
     if (!CHANNEL_ID) return res.status(400).json({ ok: false, error: "CHANNEL_ID 누락" });
+
+    // ① 자동 폴백(Analytics 첫 N일) — 비싸므로 20분 캐시
+    let early;
     if (Date.now() - earlyCache.at < 20 * 60 * 1000 && Object.keys(earlyCache.data).length) {
-      return res.json({ ok: true, days: EARLY_DAYS, cached: true, early: earlyCache.data });
+      early = earlyCache.data;
+    } else {
+      early = {};
+      const yt = google.youtube({ version: "v3", auth: getOAuth() });
+      const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
+      const ch = await yt.channels.list({ part: "contentDetails", id: CHANNEL_ID });
+      const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      if (uploads) {
+        const pl = await yt.playlistItems.list({ part: "contentDetails,snippet", maxResults: 25, playlistId: uploads });
+        const items = (pl.data.items || []).map((it) => ({ id: it.contentDetails.videoId, publishedAt: it.contentDetails.videoPublishedAt || it.snippet.publishedAt }));
+        const CH = 6;
+        for (let i = 0; i < items.length; i += CH) {
+          const chunk = items.slice(i, i + CH);
+          await Promise.all(chunk.map(async (it) => {
+            try {
+              const pub = new Date(it.publishedAt);
+              const start = ymd(pub);
+              const end = ymd(new Date(pub.getTime() + (EARLY_DAYS - 1) * 86400000));
+              const r = await ya.reports.query({
+                ids: "channel==MINE", startDate: start, endDate: end,
+                dimensions: "day", metrics: "views", filters: "video==" + it.id,
+              });
+              let sum = 0; (r.data.rows || []).forEach((row) => sum += Number(row[1] || 0));
+              early[it.id] = { views: sum, perHour: Math.round(sum / (EARLY_DAYS * 24)), days: EARLY_DAYS };
+            } catch (_) { /* 영상별 실패는 건너뜀 */ }
+          }));
+        }
+      }
+      earlyCache = { at: Date.now(), data: early };
     }
-    const yt = google.youtube({ version: "v3", auth: getOAuth() });
-    const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
-    const ch = await yt.channels.list({ part: "contentDetails", id: CHANNEL_ID });
-    const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    if (!uploads) return res.json({ ok: true, days: EARLY_DAYS, early: {} });
-    const pl = await yt.playlistItems.list({ part: "contentDetails,snippet", maxResults: 25, playlistId: uploads });
-    const items = (pl.data.items || []).map((it) => ({ id: it.contentDetails.videoId, publishedAt: it.contentDetails.videoPublishedAt || it.snippet.publishedAt }));
-    const early = {};
-    const CH = 6;
-    for (let i = 0; i < items.length; i += CH) {
-      const chunk = items.slice(i, i + CH);
-      await Promise.all(chunk.map(async (it) => {
-        try {
-          const pub = new Date(it.publishedAt);
-          const start = ymd(pub);
-          const end = ymd(new Date(pub.getTime() + (EARLY_DAYS - 1) * 86400000));
-          const r = await ya.reports.query({
-            ids: "channel==MINE", startDate: start, endDate: end,
-            dimensions: "day", metrics: "views", filters: "video==" + it.id,
-          });
-          let sum = 0; (r.data.rows || []).forEach((row) => sum += Number(row[1] || 0));
-          early[it.id] = { views: sum, perHour: Math.round(sum / (EARLY_DAYS * 24)), days: EARLY_DAYS };
-        } catch (_) { /* 영상별 실패는 건너뜀 */ }
-      }));
-    }
-    earlyCache = { at: Date.now(), data: early };
 
     // ② 수동 입력(영상초기반응 탭) 덮어쓰기 — 최우선, 매번 최신 반영(캐시 안 함)
     const merged = { ...early };
