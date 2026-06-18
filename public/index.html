@@ -41,12 +41,12 @@
     /* 토글 섹션 묶음: 최소 높이 고정 + 보이는 섹션의 표·차트를 하단까지 늘려 높이 통일 */
     #secWrap{min-height:74vh;display:flex;flex-direction:column;}
     #secWrap > .sec{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
-    /* 표: 스크롤 박스를 남는 높이만큼 확장 */
-    #secWrap > .sec .tbl-wrap{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
-    #secWrap > .sec .tbl-wrap > .scroll{flex:1 0 auto;max-height:none;}
-    /* 차트: 패널·차트박스를 남는 높이만큼 확장 */
-    #secWrap > .sec .panel{flex:1 0 auto;min-height:0;display:flex;flex-direction:column;}
-    #secWrap > .sec .panel > .chart-box{flex:1 0 auto;height:auto;min-height:300px;}
+    /* 표: 채운 높이에 맞춰 캡 + 넘치면 내부 스크롤(내용만큼 무한히 늘어나지 않게) */
+    #secWrap > .sec .tbl-wrap{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
+    #secWrap > .sec .tbl-wrap > .scroll{flex:1 1 0;min-height:0;max-height:none;overflow:auto;}
+    /* 차트: 패널·차트박스를 남는 높이만큼 확장(최소 300px) */
+    #secWrap > .sec .panel{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
+    #secWrap > .sec .panel > .chart-box{flex:1 1 0;height:auto;min-height:300px;}
     /* 하단 푸터 (저작권·출처) */
     .site-footer{margin-top:44px;padding:26px 0 40px;border-top:1px solid var(--divider);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.75;}
     .site-footer .sub{font-size:11.5px;opacity:.85;margin-top:3px;}
