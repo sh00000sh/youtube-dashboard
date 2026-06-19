@@ -860,7 +860,27 @@ function normDate(s) {
   return isNaN(d) ? s : kstDate(d.getTime());
 }
 
-// 채널 누적 지표(구독자·누적조회수) 1줄 기록
+// 업로드 영상들의 현재 조회수 합 (채널 viewCount보다 빠르게 갱신 → 일일 실시간 기준값)
+async function fetchUploadsViewSum() {
+  if (!CHANNEL_ID || !YOUTUBE_API_KEY) return null;
+  const ch = await (await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
+  const up = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!up) return null;
+  const pl = await (await fetch(
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId=${up}&key=${YOUTUBE_API_KEY}`)).json();
+  const ids = (pl.items || []).map((it) => it.contentDetails.videoId).filter(Boolean);
+  let sum = 0;
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const vs = await (await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${chunk.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
+    (vs.items || []).forEach((it) => sum += Number(it.statistics?.viewCount || 0));
+  }
+  return sum;
+}
+
+// 채널 누적 지표 1줄 기록 (구독자·채널누적·영상합계)
 async function channelSnapshotJob() {
   if (!CHANNEL_ID || !YOUTUBE_API_KEY || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return false;
   const sheets = getSheetsClient();
@@ -868,13 +888,15 @@ async function channelSnapshotJob() {
     `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
   const st = ch.items?.[0]?.statistics;
   if (!st) return false;
-  await ensureTab(sheets, CHSNAP_TAB, ["타임스탬프", "구독자", "누적조회수"]);
+  let viewSum = null;
+  try { viewSum = await fetchUploadsViewSum(); } catch (_) { /* 합계 실패시 빈칸 */ }
+  await ensureTab(sheets, CHSNAP_TAB, ["타임스탬프", "구독자", "채널누적조회수", "영상합계조회수"]);
   // 사용자 수동 보정 탭도 같이 준비(없으면 생성) — A:날짜 B:조회수
   await ensureTab(sheets, DAILYFIX_TAB, ["날짜(2026-06-16 또는 26-06-16)", "조회수(스튜디오 고급분석 값)"]);
   await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A:C`,
+    spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A:D`,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[new Date().toISOString(), Number(st.subscriberCount || 0), Number(st.viewCount || 0)]] },
+    requestBody: { values: [[new Date().toISOString(), Number(st.subscriberCount || 0), Number(st.viewCount || 0), viewSum == null ? "" : viewSum]] },
   });
   return true;
 }
@@ -887,17 +909,21 @@ app.get("/api/daily-live", async (req, res) => {
     const ch = await (await fetch(
       `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
     const st = ch.items?.[0]?.statistics || {};
-    const nowViews = Number(st.viewCount || 0), nowSubs = Number(st.subscriberCount || 0);
+    const nowSubs = Number(st.subscriberCount || 0);
+    const displayTotal = Number(st.viewCount || 0);          // 표시용 채널 누적(유튜브가 느리게 갱신)
+    let gainNow = null; try { gainNow = await fetchUploadsViewSum(); } catch (_) {}
+    if (gainNow == null) gainNow = displayTotal;             // 합계 실패시 채널 누적으로 폴백
     const nowTs = Date.now();
     const todayK = kstDate(nowTs), ydayK = kstDate(nowTs - 24 * 3600000);
 
     // 2) 채널 스냅샷 → KST 날짜별 "그날 첫 스냅샷"(0시 기준점)
+    //    영상합계(D열, 즉시 갱신) 기준만 사용 — 채널 viewCount(C열)는 굼떠서 일일이 0으로 멈춤
     const sheets = getSheetsClient();
     let snaps = [];
     try {
-      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:C` });
-      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[2] || 0) }))
-        .filter((s) => s.ts && s.views).sort((a, b) => a.ts - b.ts);
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
+      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || 0) }))
+        .filter((s) => s.ts && s.views > 0).sort((a, b) => a.ts - b.ts);
     } catch (_) { /* 탭 없음 */ }
     const firstOfDay = {};
     for (const s of snaps) { const dk = kstDate(s.ts); if (!firstOfDay[dk]) firstOfDay[dk] = s; }
@@ -907,7 +933,7 @@ app.get("/api/daily-live", async (req, res) => {
     const dks = Object.keys(firstOfDay).sort();
     for (let i = 0; i < dks.length; i++) {
       const startV = firstOfDay[dks[i]].views;
-      const nextV = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]].views : nowViews;
+      const nextV = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]].views : gainNow;
       snapDaily[dks[i]] = Math.max(0, nextV - startV);
     }
 
@@ -946,7 +972,7 @@ app.get("/api/daily-live", async (req, res) => {
     });
 
     const todayStart = firstOfDay[todayK];
-    const todayViews = (manualFix[todayK] != null) ? manualFix[todayK] : (todayStart ? Math.max(0, nowViews - todayStart.views) : null);
+    const todayViews = (manualFix[todayK] != null) ? manualFix[todayK] : (todayStart ? Math.max(0, gainNow - todayStart.views) : null);
     const todaySubs = todayStart ? (nowSubs - todayStart.subs) : (anaDaily[todayK] ? anaDaily[todayK].subsNet : null);
     const yesterdayViews = (manualFix[ydayK] != null) ? manualFix[ydayK]
       : (snapDaily[ydayK] != null) ? snapDaily[ydayK]
@@ -954,7 +980,7 @@ app.get("/api/daily-live", async (req, res) => {
 
     res.json({
       ok: true, at: new Date(nowTs).toISOString(),
-      now: { subs: nowSubs, totalViews: nowViews },
+      now: { subs: nowSubs, totalViews: displayTotal },
       today: { views: todayViews, subs: todaySubs },
       yesterday: { views: yesterdayViews },
       hasSnapshots: snaps.length > 0,
