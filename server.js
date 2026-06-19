@@ -922,7 +922,8 @@ app.get("/api/daily-live", async (req, res) => {
     let snaps = [];
     try {
       const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
-      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || 0) }))
+      // 기준값 = 영상합계(D열) 우선, 없으면 채널누적(C열) 폴백 — 오늘 새벽 baseline 확보용
+      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || x[2] || 0) }))
         .filter((s) => s.ts && s.views > 0).sort((a, b) => a.ts - b.ts);
     } catch (_) { /* 탭 없음 */ }
     const firstOfDay = {};
@@ -963,8 +964,10 @@ app.get("/api/daily-live", async (req, res) => {
     const days = dates.map((d) => {
       const hasSnap = snapDaily[d] != null, hasAna = anaDaily[d] != null, hasFix = manualFix[d] != null;
       let views, source;
-      if (hasFix) { views = manualFix[d]; source = "manual"; }
-      else if ((d === todayK || d === ydayK) && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
+      // 오늘은 항상 라이브(스냅샷) — 수동입력에 묶이면 갱신이 멈춤
+      if (d === todayK && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
+      else if (hasFix) { views = manualFix[d]; source = "manual"; }
+      else if (d === ydayK && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
       else if (hasAna) { views = anaDaily[d].views; source = "analytics"; }
       else if (hasSnap) { views = snapDaily[d]; source = "snapshot"; }
       else { views = 0; source = "none"; }
@@ -972,7 +975,8 @@ app.get("/api/daily-live", async (req, res) => {
     });
 
     const todayStart = firstOfDay[todayK];
-    const todayViews = (manualFix[todayK] != null) ? manualFix[todayK] : (todayStart ? Math.max(0, gainNow - todayStart.views) : null);
+    // 오늘 = 라이브(영상합계 - 새벽 baseline). 수동값은 baseline 스냅샷이 아예 없을 때만 폴백
+    const todayViews = todayStart ? Math.max(0, gainNow - todayStart.views) : (manualFix[todayK] != null ? manualFix[todayK] : null);
     const todaySubs = todayStart ? (nowSubs - todayStart.subs) : (anaDaily[todayK] ? anaDaily[todayK].subsNet : null);
     const yesterdayViews = (manualFix[ydayK] != null) ? manualFix[ydayK]
       : (snapDaily[ydayK] != null) ? snapDaily[ydayK]
