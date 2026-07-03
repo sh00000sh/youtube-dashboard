@@ -995,6 +995,45 @@ app.get("/api/daily-live", async (req, res) => {
   }
 });
 
+// 영상별 일일 조회수 (일일 그래프 툴팁용) — 최근 30일, day×video
+app.get("/api/daily-by-video", async (req, res) => {
+  try {
+    const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
+    const r = await ya.reports.query({
+      ids: "channel==MINE",
+      startDate: ymd(daysAgo(30)),
+      endDate: ymd(new Date()),
+      dimensions: "day,video",
+      metrics: "views",
+      sort: "day",
+      maxResults: 500,
+    });
+    const rows = r.data.rows || [];
+    // 영상 제목 매핑 (Data API, 50개씩)
+    const ids = [...new Set(rows.map((x) => x[1]))];
+    const titles = {};
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      if (!chunk.length) break;
+      try {
+        const vr = await (await fetch(
+          `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${chunk.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
+        (vr.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
+      } catch (_) { /* 제목 실패해도 id로 표시 */ }
+    }
+    const byDay = {};
+    rows.forEach((x) => {
+      const day = x[0], vid = x[1], views = Number(x[2] || 0);
+      if (views <= 0) return;
+      (byDay[day] = byDay[day] || []).push({ id: vid, title: titles[vid] || vid, views });
+    });
+    Object.keys(byDay).forEach((day) => byDay[day].sort((a, b) => b.views - a.views));
+    res.json({ ok: true, byDay });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // 수동 채널 스냅샷 트리거
 app.post("/api/channel-snapshot", async (req, res) => {
   try { const ok = await channelSnapshotJob(); res.json({ ok: true, recorded: ok }); }

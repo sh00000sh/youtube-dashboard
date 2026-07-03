@@ -960,18 +960,20 @@
     }
 
     // ===== 실시간 (Data API 현재값) =====
-    let livePrev=null, liveTimer=null, dlChart=null, dlLoaded=false, lastDL=null;
+    let livePrev=null, liveTimer=null, dlChart=null, dlLoaded=false, lastDL=null, dailyByVideo={};
     // 일일 실시간 + 최근 영상 실시간을 함께 갱신
     async function loadDailyLive(){
       const at=document.getElementById("liveAt");
       at.textContent="(불러오는 중...)";
       try{
-        const [dl,lv,ev]=await Promise.all([
+        const [dl,lv,ev,dbv]=await Promise.all([
           fetch("/api/daily-live").then(r=>r.json()).catch(()=>({ok:false})),
           fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false})),
           fetch("/api/early").then(r=>r.json()).catch(()=>({ok:false})),
+          fetch("/api/daily-by-video").then(r=>r.json()).catch(()=>({ok:false})),
         ]);
         if(ev.ok){ earlyMap=ev.early||{}; earlyDays=ev.days||1; }
+        if(dbv.ok){ dailyByVideo=dbv.byDay||{}; }
         if(dl.ok){ lastDL=dl; renderDailyLive(dl); }
         if(lv.ok){ renderLive(lv); }
         dlLoaded=true;
@@ -1010,7 +1012,16 @@
       dlChart=new Chart(ctx,{type:"bar",
         data:{labels,datasets:[{label:"일별 조회수",data,backgroundColor:colors,borderRadius:6,maxBarThickness:40}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
-          tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`+srcLabel(days[c.dataIndex].source)}}},
+          tooltip:{callbacks:{
+            label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`+srcLabel(days[c.dataIndex].source),
+            afterBody:(items)=>{
+              const day=days[items[0].dataIndex].date;
+              const vids=(dailyByVideo[day]||[]).slice(0,3);
+              if(!vids.length) return (day>=kstD(Date.now())) ? ["","영상별 집계 중…"] : [];
+              const tr=(t)=> t.length>24 ? t.slice(0,23)+"…" : t;
+              return ["","📹 조회 TOP3"].concat(vids.map((v,i)=>`${i+1}. ${tr(v.title)}  ${v.views.toLocaleString("ko-KR")}회`));
+            }
+          }}},
           scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
     }
     // (호환용) 기존 호출부가 있을 수 있어 유지 — 일일 실시간 전체 갱신으로 위임
