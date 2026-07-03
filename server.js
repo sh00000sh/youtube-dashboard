@@ -995,40 +995,40 @@ app.get("/api/daily-live", async (req, res) => {
   }
 });
 
-// 영상별 일일 조회수 (일일 그래프 툴팁용) — 최근 30일, day×video
+// 영상별 일일 조회수 (일일 그래프 툴팁용)
+//  - day,video 동시 dimension은 미지원 → 영상별로 (video 필터 + day) 조회 후 병합. 10분 캐시.
+let dbvCache = { at: 0, data: null };
 app.get("/api/daily-by-video", async (req, res) => {
   try {
+    if (dbvCache.data && Date.now() - dbvCache.at < 10 * 60 * 1000) return res.json(dbvCache.data);
+    if (!CHANNEL_ID) return res.status(400).json({ ok: false, error: "CHANNEL_ID 누락" });
+    const yt = google.youtube({ version: "v3", auth: getOAuth() });
     const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
-    const r = await ya.reports.query({
-      ids: "channel==MINE",
-      startDate: ymd(daysAgo(30)),
-      endDate: ymd(new Date()),
-      dimensions: "day,video",
-      metrics: "views",
-      sort: "day",
-      maxResults: 500,
-    });
-    const rows = r.data.rows || [];
-    // 영상 제목 매핑 (Data API, 50개씩)
-    const ids = [...new Set(rows.map((x) => x[1]))];
-    const titles = {};
-    for (let i = 0; i < ids.length; i += 50) {
-      const chunk = ids.slice(i, i + 50);
-      if (!chunk.length) break;
-      try {
-        const vr = await (await fetch(
-          `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${chunk.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
-        (vr.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
-      } catch (_) { /* 제목 실패해도 id로 표시 */ }
+    const ch = await yt.channels.list({ part: "contentDetails", id: CHANNEL_ID });
+    const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    let vids = [];
+    if (uploads) {
+      const pl = await yt.playlistItems.list({ part: "contentDetails,snippet", maxResults: 25, playlistId: uploads });
+      vids = (pl.data.items || []).map((it) => ({ id: it.contentDetails.videoId, title: it.snippet.title }));
     }
+    const start = ymd(daysAgo(30)), end = ymd(new Date());
     const byDay = {};
-    rows.forEach((x) => {
-      const day = x[0], vid = x[1], views = Number(x[2] || 0);
-      if (views <= 0) return;
-      (byDay[day] = byDay[day] || []).push({ id: vid, title: titles[vid] || vid, views });
-    });
+    for (const v of vids) {
+      try {
+        const r = await ya.reports.query({
+          ids: "channel==MINE", filters: "video==" + v.id,
+          startDate: start, endDate: end, dimensions: "day", metrics: "views", sort: "day",
+        });
+        (r.data.rows || []).forEach((row) => {
+          const day = row[0], views = Number(row[1] || 0);
+          if (views > 0) (byDay[day] = byDay[day] || []).push({ id: v.id, title: v.title, views });
+        });
+      } catch (_) { /* 개별 영상 실패는 스킵 */ }
+    }
     Object.keys(byDay).forEach((day) => byDay[day].sort((a, b) => b.views - a.views));
-    res.json({ ok: true, byDay });
+    const out = { ok: true, byDay };
+    dbvCache = { at: Date.now(), data: out };
+    res.json(out);
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
