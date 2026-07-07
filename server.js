@@ -774,7 +774,13 @@ async function ensureTab(sheets, title, header) {
   }
 }
 
-// 한 번 스냅샷: 최근 24시간 내 게시된 영상의 현재 조회수를 기록
+// 한 번 스냅샷: 숏폼=업로드 후 24시간 / 롱폼(3분+)=업로드 후 7일 추적
+const SNAP_LONG_HOURS = Number(process.env.SNAP_LONG_HOURS || 168); // 롱폼 추적 시간(기본 7일)
+function isoDurToSec(d) {
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d || "");
+  if (!m) return 0;
+  return (Number(m[1] || 0) * 3600) + (Number(m[2] || 0) * 60) + Number(m[3] || 0);
+}
 async function snapshotJob() {
   if (!CHANNEL_ID || !YOUTUBE_API_KEY || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return 0;
   const sheets = getSheetsClient();
@@ -786,17 +792,25 @@ async function snapshotJob() {
   const pl = await (await fetch(
     `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails,snippet&maxResults=15&playlistId=${uploads}&key=${YOUTUBE_API_KEY}`)).json();
   const now = Date.now();
-  const recent = (pl.items || []).map((it) => ({
+  // 1차: 롱폼 최대 추적시간 안의 후보를 모두 모은 뒤, 길이 확인 후 최종 필터
+  const cand = (pl.items || []).map((it) => ({
     id: it.contentDetails.videoId,
     publishedAt: it.contentDetails.videoPublishedAt || it.snippet.publishedAt,
     title: it.snippet.title,
-  })).filter((v) => ((now - new Date(v.publishedAt).getTime()) / 3600000) <= 24.5);
-  if (!recent.length) return 0;
+  })).filter((v) => ((now - new Date(v.publishedAt).getTime()) / 3600000) <= SNAP_LONG_HOURS + 0.5);
+  if (!cand.length) return 0;
 
-  const ids = recent.map((v) => v.id);
+  const ids = cand.map((v) => v.id);
   const stat = await (await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
-  const sm = {}; (stat.items || []).forEach((it) => sm[it.id] = it.statistics);
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${ids.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
+  const sm = {}, dur = {};
+  (stat.items || []).forEach((it) => { sm[it.id] = it.statistics; dur[it.id] = isoDurToSec(it.contentDetails?.duration); });
+  // 2차: 숏폼(3분 미만)=24.5h까지 / 롱폼(3분+)=SNAP_LONG_HOURS까지
+  const recent = cand.filter((v) => {
+    const hrs = (now - new Date(v.publishedAt).getTime()) / 3600000;
+    return (dur[v.id] >= 180) ? hrs <= SNAP_LONG_HOURS + 0.5 : hrs <= 24.5;
+  });
+  if (!recent.length) return 0;
 
   await ensureTab(sheets, SNAP_TAB, ["타임스탬프", "영상ID", "제목", "게시후시간(H)", "조회수", "좋아요", "댓글"]);
   const rows = recent.map((v) => {
