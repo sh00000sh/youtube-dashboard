@@ -1351,24 +1351,42 @@
           <div class="card"><div class="label">댓글</div><div class="value">${fmt(tc)}</div></div>`;
         const dayMap={};
         posts.forEach(p=>p.days.forEach(d=>{dayMap[d.date]=(dayMap[d.date]||0)+d.views;}));
-        const labels=Object.keys(dayMap).sort();
+        // 연속 날짜 축: 첫 게시물 날짜 ~ 오늘(KST), 조회 없는 날은 0
+        const kst=(ms)=>new Date(ms+9*3600000).toISOString().slice(0,10);
+        const seen=Object.keys(dayMap).sort();
+        const allDates=[];
+        if(seen.length){
+          let cur=new Date(seen[0]+"T00:00:00Z");
+          const end=kst(Date.now());
+          while(cur.toISOString().slice(0,10)<=end){
+            allDates.push(cur.toISOString().slice(0,10));
+            cur.setUTCDate(cur.getUTCDate()+1);
+          }
+        }
         if(postChart)postChart.destroy();
         const ctx=document.getElementById("postChart");
         if(ctx) postChart=new Chart(ctx,{type:"bar",
-          data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"게시물 조회수",data:labels.map(x=>dayMap[x]),backgroundColor:"#8b5cf6",borderRadius:6,maxBarThickness:40}]},
+          data:{labels:allDates.map(x=>x.slice(5)),datasets:[{label:"게시물 조회수",data:allDates.map(x=>dayMap[x]||0),backgroundColor:"#8b5cf6",borderRadius:6,maxBarThickness:40}]},
           options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
             tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`}}},
             scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
         const md=(s)=>s?`${+s.slice(5,7)}/${+s.slice(8)}`:"-";
-        // 일일 조회수 방식: (날짜 × 게시물) 행으로 펼쳐서 최신순 정렬
-        const flat=[];
-        posts.forEach(p=>p.days.forEach(d=>flat.push({date:d.date,title:p.title||"게시물",id:p.id,views:d.views})));
-        flat.sort((a,b)=> b.date===a.date ? b.views-a.views : (b.date>a.date?1:-1));
-        rowsEl.innerHTML=flat.length?flat.map((r)=>`
-          <tr><td>${md(r.date)}</td>
-          <td>${r.title} <span style="color:var(--sub);font-size:11px">(${r.id})</span></td>
-          <td>${fmt(r.views)}</td></tr>`).join("")
-          :`<tr><td colspan="3" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;
+        // 일별 상세: 모든 날짜 표시(최신순), 게시물 조회 없는 날은 0으로
+        const byDate={};
+        posts.forEach(p=>p.days.forEach(d=>{(byDate[d.date]=byDate[d.date]||[]).push({title:p.title||"게시물",id:p.id,views:d.views});}));
+        const rows=[];
+        [...allDates].reverse().forEach(date=>{
+          const list=(byDate[date]||[]).sort((a,b)=>b.views-a.views);
+          if(list.length) list.forEach(r=>rows.push(`
+            <tr><td>${md(date)}</td>
+            <td>${r.title} <span style="color:var(--sub);font-size:11px">(${r.id})</span></td>
+            <td>${fmt(r.views)}</td></tr>`));
+          else rows.push(`
+            <tr><td>${md(date)}</td>
+            <td style="color:var(--sub)">게시물 조회 없음</td>
+            <td style="color:var(--sub)">0</td></tr>`);
+        });
+        rowsEl.innerHTML=rows.length?rows.join(""):`<tr><td colspan="3" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;
       }catch(e){ rowsEl.innerHTML=`<tr><td colspan="5" class="empty">❌ ${e.message}</td></tr>`; }
     }
 
