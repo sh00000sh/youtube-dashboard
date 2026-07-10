@@ -380,7 +380,7 @@
 
     <div class="sec" id="sec-posts" style="display:none">
     <h2>📝 게시물 성과 <span class="kpi-badge">커뮤니티 게시물 · 최근 30일</span></h2>
-    <div class="desc">유튜브 커뮤니티 게시물의 조회수·좋아요·댓글을 영상과 분리해서 집계해요. 게시물은 API로 본문을 볼 수 없어 "게시물 · 첫 집계일"로 표시돼요.</div>
+    <div class="desc">유튜브 커뮤니티 게시물(데일리 Options Trend 시황)의 조회수를 영상과 분리해서 집계해요. 제목은 첫 조회일 기준 자동 생성이에요. ※ 좋아요·댓글은 유튜브 API가 게시물에 대해 제공하지 않아 0으로 표시될 수 있어요(스튜디오에서 확인).</div>
     <div class="cards" id="postCards" style="grid-template-columns:repeat(4,1fr)"></div>
     <h2 style="font-size:15px;margin-top:20px">📈 게시물 일별 조회수</h2>
     <div class="panel"><div class="chart-box"><canvas id="postChart"></canvas></div></div>
@@ -1359,8 +1359,8 @@
             tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`}}},
             scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
         const md=(s)=>s?`${+s.slice(5,7)}/${+s.slice(8)}`:"-";
-        rowsEl.innerHTML=posts.length?posts.map((p,i)=>`
-          <tr><td>게시물 ${i+1} <span style="color:var(--sub);font-size:11px">(${p.id})</span></td>
+        rowsEl.innerHTML=posts.length?posts.map((p)=>`
+          <tr><td>${p.title||"게시물"} <span style="color:var(--sub);font-size:11px">(${p.id})</span></td>
           <td>${md(p.firstSeen)} ~ ${md(p.lastSeen)}</td>
           <td>${fmt(p.views)}</td><td>${fmt(p.likes)}</td><td>${fmt(p.comments)}</td></tr>`).join("")
           :`<tr><td colspan="5" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;

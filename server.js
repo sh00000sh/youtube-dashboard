@@ -1080,7 +1080,12 @@ app.get("/api/posts", async (req, res) => {
       });
     });
     const posts = Object.values(map)
-      .map((p) => ({ ...p, firstSeen: p.days[0]?.date || null, lastSeen: p.days[p.days.length - 1]?.date || null }))
+      .map((p) => {
+        const firstSeen = p.days[0]?.date || null, lastSeen = p.days[p.days.length - 1]?.date || null;
+        // 채널 게시물 = 데일리 "Options Trend" 시황 → 첫 조회일 기준으로 제목 생성
+        const title = firstSeen ? `${firstSeen.slice(2).replace(/-/g, ".")} Options Trend 시황` : "게시물";
+        return { ...p, firstSeen, lastSeen, title };
+      })
       .sort((a, b) => b.views - a.views);
     res.json({ ok: true, range: 30, posts });
   } catch (e) {
