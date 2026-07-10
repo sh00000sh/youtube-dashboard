@@ -1032,19 +1032,23 @@ app.get("/api/daily-by-video", async (req, res) => {
         }
       } catch (_) { /* 하루 실패는 스킵 */ }
     }
-    // 제목 매핑 (Data API) — 삭제/비공개 영상은 응답에 없음 → 표시용 라벨
+    // 제목 매핑 — OAuth 사용(본인 비공개 영상도 제목 조회됨).
+    // videos.list에 안 잡히는 ID = 영상이 아닌 콘텐츠(커뮤니티 게시물 등) → isPost로 분리
+    const yt = google.youtube({ version: "v3", auth: getOAuth() });
     const titles = {};
     const ids = [...allIds];
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
       try {
-        const vr = await (await fetch(
-          `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${chunk.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
-        (vr.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
+        const vr = await yt.videos.list({ part: "snippet", id: chunk.join(",") });
+        (vr.data.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
       } catch (_) {}
     }
     Object.keys(byDay).forEach((day) => {
-      byDay[day].forEach((v) => { v.title = titles[v.id] || "(삭제/비공개 영상)"; });
+      byDay[day].forEach((v) => {
+        if (titles[v.id]) { v.title = titles[v.id]; v.isPost = false; }
+        else { v.title = "게시물"; v.isPost = true; }
+      });
     });
     const out = { ok: true, byDay };
     dbvCache = { at: Date.now(), data: out };

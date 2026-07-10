@@ -1020,8 +1020,15 @@
               const sum=list.reduce((a,v)=>a+v.views,0);
               const recent = day >= kstD(Date.now()-2*86400000);
               if(!list.length) return recent ? ["","영상별 집계 중… (유튜브 반영 2~3일 지연)"] : [];
+              const vids=list.filter(v=>!v.isPost), posts=list.filter(v=>v.isPost);
+              const postSum=posts.reduce((a,v)=>a+v.views,0);
               const tr=(t)=> t.length>24 ? t.slice(0,23)+"…" : t;
-              const out=["","📹 조회 TOP3"].concat(list.slice(0,3).map((v,i)=>`${i+1}. ${tr(v.title)}  ${v.views.toLocaleString("ko-KR")}회`));
+              const out=[""];
+              if(vids.length){
+                out.push("📹 영상 TOP3");
+                vids.slice(0,3).forEach((v,i)=>out.push(`${i+1}. ${tr(v.title)}  ${v.views.toLocaleString("ko-KR")}회`));
+              }
+              if(postSum>0) out.push(`📝 게시물 조회 ${postSum.toLocaleString("ko-KR")}회`);
               if(recent && sum < total*0.8) out.push("※ 최근일은 집계 반영 중");
               return out;
             }
