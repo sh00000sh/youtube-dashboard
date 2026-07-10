@@ -384,11 +384,11 @@
     <div class="cards" id="postCards" style="grid-template-columns:repeat(4,1fr)"></div>
     <h2 style="font-size:15px;margin-top:20px">📈 게시물 일별 조회수</h2>
     <div class="panel"><div class="chart-box"><canvas id="postChart"></canvas></div></div>
-    <h2 style="font-size:15px;margin-top:20px">📋 게시물별 상세</h2>
+    <h2 style="font-size:15px;margin-top:20px">📋 게시물 일별 상세 <span class="kpi-badge">날짜별 · 최신순</span></h2>
     <div class="panel" style="overflow-x:auto">
       <table>
-        <thead><tr><th>게시물</th><th>활동 기간</th><th>조회수</th><th>좋아요</th><th>댓글</th></tr></thead>
-        <tbody id="postRows"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
+        <thead><tr><th>날짜</th><th>게시물</th><th>일일 조회수</th></tr></thead>
+        <tbody id="postRows"><tr><td colspan="3" class="empty">불러오는 중…</td></tr></tbody>
       </table>
     </div>
     </div>
@@ -1359,11 +1359,15 @@
             tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`}}},
             scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
         const md=(s)=>s?`${+s.slice(5,7)}/${+s.slice(8)}`:"-";
-        rowsEl.innerHTML=posts.length?posts.map((p)=>`
-          <tr><td>${p.title||"게시물"} <span style="color:var(--sub);font-size:11px">(${p.id})</span></td>
-          <td>${md(p.firstSeen)} ~ ${md(p.lastSeen)}</td>
-          <td>${fmt(p.views)}</td><td>${fmt(p.likes)}</td><td>${fmt(p.comments)}</td></tr>`).join("")
-          :`<tr><td colspan="5" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;
+        // 일일 조회수 방식: (날짜 × 게시물) 행으로 펼쳐서 최신순 정렬
+        const flat=[];
+        posts.forEach(p=>p.days.forEach(d=>flat.push({date:d.date,title:p.title||"게시물",id:p.id,views:d.views})));
+        flat.sort((a,b)=> b.date===a.date ? b.views-a.views : (b.date>a.date?1:-1));
+        rowsEl.innerHTML=flat.length?flat.map((r)=>`
+          <tr><td>${md(r.date)}</td>
+          <td>${r.title} <span style="color:var(--sub);font-size:11px">(${r.id})</span></td>
+          <td>${fmt(r.views)}</td></tr>`).join("")
+          :`<tr><td colspan="3" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;
       }catch(e){ rowsEl.innerHTML=`<tr><td colspan="5" class="empty">❌ ${e.message}</td></tr>`; }
     }
 
