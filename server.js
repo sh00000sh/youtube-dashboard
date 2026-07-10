@@ -1010,36 +1010,42 @@ app.get("/api/daily-live", async (req, res) => {
 });
 
 // 영상별 일일 조회수 (일일 그래프 툴팁용)
-//  - day,video 동시 dimension은 미지원 → 영상별로 (video 필터 + day) 조회 후 병합. 10분 캐시.
+//  - 일자별 "TOP 영상" 리포트(dimensions=video, 하루 범위)로 조회 → 삭제/비공개 영상 조회수도 잡힘. 10분 캐시.
 let dbvCache = { at: 0, data: null };
 app.get("/api/daily-by-video", async (req, res) => {
   try {
     if (dbvCache.data && Date.now() - dbvCache.at < 10 * 60 * 1000) return res.json(dbvCache.data);
-    if (!CHANNEL_ID) return res.status(400).json({ ok: false, error: "CHANNEL_ID 누락" });
-    const yt = google.youtube({ version: "v3", auth: getOAuth() });
     const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
-    const ch = await yt.channels.list({ part: "contentDetails", id: CHANNEL_ID });
-    const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    let vids = [];
-    if (uploads) {
-      const pl = await yt.playlistItems.list({ part: "contentDetails,snippet", maxResults: 25, playlistId: uploads });
-      vids = (pl.data.items || []).map((it) => ({ id: it.contentDetails.videoId, title: it.snippet.title }));
-    }
-    const start = ymd(daysAgo(30)), end = ymd(new Date());
     const byDay = {};
-    for (const v of vids) {
+    const allIds = new Set();
+    for (let i = 30; i >= 0; i--) {
+      const day = ymd(daysAgo(i));
       try {
         const r = await ya.reports.query({
-          ids: "channel==MINE", filters: "video==" + v.id,
-          startDate: start, endDate: end, dimensions: "day", metrics: "views", sort: "day",
+          ids: "channel==MINE", startDate: day, endDate: day,
+          dimensions: "video", metrics: "views", sort: "-views", maxResults: 10,
         });
-        (r.data.rows || []).forEach((row) => {
-          const day = row[0], views = Number(row[1] || 0);
-          if (views > 0) (byDay[day] = byDay[day] || []).push({ id: v.id, title: v.title, views });
-        });
-      } catch (_) { /* 개별 영상 실패는 스킵 */ }
+        const rows = (r.data.rows || []).filter((x) => Number(x[1] || 0) > 0);
+        if (rows.length) {
+          byDay[day] = rows.map((x) => ({ id: x[0], views: Number(x[1]) }));
+          rows.forEach((x) => allIds.add(x[0]));
+        }
+      } catch (_) { /* 하루 실패는 스킵 */ }
     }
-    Object.keys(byDay).forEach((day) => byDay[day].sort((a, b) => b.views - a.views));
+    // 제목 매핑 (Data API) — 삭제/비공개 영상은 응답에 없음 → 표시용 라벨
+    const titles = {};
+    const ids = [...allIds];
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      try {
+        const vr = await (await fetch(
+          `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${chunk.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
+        (vr.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
+      } catch (_) {}
+    }
+    Object.keys(byDay).forEach((day) => {
+      byDay[day].forEach((v) => { v.title = titles[v.id] || "(삭제/비공개 영상)"; });
+    });
     const out = { ok: true, byDay };
     dbvCache = { at: Date.now(), data: out };
     res.json(out);

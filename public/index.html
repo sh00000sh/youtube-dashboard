@@ -1018,10 +1018,12 @@
               const dObj=days[items[0].dataIndex], day=dObj.date, total=dObj.views;
               const list=dailyByVideo[day]||[];
               const sum=list.reduce((a,v)=>a+v.views,0);
-              if(day>=kstD(Date.now())) return ["","영상별 집계 중…"];
-              if(!list.length || sum < total*0.9) return ["","⚠ 영상별 집계 확정 전","(유튜브 반영 2~3일 지연)"];
+              const recent = day >= kstD(Date.now()-2*86400000);
+              if(!list.length) return recent ? ["","영상별 집계 중… (유튜브 반영 2~3일 지연)"] : [];
               const tr=(t)=> t.length>24 ? t.slice(0,23)+"…" : t;
-              return ["","📹 조회 TOP3"].concat(list.slice(0,3).map((v,i)=>`${i+1}. ${tr(v.title)}  ${v.views.toLocaleString("ko-KR")}회`));
+              const out=["","📹 조회 TOP3"].concat(list.slice(0,3).map((v,i)=>`${i+1}. ${tr(v.title)}  ${v.views.toLocaleString("ko-KR")}회`));
+              if(recent && sum < total*0.8) out.push("※ 최근일은 집계 반영 중");
+              return out;
             }
           }}},
           scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
