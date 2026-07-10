@@ -378,6 +378,21 @@
     <div class="panel"><div class="chart-box"><canvas id="cmpChart"></canvas></div></div>
     </div>
 
+    <div class="sec" id="sec-posts" style="display:none">
+    <h2>📝 게시물 성과 <span class="kpi-badge">커뮤니티 게시물 · 최근 30일</span></h2>
+    <div class="desc">유튜브 커뮤니티 게시물의 조회수·좋아요·댓글을 영상과 분리해서 집계해요. 게시물은 API로 본문을 볼 수 없어 "게시물 · 첫 집계일"로 표시돼요.</div>
+    <div class="cards" id="postCards" style="grid-template-columns:repeat(4,1fr)"></div>
+    <h2 style="font-size:15px;margin-top:20px">📈 게시물 일별 조회수</h2>
+    <div class="panel"><div class="chart-box"><canvas id="postChart"></canvas></div></div>
+    <h2 style="font-size:15px;margin-top:20px">📋 게시물별 상세</h2>
+    <div class="panel" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>게시물</th><th>활동 기간</th><th>조회수</th><th>좋아요</th><th>댓글</th></tr></thead>
+        <tbody id="postRows"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+    </div>
+
     <div class="sec" id="sec-dchart">
     <h2>📈 채널 일별 추이 <span class="kpi-badge">(점선 = 일별 KPI 목표)</span>
       <select id="dailyPeriod" style="margin-left:auto">
@@ -1276,6 +1291,9 @@
         {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
         {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
       ]},
+      {cat:"posts", label:"📝 게시물", subs:[
+        {id:"sec-posts", label:"게시물 성과", secs:["sec-posts"], draw:()=>loadPosts()},
+      ]},
       {cat:"kpi", label:"🎯 KPI", subs:[
         {id:"sec-cum",     label:"누적 성과·성장", secs:["sec-cum","sec-growth"], draw:()=>{renderCumulative();drawGrowth();}},
         {id:"sec-compare", label:"과거 vs 현재",   secs:["sec-compare"],          draw:()=>{ if(cmpData)renderCompare(); }},
@@ -1311,6 +1329,42 @@
       ALL_SECS.forEach(secId=>{ const el=document.getElementById(secId); if(el) el.style.display=(sub.secs.includes(secId)?"":"none"); });
       document.getElementById("navSub").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
       if(sub.draw) sub.draw();
+    }
+
+    // ===== 게시물 성과 탭 =====
+    let postChart=null, postsCache=null;
+    async function loadPosts(){
+      const rowsEl=document.getElementById("postRows");
+      try{
+        if(!postsCache){
+          const r=await fetch("/api/posts").then(r=>r.json());
+          if(!r.ok) throw new Error(r.error||"불러오기 실패");
+          postsCache=r;
+        }
+        const posts=postsCache.posts||[];
+        const tv=posts.reduce((a,p)=>a+p.views,0), tl=posts.reduce((a,p)=>a+p.likes,0), tc=posts.reduce((a,p)=>a+p.comments,0);
+        document.getElementById("postCards").innerHTML=`
+          <div class="card"><div class="label">게시물 수 (30일)</div><div class="value">${posts.length}</div></div>
+          <div class="card"><div class="label">총 조회수</div><div class="value">${fmt(tv)}</div></div>
+          <div class="card"><div class="label">좋아요</div><div class="value">${fmt(tl)}</div></div>
+          <div class="card"><div class="label">댓글</div><div class="value">${fmt(tc)}</div></div>`;
+        const dayMap={};
+        posts.forEach(p=>p.days.forEach(d=>{dayMap[d.date]=(dayMap[d.date]||0)+d.views;}));
+        const labels=Object.keys(dayMap).sort();
+        if(postChart)postChart.destroy();
+        const ctx=document.getElementById("postChart");
+        if(ctx) postChart=new Chart(ctx,{type:"bar",
+          data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"게시물 조회수",data:labels.map(x=>dayMap[x]),backgroundColor:"#8b5cf6",borderRadius:6,maxBarThickness:40}]},
+          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+            tooltip:{callbacks:{label:(c)=>`${c.parsed.y.toLocaleString("ko-KR")}회`}}},
+            scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
+        const md=(s)=>s?`${+s.slice(5,7)}/${+s.slice(8)}`:"-";
+        rowsEl.innerHTML=posts.length?posts.map((p,i)=>`
+          <tr><td>게시물 ${i+1} <span style="color:var(--sub);font-size:11px">(${p.id})</span></td>
+          <td>${md(p.firstSeen)} ~ ${md(p.lastSeen)}</td>
+          <td>${fmt(p.views)}</td><td>${fmt(p.likes)}</td><td>${fmt(p.comments)}</td></tr>`).join("")
+          :`<tr><td colspan="5" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;
+      }catch(e){ rowsEl.innerHTML=`<tr><td colspan="5" class="empty">❌ ${e.message}</td></tr>`; }
     }
 
     // ===== 관리자 모드 =====

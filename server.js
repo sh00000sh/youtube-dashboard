@@ -1009,50 +1009,80 @@ app.get("/api/daily-live", async (req, res) => {
   }
 });
 
-// 영상별 일일 조회수 (일일 그래프 툴팁용)
-//  - 일자별 "TOP 영상" 리포트(dimensions=video, 하루 범위)로 조회 → 삭제/비공개 영상 조회수도 잡힘. 10분 캐시.
+// 콘텐츠별 일일 성과 빌더 (일일 그래프 툴팁 + 게시물 탭 공용)
+//  - 일자별 "TOP 콘텐츠" 리포트(dimensions=video, 하루 범위) → 삭제/비공개 영상·게시물까지 잡힘. 10분 캐시.
 let dbvCache = { at: 0, data: null };
-app.get("/api/daily-by-video", async (req, res) => {
-  try {
-    if (dbvCache.data && Date.now() - dbvCache.at < 10 * 60 * 1000) return res.json(dbvCache.data);
-    const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
-    const byDay = {};
-    const allIds = new Set();
-    for (let i = 30; i >= 0; i--) {
-      const day = ymd(daysAgo(i));
-      try {
+async function buildDailyByVideo() {
+  if (dbvCache.data && Date.now() - dbvCache.at < 10 * 60 * 1000) return dbvCache.data;
+  const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
+  const byDay = {};
+  const allIds = new Set();
+  for (let i = 30; i >= 0; i--) {
+    const day = ymd(daysAgo(i));
+    let rows = null;
+    try {
+      const r = await ya.reports.query({
+        ids: "channel==MINE", startDate: day, endDate: day,
+        dimensions: "video", metrics: "views,likes,comments", sort: "-views", maxResults: 20,
+      });
+      rows = (r.data.rows || []).map((x) => ({ id: x[0], views: Number(x[1] || 0), likes: Number(x[2] || 0), comments: Number(x[3] || 0) }));
+    } catch (_) {
+      try { // 일부 조합 미지원 시 조회수만 폴백
         const r = await ya.reports.query({
           ids: "channel==MINE", startDate: day, endDate: day,
-          dimensions: "video", metrics: "views", sort: "-views", maxResults: 10,
+          dimensions: "video", metrics: "views", sort: "-views", maxResults: 20,
         });
-        const rows = (r.data.rows || []).filter((x) => Number(x[1] || 0) > 0);
-        if (rows.length) {
-          byDay[day] = rows.map((x) => ({ id: x[0], views: Number(x[1]) }));
-          rows.forEach((x) => allIds.add(x[0]));
-        }
+        rows = (r.data.rows || []).map((x) => ({ id: x[0], views: Number(x[1] || 0), likes: 0, comments: 0 }));
       } catch (_) { /* 하루 실패는 스킵 */ }
     }
-    // 제목 매핑 — OAuth 사용(본인 비공개 영상도 제목 조회됨).
-    // videos.list에 안 잡히는 ID = 영상이 아닌 콘텐츠(커뮤니티 게시물 등) → isPost로 분리
-    const yt = google.youtube({ version: "v3", auth: getOAuth() });
-    const titles = {};
-    const ids = [...allIds];
-    for (let i = 0; i < ids.length; i += 50) {
-      const chunk = ids.slice(i, i + 50);
-      try {
-        const vr = await yt.videos.list({ part: "snippet", id: chunk.join(",") });
-        (vr.data.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
-      } catch (_) {}
+    if (rows) {
+      const f = rows.filter((v) => v.views > 0);
+      if (f.length) { byDay[day] = f; f.forEach((v) => allIds.add(v.id)); }
     }
-    Object.keys(byDay).forEach((day) => {
-      byDay[day].forEach((v) => {
-        if (titles[v.id]) { v.title = titles[v.id]; v.isPost = false; }
-        else { v.title = "게시물"; v.isPost = true; }
+  }
+  // 제목 매핑 — OAuth 사용(본인 비공개 영상도 제목 조회됨).
+  // videos.list에 안 잡히는 ID = 영상이 아닌 콘텐츠(커뮤니티 게시물 등) → isPost로 분리
+  const yt = google.youtube({ version: "v3", auth: getOAuth() });
+  const titles = {};
+  const ids = [...allIds];
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    try {
+      const vr = await yt.videos.list({ part: "snippet", id: chunk.join(",") });
+      (vr.data.items || []).forEach((it) => { titles[it.id] = it.snippet.title; });
+    } catch (_) {}
+  }
+  Object.keys(byDay).forEach((day) => {
+    byDay[day].forEach((v) => {
+      if (titles[v.id]) { v.title = titles[v.id]; v.isPost = false; }
+      else { v.title = "게시물"; v.isPost = true; }
+    });
+  });
+  const out = { ok: true, byDay };
+  dbvCache = { at: Date.now(), data: out };
+  return out;
+}
+app.get("/api/daily-by-video", async (req, res) => {
+  try { res.json(await buildDailyByVideo()); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// 게시물 성과 (게시물 탭용) — 게시물별 조회수·좋아요·댓글 + 일자별 추이
+app.get("/api/posts", async (req, res) => {
+  try {
+    const d = await buildDailyByVideo();
+    const map = {};
+    Object.keys(d.byDay).sort().forEach((day) => {
+      d.byDay[day].filter((v) => v.isPost).forEach((v) => {
+        if (!map[v.id]) map[v.id] = { id: v.id, views: 0, likes: 0, comments: 0, days: [] };
+        map[v.id].views += v.views; map[v.id].likes += v.likes || 0; map[v.id].comments += v.comments || 0;
+        map[v.id].days.push({ date: day, views: v.views, likes: v.likes || 0, comments: v.comments || 0 });
       });
     });
-    const out = { ok: true, byDay };
-    dbvCache = { at: Date.now(), data: out };
-    res.json(out);
+    const posts = Object.values(map)
+      .map((p) => ({ ...p, firstSeen: p.days[0]?.date || null, lastSeen: p.days[p.days.length - 1]?.date || null }))
+      .sort((a, b) => b.views - a.views);
+    res.json({ ok: true, range: 30, posts });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
