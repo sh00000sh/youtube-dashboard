@@ -1034,7 +1034,8 @@
               const list=dailyByVideo[day]||[];
               const sum=list.reduce((a,v)=>a+v.views,0);
               const recent = day >= kstD(Date.now()-2*86400000);
-              if(!list.length) return recent ? ["","영상별 집계 중… (유튜브 반영 2~3일 지연)"] : [];
+              if(!list.length) return recent ? ["","영상별 집계 중… (유튜브 반영 2~3일 지연)"]
+                : (total>0 ? ["","ℹ 콘텐츠별 내역 미제공","(삭제된 콘텐츠의 조회로 추정)"] : []);
               const vids=list.filter(v=>!v.isPost), posts=list.filter(v=>v.isPost);
               const postSum=posts.reduce((a,v)=>a+v.views,0);
               const tr=(t)=> t.length>24 ? t.slice(0,23)+"…" : t;
