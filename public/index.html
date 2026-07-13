@@ -496,6 +496,15 @@
     </div></div>
     </div>
 
+    <div class="sec" id="sec-longform" style="display:none">
+    <h2>🎬 롱폼 실시간 <span class="kpi-badge">최근 롱폼 조회수 실시간 추적</span>
+      <button id="lfAutoBtn" onclick="toggleLfAuto()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">▶ 자동 갱신</button>
+      <button onclick="loadLongformLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
+    </h2>
+    <div class="desc">최근 7일 내 올린 롱폼을 실시간 조회수로 보여줘요. <b>현재 조회수는 지연 없이 즉시</b> 반영되고, 시간대별 곡선은 스냅샷(1시간 간격)이 쌓이며 채워져요. 자동 갱신은 30초마다. <span id="lfAt"></span></div>
+    <div id="lfCards"><div class="empty">불러오는 중…</div></div>
+    </div>
+
     <div class="sec" id="sec-hl">
     <h2>🏆 영상 하이라이트 & 포맷 비교</h2>
     <div class="bw" id="bestWorst"></div>
@@ -1194,6 +1203,86 @@
       else { loadLive(); liveTimer=setInterval(loadLive,30000); btn.textContent="⏸ 자동 갱신 중"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
     }
 
+    // ===== 롱폼 실시간 (오늘 A/B 테스트 등 최근 롱폼 조회수 추적) =====
+    let lfTimer=null, lfCharts={};
+    const kstToday=()=> new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+    async function loadLongformLive(){
+      const at=document.getElementById("lfAt"), wrap=document.getElementById("lfCards");
+      if(at) at.textContent="(불러오는 중...)";
+      try{
+        const lv=await fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false}));
+        if(!lv.ok){ wrap.innerHTML='<div class="empty">불러오기 실패</div>'; if(at)at.textContent=""; return; }
+        // 롱폼(3분+)만, 최신 업로드 순 (오늘 올린 A/B 테스트 영상이 맨 위로)
+        const longs=(lv.videos||[]).filter(v=>durSec(v.duration)>180).sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
+        if(!longs.length){ wrap.innerHTML='<div class="empty">최근 7일 내 롱폼이 없어요. (롱폼 업로드 후 이 탭에서 실시간 추적돼요)</div>'; if(at)at.textContent=""; return; }
+        wrap.innerHTML=longs.map(v=>lfCardHtml(v)).join("");
+        longs.forEach(v=>{ if(!v.scheduled) fillLfHourly(v.id); });
+        if(at) at.textContent="· 갱신: "+new Date().toLocaleTimeString("ko-KR");
+      }catch(e){ if(at)at.textContent="❌ "+e.message; }
+    }
+    function lfCardHtml(v){
+      const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.publishedAt||'').slice(2,10)}')`;
+      const isToday=(v.publishedAt||'').slice(0,10)===kstToday();
+      const todayBadge=isToday?'<span style="background:#e5484d;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:6px">오늘 업로드</span>':'';
+      if(v.scheduled){
+        const when=v.publishAt? new Date(v.publishAt).toLocaleString("ko-KR"):"";
+        return `<div class="panel" style="padding:0;overflow:hidden;margin-bottom:14px;opacity:.8">
+          <div style="display:flex;gap:14px;flex-wrap:wrap;padding:12px 14px">
+            <img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" style="width:180px;max-width:40%;aspect-ratio:16/9;object-fit:cover;border-radius:8px">
+            <div style="flex:1;min-width:220px">
+              <div style="font-weight:700;font-size:14px;line-height:1.4">${v.title} ${todayBadge}</div>
+              <div style="margin-top:10px;color:var(--y-tx,#b8860b);font-weight:700">🕒 공개 예정: ${when}</div>
+              <div style="color:var(--sub);font-size:12px;margin-top:4px">공개되면 여기서 조회수가 실시간으로 잡혀요.</div>
+            </div></div></div>`;
+      }
+      const h=hoursSince(v.publishedAt);
+      const perH=(h&&h>0)?fmt(Math.round(N(v.views)/h)):"-";
+      const uploadedAt=v.publishedAt? new Date(v.publishedAt).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+      return `<div class="panel" style="padding:0;overflow:hidden;margin-bottom:14px">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;padding:12px 14px">
+          <div style="position:relative;width:180px;max-width:40%">
+            <img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;cursor:pointer" onclick="${oc}">
+            <span style="position:absolute;top:6px;left:6px;background:#378add;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">롱폼</span>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <div style="font-weight:700;font-size:14px;line-height:1.4;cursor:pointer" onclick="${oc}">${v.title} ${todayBadge}</div>
+            <div style="display:flex;gap:22px;margin-top:10px;align-items:flex-end;flex-wrap:wrap">
+              <div><div style="font-size:11px;color:var(--sub)">현재 조회수 <span style="color:var(--blue)">실시간</span></div><div style="font-size:26px;font-weight:800;line-height:1.1">${fmt(v.views)}</div></div>
+              <div><div style="font-size:11px;color:var(--sub)">좋아요</div><div style="font-size:17px;font-weight:700">${fmt(v.likes)}</div></div>
+              <div><div style="font-size:11px;color:var(--sub)">댓글</div><div style="font-size:17px;font-weight:700">${fmt(v.comments)}</div></div>
+              <div><div style="font-size:11px;color:var(--sub)">시간당 평균</div><div style="font-size:17px;font-weight:700">${perH}회/h</div></div>
+            </div>
+            <div style="color:var(--sub);font-size:12px;margin-top:8px">업로드 ${uploadedAt} · ${agoStr(v.publishedAt)}</div>
+          </div>
+        </div>
+        <div style="padding:0 14px 14px">
+          <div style="position:relative;height:170px"><canvas id="lfChart_${v.id}"></canvas></div>
+          <div id="lfNote_${v.id}" class="note" style="margin-top:4px"></div>
+        </div></div>`;
+    }
+    async function fillLfHourly(id){
+      const ctx=document.getElementById("lfChart_"+id); if(!ctx) return;
+      const note=document.getElementById("lfNote_"+id);
+      try{
+        const r=await fetch("/api/video-hourly?id="+id).then(x=>x.json());
+        const rows=(r.rows||[]).filter(p=>p.views>0);
+        if(rows.length<2){ if(note) note.textContent="시간대별 곡선은 스냅샷이 2개 이상 쌓이면 그려져요(정시마다 1개 기록). 현재 조회수는 위 숫자로 지금 바로 확인돼요."; if(lfCharts[id]){lfCharts[id].destroy();lfCharts[id]=null;} return; }
+        if(note) note.textContent="";
+        const labels=rows.map(p=>"+"+ (p.hours<1? Math.round(p.hours*60)+"분" : Math.round(p.hours)+"h"));
+        const data=rows.map(p=>p.views);
+        if(lfCharts[id]) lfCharts[id].destroy();
+        lfCharts[id]=new Chart(ctx,{type:"line",
+          data:{labels,datasets:[{label:"조회수",data,borderColor:"#378add",backgroundColor:"rgba(55,138,221,.12)",fill:true,tension:.3,pointRadius:2}]},
+          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:(it)=>"업로드 "+it[0].label,label:(c)=>fmt(c.parsed.y)+"회"}}},
+            scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()},beginAtZero:true}}}});
+      }catch(_){ if(note) note.textContent="시간대별 데이터를 불러오지 못했어요."; }
+    }
+    function toggleLfAuto(){
+      const btn=document.getElementById("lfAutoBtn");
+      if(lfTimer){ clearInterval(lfTimer); lfTimer=null; btn.textContent="▶ 자동 갱신"; btn.style.background="var(--chip)"; btn.style.color="var(--text)"; }
+      else { loadLongformLive(); lfTimer=setInterval(loadLongformLive,30000); btn.textContent="⏸ 자동 갱신 중"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
+    }
+
     // 과거 vs 현재 비교 (광고 제외)
     let cmpData=null, cmpChart=null, cmpForm="all"; // all | long | short
     async function loadCompare(){
@@ -1368,9 +1457,10 @@
     // sub: id(탭 키) · label · secs(보여줄 섹션 id 배열) · draw
     const NAV=[
       {cat:"daily", label:"📅 일일", subs:[
-        {id:"sec-live",   label:"실시간",        secs:["sec-live"],   draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
-        {id:"sec-dchart", label:"일일 그래프",   secs:["sec-dchart"], draw:()=>drawChart()},
-        {id:"sec-dtable", label:"일일 상세",     secs:["sec-dtable"], draw:()=>renderDailyTable()},
+        {id:"sec-live",     label:"실시간",        secs:["sec-live"],     draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
+        {id:"sec-longform", label:"롱폼 실시간",   secs:["sec-longform"], draw:()=>loadLongformLive()},
+        {id:"sec-dchart",   label:"일일 그래프",   secs:["sec-dchart"],   draw:()=>drawChart()},
+        {id:"sec-dtable",   label:"일일 상세",     secs:["sec-dtable"],   draw:()=>renderDailyTable()},
       ]},
       {cat:"video", label:"🎬 영상", subs:[
         {id:"sec-hl",      label:"영상 하이라이트", secs:["sec-hl"],      draw:()=>{renderBestWorst();renderFormCompare();}},
