@@ -1221,8 +1221,18 @@ async function runAIReport(force) {
     ct[x.id].일별[d.slice(5)] = x.views; ct[x.id].합 += x.views;
   }));
   const topContents = Object.values(ct).sort((a, b) => b.합 - a.합).slice(0, 6);
+  // 전일 대비 비교 (어제 vs 그제) — 서버에서 확정 계산
+  const conf2 = s.daily.filter((d) => d.date < todayK);
+  const yD = conf2[conf2.length - 1] || null, pD = conf2[conf2.length - 2] || null;
+  const pct = (a, b) => (b > 0 ? Math.round((a - b) / b * 100) + "%" : "-");
+  const 전일비교 = (yD && pD) ? {
+    어제: { 날짜: yD.date, 영상조회: yD.video, 게시물조회: yD.post },
+    그제: { 날짜: pD.date, 영상조회: pD.video, 게시물조회: pD.post },
+    증감: { 영상: `${yD.video - pD.video >= 0 ? "+" : ""}${yD.video - pD.video}회 (${pct(yD.video, pD.video)})`, 게시물: `${yD.post - pD.post >= 0 ? "+" : ""}${yD.post - pD.post}회 (${pct(yD.post, pD.post)})` },
+  } : null;
   const summary = {
     기준일: todayK, 구독자: s.subs,
+    전일비교,
     최근7일_일별합계: s.daily.filter((d) => d.date < todayK).slice(-7).map((d) => ({ 날짜: d.date.slice(5), 영상: d.video, 게시물: d.post })),
     주요콘텐츠_최근7일_일별추이: topContents,
     최신롱폼: s.longform ? { 제목: s.longform.title, 게시일: s.longform.publishedAt.slice(0, 10), 누적조회: s.longform.views, 좋아요: s.longform.likes, 트래픽소스: s.lfTraffic } : null,
@@ -1241,8 +1251,8 @@ async function runAIReport(force) {
 3. 전체 1,000자 이내. 문장은 짧고 담백하게.
 
 내용 규칙:
-4. 최근 3일(어제 포함)의 일별 수치를 각각 언급하라. 급증한 날만 다루고 나머지를 생략하지 마라.
-5. 수치 분석에는 날짜, 값, 증감률을 구체적으로. 트래픽소스 데이터가 있으면 검색·추천·쇼츠피드 노출 상태를 해석하라.
+4. [수치 분석]은 반드시 "전일비교" 데이터로 시작하라: 어제가 그제 대비 얼마나(증감량·증감률) 변했는지, 그리고 그 변화가 무엇을 의미하는지(예: 쇼츠 유입 파도 소진, 신규 업로드 효과, 자연 감쇠 등) 해석까지. 그다음 최근 3일(어제 포함)의 일별 수치를 각각 언급하라. 급증한 날만 다루고 나머지를 생략하지 마라.
+5. 날짜, 값, 증감률을 구체적으로. 트래픽소스 데이터가 있으면 검색·추천·쇼츠피드 노출 상태를 해석하라.
 6. 전망: 최근 일별 추이를 근거로 최신 롱폼과 채널 전체의 7일 후·30일 후 예상 누적 조회수를 범위로 제시하라. 반드시 "추정치이며 변동 가능"임을 명시.
 7. "꾸준히 업로드하라", "콘텐츠를 다양화하라", "숏폼과 롱폼을 구분하라" 같은 일반론 금지. 이 채널 데이터에서만 나올 수 있는 구체적 제안만.
 8. 준법: 이 채널은 수익률·배수 숫자를 마케팅 문구에 쓸 수 없다. 제안에 반영하라.
