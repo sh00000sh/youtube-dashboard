@@ -333,9 +333,9 @@
         <option value="90">최근 90일</option>
       </select>
     </h2>
-    <div class="desc">선택한 기간 동안 모은 총합이에요. 카드 아래 숫자는 가장 최근 날의 성과와 전일 대비 변화예요.</div>
+    <div class="desc">선택한 기간 동안 모은 총합이에요. 카드 아래 숫자는 가장 최근 날의 성과와 전일 대비 변화예요. <b>여기 '누적 조회수'는 애널리틱스 일별 조회수의 기간 합계</b>라, 상단 프로필의 '유튜브 표기 누적'(유튜브 공개 카운트, 반영이 느리고 일부 조회 제외)과 숫자가 다를 수 있어요.</div>
     <div class="cards cards5">
-      <div class="card"><div class="label">누적 조회수</div><div class="value" id="cum_views">-</div><div class="delta" id="d_views"></div></div>
+      <div class="card"><div class="label">누적 조회수 <span style="font-size:10px;color:var(--sub)">애널리틱스 합계</span></div><div class="value" id="cum_views">-</div><div class="delta" id="d_views"></div></div>
       <div class="card"><div class="label">구독자</div><div class="value" id="cum_subs">-</div><div class="delta" id="d_subs"></div></div>
       <div class="card"><div class="label">누적 좋아요</div><div class="value" id="cum_likes">-</div><div class="delta" id="d_likes"></div></div>
       <div class="card"><div class="label">누적 댓글</div><div class="value" id="cum_comments">-</div><div class="delta" id="d_comments"></div></div>
@@ -380,9 +380,16 @@
 
     <div class="sec" id="sec-insight" style="display:none">
     <h2>💡 인사이트 <span class="kpi-badge" id="aiDate">규칙 분석 실시간 · AI 리포트 매일 09시</span>
-      <button onclick="refreshInsights()" style="margin-left:auto;padding:7px 14px;font-size:13px">🔄 새로고침</button>
-      <button onclick="runAINow()" style="margin-left:8px;padding:7px 14px;font-size:13px">🤖 AI 리포트 지금 생성</button>
+      <button onclick="runAILive()" style="margin-left:auto;padding:7px 14px;font-size:13px;background:var(--blue);color:#fff;border-radius:10px">⚡ 지금 실시간 피드백</button>
+      <button onclick="refreshInsights()" style="margin-left:8px;padding:7px 14px;font-size:13px">🔄 새로고침</button>
+      <button onclick="runAINow()" style="margin-left:8px;padding:7px 14px;font-size:13px">🤖 AI 리포트(어제까지)</button>
     </h2>
+    <!-- 실시간(지금 시각) AI 피드백 -->
+    <div id="aiLiveWrap" style="margin-top:6px;display:none">
+      <h2 style="font-size:15px">⚡ 지금 실시간 피드백 <span class="kpi-badge" id="aiLiveAt">오늘 진행 중 데이터 기준</span></h2>
+      <div id="aiLive"></div>
+    </div>
+    <h2 style="font-size:15px;margin-top:16px">🤖 데일리 AI 리포트 <span class="kpi-badge">어제까지 확정 데이터</span></h2>
     <div id="aiReport" style="margin-top:6px">불러오는 중…</div>
 
     <h2 style="font-size:15px;margin-top:22px">📈 최근 14일 조회수 추이 <span class="kpi-badge">파랑=영상 / 보라=게시물 · 옅은색=잠정</span></h2>
@@ -461,6 +468,12 @@
     <!-- 일일 실시간 카드 -->
     <h2 style="font-size:15px">📊 일일 실시간</h2>
     <div class="cards" id="dlCards" style="grid-template-columns:repeat(4,1fr)"></div>
+
+    <!-- 오늘 실시간 브리핑 (진행 중 · 시간대별) -->
+    <h2 style="font-size:15px;margin-top:20px">🟢 오늘 실시간 브리핑 <span class="kpi-badge" id="tlAt">지금 시각 기준 · 진행 중</span></h2>
+    <div id="tlBrief" class="panel" style="padding:14px 16px;line-height:1.7;font-size:13.5px;color:var(--sub)">불러오는 중…</div>
+    <h2 style="font-size:15px;margin-top:16px">📈 오늘 시간대별 조회수 <span class="kpi-badge">오전→오후 누적 흐름 · 회색=어제 같은시각 페이스</span></h2>
+    <div class="panel"><div class="chart-box"><canvas id="tlChart"></canvas></div></div>
 
     <!-- 일일 그래프 (실시간) -->
     <h2 style="font-size:15px;margin-top:20px">📈 일일 조회수 그래프 <span class="kpi-badge">파랑=실시간 / 옅은파랑=확정 / 보라=수동입력</span></h2>
@@ -676,7 +689,7 @@
       }
       if(c.avatar)document.getElementById("ch_avatar").src=c.avatar;
       const nm=document.getElementById("ch_name"); nm.textContent=c.title||"채널"; nm.href=c.url||"#";
-      document.getElementById("ch_stat").innerHTML=`구독자 ${fmt(c.subscribers)}명<br>전체 누적 조회수 ${fmt(c.totalViews)}회`;
+      document.getElementById("ch_stat").innerHTML=`구독자 ${fmt(c.subscribers)}명<br><span title="유튜브가 공개하는 채널 누적 조회수(Data API). 반영이 느리고 일부 조회는 제외돼 애널리틱스 합계와 다를 수 있어요.">유튜브 표기 누적 조회수 ${fmt(c.totalViews)}회</span>`;
       // 본격 업로드(6/1) 후 운영일 D+NN — 로컬 자정 기준(UTC 파싱 오차 제거, 매일 자동 증가)
       // 6/1을 1일차로 셈 → 오늘이 6/18이면 D+18
       const _start=new Date(2026,5,1,0,0,0,0);           // 2026-06-01 로컬
@@ -992,25 +1005,76 @@
     }
 
     // ===== 실시간 (Data API 현재값) =====
-    let livePrev=null, liveTimer=null, dlChart=null, dlLoaded=false, lastDL=null, dailyByVideo={};
+    let livePrev=null, liveTimer=null, dlChart=null, tlChart=null, dlLoaded=false, lastDL=null, dailyByVideo={};
     // 일일 실시간 + 최근 영상 실시간을 함께 갱신
     async function loadDailyLive(){
       const at=document.getElementById("liveAt");
       at.textContent="(불러오는 중...)";
       try{
-        const [dl,lv,ev,dbv]=await Promise.all([
+        const [dl,lv,ev,dbv,tl]=await Promise.all([
           fetch("/api/daily-live").then(r=>r.json()).catch(()=>({ok:false})),
           fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false})),
           fetch("/api/early").then(r=>r.json()).catch(()=>({ok:false})),
           fetch("/api/daily-by-video").then(r=>r.json()).catch(()=>({ok:false})),
+          fetch("/api/today-live").then(r=>r.json()).catch(()=>({ok:false})),
         ]);
         if(ev.ok){ earlyMap=ev.early||{}; earlyDays=ev.days||1; }
         if(dbv.ok){ dailyByVideo=dbv.byDay||{}; }
         if(dl.ok){ lastDL=dl; renderDailyLive(dl); }
         if(lv.ok){ renderLive(lv); }
+        if(tl.ok){ renderTodayLive(tl); }
         dlLoaded=true;
         at.textContent="· 갱신: "+new Date().toLocaleTimeString("ko-KR");
       }catch(e){ at.textContent="❌ "+e.message; }
+    }
+    // 오늘(진행 중) 실시간 브리핑 + 시간대별 조회수 차트
+    function renderTodayLive(d){
+      const brief=document.getElementById("tlBrief"), atEl=document.getElementById("tlAt");
+      if(!brief) return;
+      const hh=Math.floor(d.nowHour), mm=Math.round((d.nowHour-hh)*60);
+      if(atEl) atEl.textContent=`오늘 ${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")} 기준 · 진행 중`;
+      if(!d.hasBaseline || d.today.soFar==null){
+        brief.style.color="var(--sub)";
+        brief.innerHTML="아직 오늘 실시간 집계가 준비 중이에요. 채널 스냅샷이 1시간마다 쌓이면서 오전부터의 흐름이 채워져요(서버 켜진 뒤 첫 스냅샷 이후부터).";
+      } else {
+        const soFar=d.today.soFar, sameT=d.yesterday.sameTime, full=d.yesterday.full, pace=d.pacePct;
+        let paceTxt="";
+        if(pace!=null){
+          const faster=pace>=0;
+          paceTxt=`어제 같은 시각(${fmt(sameT)}회)보다 <b style="color:${faster?'#22a06b':'#e5484d'}">${faster?'▲':'▼'} ${Math.abs(pace)}% ${faster?'빠른':'느린'}</b> 페이스예요.`;
+        } else if(sameT==null){ paceTxt="어제 같은 시각 비교 데이터가 아직 없어요."; }
+        let progTxt="";
+        if(full && full>0){ const prog=Math.round(soFar/full*100); progTxt=` 어제 하루 최종(${fmt(full)}회)의 <b>${prog}%</b>에 와 있어요.`; }
+        const rt=(d.recentToday||[]).filter(v=>v.todayViews>0).slice(0,3);
+        let rtTxt="";
+        if(rt.length){ rtTxt="<br>오늘 조회를 끄는 영상: "+rt.map(v=>`"${(v.title||'').slice(0,18)}…" ${fmt(v.todayViews)}회`).join(" · "); }
+        brief.style.color="var(--tx)";
+        brief.innerHTML=`<b style="font-size:15px">오늘 지금까지 ${fmt(soFar)}회</b><br>${paceTxt}${progTxt}${rtTxt}<div style="color:var(--sub);font-size:11.5px;margin-top:6px">※ 진행 중이라 하루가 끝나면 달라질 수 있어요. 트래픽 소스(검색/추천)별 분해는 유튜브 확정(2~3일) 후 가능.</div>`;
+      }
+      // 시간대별 차트: 오늘 누적 곡선 + 어제 같은시각 수평 기준선
+      const series=(d.today.series||[]);
+      const ctx=document.getElementById("tlChart"); if(!ctx) return;
+      const labels=series.map(p=>{const h=Math.floor(p.h);const m=Math.round((p.h-h)*60);return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;});
+      const data=series.map(p=>p.cum);
+      const refLine=(d.yesterday.sameTime!=null)?series.map(()=>d.yesterday.sameTime):null;
+      const ds=[{label:"오늘 누적",data,borderColor:"#3182f6",backgroundColor:"rgba(49,130,246,.12)",fill:true,tension:.3,pointRadius:2}];
+      if(refLine) ds.push({label:"어제 같은시각",data:refLine,borderColor:"rgba(120,120,120,.7)",borderDash:[5,4],pointRadius:0,fill:false});
+      if(tlChart)tlChart.destroy();
+      tlChart=new Chart(ctx,{type:"line",data:{labels,datasets:ds},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:tickCol(),boxWidth:12}},
+          tooltip:{callbacks:{label:(c)=>`${c.dataset.label} ${c.parsed.y.toLocaleString("ko-KR")}회`}}},
+          scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()},beginAtZero:true}}}});
+    }
+    // 지금 실시간 AI 피드백 (오늘 진행 중 데이터 포함)
+    async function runAILive(){
+      const wrap=document.getElementById("aiLiveWrap"), el=document.getElementById("aiLive"), at=document.getElementById("aiLiveAt");
+      wrap.style.display=""; el.innerHTML='<div class="panel"><span style="color:var(--sub)">실시간 피드백 생성 중… (10~20초)</span></div>';
+      try{
+        const r=await fetch("/api/insights/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({live:true})}).then(x=>x.json());
+        if(r.live&&r.live.error){ el.innerHTML=`<div class="panel"><span style="color:var(--red,#e5484d)">❌ ${r.live.error}</span></div>`; return; }
+        if(r.live&&r.live.text){ renderAIReport(r.live.text,"aiLive"); if(at) at.textContent="생성: "+new Date().toLocaleTimeString("ko-KR")+" · 오늘 진행 중 기준"; }
+        else { el.innerHTML='<div class="panel"><span style="color:var(--sub)">응답이 비어 있어요. 잠시 후 다시 시도해 주세요.</span></div>'; }
+      }catch(e){ el.innerHTML=`<div class="panel"><span style="color:var(--red,#e5484d)">❌ ${e.message}</span></div>`; }
     }
     function renderDailyLive(d){
       const nz=(v)=> (v==null) ? '<span style="color:var(--sub);font-size:15px">집계 중…</span>' : fmt(v);
@@ -1361,13 +1425,17 @@
     // ===== 인사이트 탭 =====
     let insTrendChart=null;
     // AI 리포트 → 2×2 카드 그리드
-    function renderAIReport(text){
-      const ar=document.getElementById("aiReport");
-      const META={"핵심 진단":["🩺","#378add","rgba(55,138,221,.08)"],"수치 분석":["📊","#8b5cf6","rgba(139,92,246,.08)"],"전망":["🔮","#f0a020","rgba(240,160,32,.08)"],"실행 제안":["✅","#19a974","rgba(25,169,116,.08)"]};
-      // 첫 [핵심 진단] 앞의 머리말(마크다운 제목 등) 제거
-      const cut=text.indexOf("[핵심 진단]");
-      const clean=cut>=0?text.slice(cut):text;
-      const parts=clean.split(/\[(핵심 진단|수치 분석|전망|실행 제안)\]/).map(x=>x.trim()).filter(Boolean);
+    function renderAIReport(text,targetId){
+      const ar=document.getElementById(targetId||"aiReport");
+      if(!ar) return;
+      const META={"핵심 진단":["🩺","#378add","rgba(55,138,221,.08)"],"수치 분석":["📊","#8b5cf6","rgba(139,92,246,.08)"],"전망":["🔮","#f0a020","rgba(240,160,32,.08)"],"실행 제안":["✅","#19a974","rgba(25,169,116,.08)"],
+        "지금 상황":["🟢","#378add","rgba(55,138,221,.08)"],"오늘 페이스":["⚡","#f0a020","rgba(240,160,32,.08)"],"지금 할 일":["✅","#19a974","rgba(25,169,116,.08)"]};
+      const SECS="핵심 진단|수치 분석|전망|실행 제안|지금 상황|오늘 페이스|지금 할 일";
+      const secRe=new RegExp("\\[("+SECS+")\\]");
+      // 첫 섹션 앞의 머리말(마크다운 제목 등) 제거
+      const cm=text.match(secRe);
+      const clean=cm?text.slice(text.indexOf(cm[0])):text;
+      const parts=clean.split(new RegExp("\\[("+SECS+")\\]","g")).map(x=>x.trim()).filter(Boolean);
       let cards="";
       if(parts.length<2){
         cards=`<div class="panel" style="grid-column:1/-1;white-space:pre-wrap;line-height:1.7">${text.replace(/[#*]/g,"")}</div>`;
@@ -1379,8 +1447,8 @@
           body=body.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");       // 이스케이프
           body=body.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--tx);font-size:14px">$1</b>'); // **요약** → 볼드
           body=body.replace(/[#*]/g,"");
-          // 실행 제안은 번호별 줄바꿈
-          if(name==="실행 제안") body=body.replace(/\s*(\d\.)\s*/g,"\n$1 ").trim();
+          // 실행 제안/지금 할 일은 번호별 줄바꿈
+          if(name==="실행 제안"||name==="지금 할 일") body=body.replace(/\s*(\d\.)\s*/g,"\n$1 ").trim();
           cards+=`<div style="border-top:4px solid ${m[1]};background:${m[2]};border-radius:12px;padding:14px 16px">
             <div style="font-weight:800;font-size:14px;margin-bottom:8px;color:${m[1]}">${m[0]} ${name}</div>
             <div style="white-space:pre-wrap;line-height:1.7;font-size:13.5px;color:var(--tx)">${body}</div></div>`;

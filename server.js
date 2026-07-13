@@ -1008,6 +1008,111 @@ app.get("/api/daily-live", async (req, res) => {
   }
 });
 
+// ===================================================================
+//  오늘(진행 중) 시간대별 실시간 — 오전/점심/오후 흐름 + 어제 같은시각 대비 페이스
+//   - 채널스냅샷(1시간마다 영상합계) 을 오늘 새벽 baseline 대비 차분 → 시간대별 누적곡선
+//   - 어제 같은 시각까지의 누적과 비교해 "지금 페이스가 어제보다 빠른지" 판단
+//   - 최근 영상은 시간별스냅샷에서 오늘 증가분을 뽑아 개별 반응 표시
+// ===================================================================
+// KST 기준 그날 0시부터 흐른 시간(시 단위, 소수)
+function kstHourOfDay(ts) {
+  const k = new Date(ts + 9 * 3600000);
+  return k.getUTCHours() + k.getUTCMinutes() / 60;
+}
+// 오늘 진행중 실시간 지표 계산(엔드포인트 + 실시간 AI 공용)
+async function gatherTodayLive() {
+    const sheets = getSheetsClient();
+    const nowTs = Date.now();
+    const todayK = kstDate(nowTs), ydayK = kstDate(nowTs - 24 * 3600000);
+    const nowHour = kstHourOfDay(nowTs);
+
+    // 현재 영상합계(즉시 갱신) — 오늘 지금까지 조회수 계산의 종점
+    let gainNow = null; try { gainNow = await fetchUploadsViewSum(); } catch (_) {}
+
+    // 채널스냅샷 읽기(영상합계 D열 우선)
+    let snaps = [];
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
+      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || x[2] || 0) }))
+        .filter((s) => s.ts && s.views > 0).sort((a, b) => a.ts - b.ts);
+    } catch (_) { /* 탭 없음 */ }
+
+    const daySnaps = (dk) => snaps.filter((s) => kstDate(s.ts) === dk);
+    const todaySnaps = daySnaps(todayK), ydaySnaps = daySnaps(ydayK);
+    const todayBase = todaySnaps.length ? todaySnaps[0].views : null;   // 오늘 새벽 baseline
+    const ydayBase = ydaySnaps.length ? ydaySnaps[0].views : null;      // 어제 새벽 baseline
+
+    // 오늘 시간대별 누적 조회수(baseline 대비) — 그래프용
+    const series = [];
+    if (todayBase != null) {
+      for (const s of todaySnaps) series.push({ h: Number(kstHourOfDay(s.ts).toFixed(2)), cum: Math.max(0, s.views - todayBase) });
+      if (gainNow != null) {
+        const last = series[series.length - 1];
+        const nowPoint = { h: Number(nowHour.toFixed(2)), cum: Math.max(0, gainNow - todayBase) };
+        if (!last || nowPoint.h - last.h > 0.05 || nowPoint.cum !== last.cum) series.push(nowPoint);
+      }
+    }
+    const todaySoFar = (gainNow != null && todayBase != null) ? Math.max(0, gainNow - todayBase) : (series.length ? series[series.length - 1].cum : null);
+
+    // 어제 같은 시각(현재 시각 이하)까지의 누적 — 페이스 비교 기준
+    let ydaySameTime = null;
+    if (ydayBase != null && ydaySnaps.length) {
+      const upto = ydaySnaps.filter((s) => kstHourOfDay(s.ts) <= nowHour);
+      const ref = upto.length ? upto[upto.length - 1] : ydaySnaps[ydaySnaps.length - 1];
+      ydaySameTime = Math.max(0, ref.views - ydayBase);
+    }
+    // 어제 하루 최종(= 오늘 첫 스냅샷 - 어제 첫 스냅샷) — 진행률 표시용
+    const ydayFull = (ydayBase != null && todaySnaps.length) ? Math.max(0, todaySnaps[0].views - ydayBase)
+      : (ydayBase != null && ydaySnaps.length ? Math.max(0, ydaySnaps[ydaySnaps.length - 1].views - ydayBase) : null);
+
+    // 페이스: 오늘 지금까지 vs 어제 같은 시각
+    let pacePct = null;
+    if (todaySoFar != null && ydaySameTime != null && ydaySameTime > 0) pacePct = Math.round((todaySoFar - ydaySameTime) / ydaySameTime * 100);
+
+    // 최근 영상 오늘 반응 (시간별스냅샷: 영상별 오늘 마지막-오늘 baseline)
+    let recentToday = [];
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:G` });
+      const byVid = {};
+      (r.data.values || []).forEach((x) => {
+        const id = String(x[1] || "").trim(); if (!id) return;
+        const ts = new Date(x[0]).getTime(); if (!ts) return;
+        (byVid[id] = byVid[id] || []).push({ ts, title: x[2] || "", views: Number(x[4] || 0) });
+      });
+      Object.keys(byVid).forEach((id) => {
+        const arr = byVid[id].sort((a, b) => a.ts - b.ts);
+        const today = arr.filter((s) => kstDate(s.ts) === todayK);
+        if (today.length >= 1) {
+          // baseline = 오늘 이전 마지막 스냅샷(없으면 오늘 첫 스냅샷)
+          const before = arr.filter((s) => s.ts < today[0].ts);
+          const base = before.length ? before[before.length - 1].views : today[0].views;
+          const latest = today[today.length - 1].views;
+          const delta = Math.max(0, latest - base);
+          recentToday.push({ id, title: today[today.length - 1].title || arr[0].title, todayViews: delta, total: latest });
+        }
+      });
+      recentToday.sort((a, b) => b.todayViews - a.todayViews);
+      recentToday = recentToday.slice(0, 6);
+    } catch (_) { /* 스냅샷 없음 */ }
+
+    return {
+      at: new Date(nowTs).toISOString(), todayK, nowHour: Number(nowHour.toFixed(2)),
+      hasBaseline: todayBase != null,
+      today: { soFar: todaySoFar, series },
+      yesterday: { sameTime: ydaySameTime, full: ydayFull },
+      pacePct,
+      recentToday,
+    };
+}
+app.get("/api/today-live", async (req, res) => {
+  try {
+    if (!CHANNEL_ID || !YOUTUBE_API_KEY) return res.status(400).json({ ok: false, error: "CHANNEL_ID/API_KEY 누락" });
+    res.json({ ok: true, ...(await gatherTodayLive()) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // 콘텐츠별 일일 성과 빌더 (일일 그래프 툴팁 + 게시물 탭 공용)
 //  - 일자별 "TOP 콘텐츠" 리포트(dimensions=video, 하루 범위) → 삭제/비공개 영상·게시물까지 잡힘. 10분 캐시.
 let dbvCache = { at: 0, data: null };
@@ -1216,7 +1321,7 @@ function buildRuleInsights(s) {
     if (mine3 > 0 && others.length >= 2) {
       const avg3 = others.reduce((a, b) => a + b, 0) / others.length;
       const pct = Math.round((mine3 - avg3) / avg3 * 100);
-      if (pct >= 20) out.push({ level: "good", title: `최신 영상 초반 성과 우수`, detail: `"${newest.title.slice(0, 25)}…" 첫 3일 ${mine3}회 — 채널 평균 대비 +${pct}%. 이 훅·주제 패턴 재사용 권장` });
+      if (pct >= 20) out.push({ level: "good", title: `최신 영상 초반 성과 우수`, detail: `"${newest.title.slice(0, 25)}…" 첫 3일 ${mine3}회 — 채널 평균 대비 +${pct}%. 이 주제·구성이 잘 통했어요(수익률·배수 숫자 표현은 빼고 재사용)` });
       else if (pct <= -30) out.push({ level: "warn", title: `최신 영상 초반 부진`, detail: `"${newest.title.slice(0, 25)}…" 첫 3일 ${mine3}회 — 채널 평균 대비 ${pct}%. 썸네일·제목 점검 필요` });
     }
     // 참여율
@@ -1224,6 +1329,13 @@ function buildRuleInsights(s) {
       const lr = newest.likes / newest.views * 100;
       if (lr >= 8) out.push({ level: "info", title: "최신 영상 좋아요 비율 높음", detail: `${lr.toFixed(1)}% — 우호 관객(구독자·배포망) 비중이 높다는 신호. 콜드 유입 확대 필요` });
     }
+  }
+  // 준법 점검 — 제목에 수익률(%)·배수(N배)가 들어간 최근 영상 감지(썸네일·제목·카피 사용 금지)
+  const complRe = /([+\-]?\d+\s*%)|(\d+\s*배)/;
+  const flagged = (s.videos || []).filter((v) => complRe.test(v.title || ""));
+  if (flagged.length) {
+    const list = flagged.slice(0, 3).map((v) => `"${v.title.slice(0, 24)}…"`).join(" · ");
+    out.unshift({ level: "warn", title: `준법 점검 필요 — 제목에 수익률·배수 표현 (${flagged.length}건)`, detail: `${list} — 수익률/배수/수익금액 숫자는 제목·썸네일·카피에 쓸 수 없어요. 표현 수정 또는 준법 확인 권장` });
   }
   if (!out.length) out.push({ level: "info", title: "특이사항 없음", detail: "최근 데이터에서 큰 변동이 감지되지 않았어요" });
   return out;
@@ -1333,6 +1445,80 @@ async function runAIReport(force) {
   return { ok: true, text };
 }
 
+// ── 실시간(지금 시각) AI 피드백 ────────────────────────────────
+//   - runAIReport와 달리 "오늘(진행 중)" 데이터를 포함하고, 데일리 캐시를 오염시키지 않음
+//   - 남용 방지용 3분 캐시만. 오늘 데이터는 잠정임을 강하게 프레이밍.
+let aiLiveCache = { at: 0, text: null };
+async function runAIReportLive(force) {
+  if (!ANTHROPIC_API_KEY) return { ok: false, error: "ANTHROPIC_API_KEY 미설정" };
+  if (!force && aiLiveCache.text && Date.now() - aiLiveCache.at < 3 * 60 * 1000) return { ok: true, cached: true, text: aiLiveCache.text };
+  const s = await gatherStats();
+  let live = null; try { live = await gatherTodayLive(); } catch (_) {}
+  const todayK = kstDate(Date.now());
+  const nowHHMM = new Date(Date.now() + 9 * 3600000).toISOString().slice(11, 16); // KST HH:MM
+  // 최근 7일 업로드 영상 각각(러닝 리포트와 동일 소스)
+  const recentUploads = s.videos
+    .filter((v) => (Date.now() - new Date(v.publishedAt).getTime()) / 86400000 <= 7.5)
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+    .map((v) => ({ 제목: v.title.slice(0, 30), 형태: v.durSec > 180 ? "롱폼" : "숏폼", 게시일: v.publishedAt.slice(0, 10), 누적조회: v.views, 좋아요: v.likes, 댓글: v.comments }));
+  const summary = {
+    기준: `${todayK} ${nowHHMM} (KST, 진행 중)`, 구독자: s.subs,
+    오늘_진행중: live ? {
+      지금까지_조회수: live.today.soFar,
+      어제_같은시각_조회수: live.yesterday.sameTime,
+      어제_하루_최종: live.yesterday.full,
+      페이스_어제같은시각대비_퍼센트: live.pacePct,
+      경과시간_시: live.nowHour,
+      스냅샷baseline_있음: live.hasBaseline,
+      오늘_영상별_반응: (live.recentToday || []).map((r) => ({ 제목: (r.title || "").slice(0, 30), 오늘조회: r.todayViews, 누적: r.total })),
+    } : "오늘 스냅샷 없음(집계 대기)",
+    최근7일내_업로드영상: recentUploads,
+    최근7일_일별합계: s.daily.filter((d) => d.date < todayK).slice(-7).map((d) => ({ 날짜: d.date.slice(5), 영상: d.video, 상태: d.잠정 ? "잠정" : "확정" })),
+    최신롱폼_트래픽소스: s.longform ? { 제목: s.longform.title.slice(0, 30), 트래픽소스: s.lfTraffic } : null,
+    채널_트래픽소스_14일: s.traffic,
+  };
+  const body = {
+    model: "claude-sonnet-5",
+    max_tokens: 1600,
+    thinking: { type: "disabled" },
+    system: `너는 유진투자선물(금융사, 미국주식옵션 교육 채널)의 유튜브 데이터 분석가다. 지금은 ${todayK} ${nowHHMM}(KST)이고, "오늘 하루가 진행 중인 시점"에서 지금까지 쌓인 데이터로 실시간 브리핑을 한다.
+
+형식 규칙:
+1. 섹션은 정확히 [지금 상황] [오늘 페이스] [지금 할 일] 3개의 대괄호 헤더로 구분.
+2. 각 섹션 첫 줄에 한 줄 요약을 **별표 두 개로 감싸서** 쓰고, 한 줄 띄운 뒤 설명 문단.
+3. 볼드 요약과 [지금 할 일]의 번호(1. 2.) 외에는 마크다운/이모지 금지.
+4. 전체 700자 이내.
+5. 말투: 옆에서 말해주듯 편한 존댓말(~했어요, ~네요). 딱딱한 전문용어 금지.
+
+내용 규칙:
+6. 이 데이터는 "오늘 진행 중"이라 잠정이다. 반드시 "지금 ${nowHHMM} 기준"임을 밝히고, 하루가 끝나면 달라질 수 있음을 전제로 말하라. 이른 시간이면 "아직 초반이라 단정은 일러요" 같은 톤.
+7. [오늘 페이스]는 "지금까지_조회수 vs 어제_같은시각_조회수"를 핵심으로: 어제 같은 시각보다 빠른지/느린지와 그 의미. 어제_하루_최종과 비교해 진행률도 언급.
+8. "오늘_영상별_반응"에 값이 있으면 어떤 영상이 오늘 조회를 끌고 있는지 실제 제목(큰따옴표, 앞 15자)으로 짚어라.
+9. 스냅샷baseline_있음이 false거나 데이터가 비면 "아직 오늘 실시간 집계가 준비 중"이라고 솔직히 말하고 무리한 해석 금지.
+10. [지금 할 일]은 번호 1~2개, 한 문장씩. "무엇을 + (왜)". 지금 이 시각에 실제로 할 수 있는 것(예: 반응 좋은 영상 커뮤니티 공유, 댓글 유도 고정댓글)만.
+11. 준법: 이 채널은 수익률·배수·수익금액 숫자를 마케팅 문구(제목·썸네일·카피)에 쓸 수 없다. 어떤 제안에도 그런 표현을 권하지 마라.
+12. 데이터에 없는 것을 지어내지 마라.`,
+    messages: [{ role: "user", content: "실시간 데이터:\n" + JSON.stringify(summary, null, 1) }],
+  };
+  const callClaude = async (b) => {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify(b),
+    });
+    const j = await r.json();
+    if (!r.ok) return { err: j.error?.message || ("HTTP " + r.status) };
+    const text = (j.content || []).filter((c) => c.type === "text").map((c) => c.text || "").join("\n").trim();
+    if (!text) return { err: `빈 응답 (stop_reason: ${j.stop_reason})` };
+    return { text };
+  };
+  let out = await callClaude(body);
+  if (out.err) { const fb = { ...body, model: "claude-haiku-4-5-20251001", max_tokens: 1200 }; delete fb.thinking; out = await callClaude(fb); }
+  if (out.err) return { ok: false, error: out.err };
+  aiLiveCache = { at: Date.now(), text: out.text };
+  return { ok: true, text: out.text, at: aiLiveCache.at };
+}
+
 // 인사이트 조회 (규칙=10분 캐시, AI=오늘자 캐시/시트)
 function insightVisuals(s) {
   const todayK = kstDate(Date.now());
@@ -1359,9 +1545,14 @@ app.get("/api/insights", async (req, res) => {
     res.json({ ok: true, rules: ruleCache.data, vis: ruleCache.vis || null, ai: aiCache.text ? { date: aiCache.date, text: aiCache.text } : null, aiEnabled: !!ANTHROPIC_API_KEY });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-// 수동 실행 (규칙 새로고침 / body.ai=true면 AI 강제 실행)
+// 수동 실행 (규칙 새로고침 / body.ai=true면 데일리 AI / body.live=true면 실시간 AI)
 app.post("/api/insights/run", async (req, res) => {
   try {
+    // 실시간 AI만 요청된 경우: 규칙 재계산 없이 빠르게 실시간 리포트만
+    if (req.body && req.body.live) {
+      const r = await runAIReportLive(true);
+      return res.json({ ok: true, live: r.ok ? { at: r.at || Date.now(), text: aiLiveCache.text } : { error: r.error } });
+    }
     const s = await gatherStats();
     ruleCache = { at: Date.now(), data: buildRuleInsights(s), vis: insightVisuals(s) };
     let ai = null;
