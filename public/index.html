@@ -1364,7 +1364,10 @@
     function renderAIReport(text){
       const ar=document.getElementById("aiReport");
       const META={"핵심 진단":["🩺","#378add","rgba(55,138,221,.08)"],"수치 분석":["📊","#8b5cf6","rgba(139,92,246,.08)"],"전망":["🔮","#f0a020","rgba(240,160,32,.08)"],"실행 제안":["✅","#19a974","rgba(25,169,116,.08)"]};
-      const parts=text.split(/\[(핵심 진단|수치 분석|전망|실행 제안)\]/).map(x=>x.trim()).filter(Boolean);
+      // 첫 [핵심 진단] 앞의 머리말(마크다운 제목 등) 제거
+      const cut=text.indexOf("[핵심 진단]");
+      const clean=cut>=0?text.slice(cut):text;
+      const parts=clean.split(/\[(핵심 진단|수치 분석|전망|실행 제안)\]/).map(x=>x.trim()).filter(Boolean);
       let cards="";
       if(parts.length<2){
         cards=`<div class="panel" style="grid-column:1/-1;white-space:pre-wrap;line-height:1.7">${text.replace(/[#*]/g,"")}</div>`;
