@@ -1370,9 +1370,13 @@
         cards=`<div class="panel" style="grid-column:1/-1;white-space:pre-wrap;line-height:1.7">${text.replace(/[#*]/g,"")}</div>`;
       }else{
         for(let i=0;i<parts.length-1;i+=2){
-          const name=parts[i]; let body=(parts[i+1]||"").replace(/[#*]/g,"").trim();
+          const name=parts[i];
           const m=META[name]||["📌","var(--sub)","transparent"];
-          // 실행 제안은 번호별 줄바꿈 강조
+          let body=(parts[i+1]||"").trim();
+          body=body.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");       // 이스케이프
+          body=body.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--tx);font-size:14px">$1</b>'); // **요약** → 볼드
+          body=body.replace(/[#*]/g,"");
+          // 실행 제안은 번호별 줄바꿈
           if(name==="실행 제안") body=body.replace(/\s*(\d\.)\s*/g,"\n$1 ").trim();
           cards+=`<div style="border-top:4px solid ${m[1]};background:${m[2]};border-radius:12px;padding:14px 16px">
             <div style="font-weight:800;font-size:14px;margin-bottom:8px;color:${m[1]}">${m[0]} ${name}</div>
