@@ -379,14 +379,20 @@
     </div>
 
     <div class="sec" id="sec-insight" style="display:none">
-    <h2>💡 인사이트 <span class="kpi-badge">규칙 분석 실시간 · AI 리포트 매일 09시(전날까지 데이터 기준)</span>
-      <button onclick="refreshInsights()" style="margin-left:auto;padding:7px 14px;font-size:13px">🔄 분석 새로고침</button>
+    <h2>💡 인사이트 <span class="kpi-badge" id="aiDate">규칙 분석 실시간 · AI 리포트 매일 09시</span>
+      <button onclick="refreshInsights()" style="margin-left:auto;padding:7px 14px;font-size:13px">🔄 새로고침</button>
       <button onclick="runAINow()" style="margin-left:8px;padding:7px 14px;font-size:13px">🤖 AI 리포트 지금 생성</button>
     </h2>
-    <h2 style="font-size:15px">🤖 AI 데일리 리포트 <span class="kpi-badge" id="aiDate"></span></h2>
-    <div class="panel"><div id="aiReport" style="white-space:pre-wrap;line-height:1.65;font-size:14px;color:var(--tx)">불러오는 중…</div></div>
-    <h2 style="font-size:15px;margin-top:20px">📌 자동 감지 발견사항</h2>
-    <div id="ruleCards" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="aiReport" style="margin-top:6px">불러오는 중…</div>
+
+    <h2 style="font-size:15px;margin-top:22px">📈 최근 14일 조회수 추이 <span class="kpi-badge">파랑=영상 / 보라=게시물 · 옅은색=잠정</span></h2>
+    <div class="panel"><div class="chart-box"><canvas id="insTrend"></canvas></div></div>
+
+    <h2 style="font-size:15px;margin-top:22px">🎬 최근 콘텐츠 성과</h2>
+    <div id="insContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px"></div>
+
+    <h2 style="font-size:15px;margin-top:22px">📌 자동 감지 발견사항</h2>
+    <div id="ruleCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
     </div>
 
     <div class="sec" id="sec-posts" style="display:none">
@@ -1309,15 +1315,15 @@
         {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
         {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
       ]},
-      {cat:"insight", label:"💡 인사이트", subs:[
-        {id:"sec-insight", label:"AI 분석", secs:["sec-insight"], draw:()=>loadInsights()},
-      ]},
       {cat:"posts", label:"📝 게시물", subs:[
         {id:"sec-posts", label:"게시물 성과", secs:["sec-posts"], draw:()=>loadPosts()},
       ]},
       {cat:"kpi", label:"🎯 KPI", subs:[
         {id:"sec-cum",     label:"누적 성과·성장", secs:["sec-cum","sec-growth"], draw:()=>{renderCumulative();drawGrowth();}},
         {id:"sec-compare", label:"과거 vs 현재",   secs:["sec-compare"],          draw:()=>{ if(cmpData)renderCompare(); }},
+      ]},
+      {cat:"insight", label:"💡 인사이트", subs:[
+        {id:"sec-insight", label:"AI 분석", secs:["sec-insight"], draw:()=>loadInsights()},
       ]},
     ];
     const ALL_SUBS=NAV.flatMap(c=>c.subs);
@@ -1353,38 +1359,76 @@
     }
 
     // ===== 인사이트 탭 =====
-    // AI 리포트 텍스트를 섹션 카드로 렌더링
+    let insTrendChart=null;
+    // AI 리포트 → 2×2 카드 그리드
     function renderAIReport(text){
       const ar=document.getElementById("aiReport");
-      const META={"핵심 진단":["🩺","var(--blue)"],"수치 분석":["📊","#8b5cf6"],"전망":["🔮","#f0a020"],"실행 제안":["✅","#19a974"]};
+      const META={"핵심 진단":["🩺","#378add","rgba(55,138,221,.08)"],"수치 분석":["📊","#8b5cf6","rgba(139,92,246,.08)"],"전망":["🔮","#f0a020","rgba(240,160,32,.08)"],"실행 제안":["✅","#19a974","rgba(25,169,116,.08)"]};
       const parts=text.split(/\[(핵심 진단|수치 분석|전망|실행 제안)\]/).map(x=>x.trim()).filter(Boolean);
-      let html='<div style="color:var(--sub);font-size:12px;margin-bottom:12px">※ 실시간 집계 기준이라 아래 수치는 이후 변동될 수 있어요.</div>';
-      if(parts.length<2){ // 섹션 구분 실패 시 원문 그대로
-        html+=`<div style="white-space:pre-wrap;line-height:1.65">${text.replace(/[#*]/g,"")}</div>`;
+      let cards="";
+      if(parts.length<2){
+        cards=`<div class="panel" style="grid-column:1/-1;white-space:pre-wrap;line-height:1.7">${text.replace(/[#*]/g,"")}</div>`;
       }else{
         for(let i=0;i<parts.length-1;i+=2){
-          const name=parts[i], body=(parts[i+1]||"").replace(/[#*]/g,"");
-          const m=META[name]||["📌","var(--sub)"];
-          html+=`<div style="border-left:3px solid ${m[1]};padding:10px 14px;margin-bottom:12px;background:var(--panel2,rgba(128,128,128,.05));border-radius:0 10px 10px 0">
-            <div style="font-weight:800;font-size:13.5px;margin-bottom:6px">${m[0]} ${name}</div>
-            <div style="white-space:pre-wrap;line-height:1.65;font-size:13.5px;color:var(--tx)">${body}</div></div>`;
+          const name=parts[i]; let body=(parts[i+1]||"").replace(/[#*]/g,"").trim();
+          const m=META[name]||["📌","var(--sub)","transparent"];
+          // 실행 제안은 번호별 줄바꿈 강조
+          if(name==="실행 제안") body=body.replace(/\s*(\d\.)\s*/g,"\n$1 ").trim();
+          cards+=`<div style="border-top:4px solid ${m[1]};background:${m[2]};border-radius:12px;padding:14px 16px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:8px;color:${m[1]}">${m[0]} ${name}</div>
+            <div style="white-space:pre-wrap;line-height:1.7;font-size:13.5px;color:var(--tx)">${body}</div></div>`;
         }
       }
-      ar.innerHTML=html;
+      ar.innerHTML=`<div style="color:var(--sub);font-size:12px;margin-bottom:10px">※ 실시간 집계 기준이라 수치는 이후 변동될 수 있어요.</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${cards}</div>`;
+    }
+    function renderInsTrend(trend){
+      if(!trend||!trend.length) return;
+      const labels=trend.map(t=>t.date.slice(5));
+      const vCol=trend.map(t=>t.prov?"rgba(49,130,246,.45)":"#3182f6");
+      const pCol=trend.map(t=>t.prov?"rgba(139,92,246,.35)":"#8b5cf6");
+      if(insTrendChart)insTrendChart.destroy();
+      const ctx=document.getElementById("insTrend"); if(!ctx)return;
+      insTrendChart=new Chart(ctx,{type:"bar",
+        data:{labels,datasets:[
+          {label:"영상",data:trend.map(t=>t.video),backgroundColor:vCol,borderRadius:5,maxBarThickness:26},
+          {label:"게시물",data:trend.map(t=>t.post==null?0:t.post),backgroundColor:pCol,borderRadius:5,maxBarThickness:26},
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:tickCol(),boxWidth:12}},
+          tooltip:{callbacks:{label:(c)=>`${c.dataset.label} ${c.parsed.y.toLocaleString("ko-KR")}회${trend[c.dataIndex].prov?" (잠정)":""}`}}},
+          scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
+    }
+    function renderInsContent(content){
+      const el=document.getElementById("insContent"); if(!el)return;
+      el.innerHTML=(content||[]).map(v=>{
+        const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.published||'').slice(2)}')`;
+        const badge=v.form==="롱폼"?'#378add':'#f0a020';
+        return `<div class="panel" style="padding:0;overflow:hidden;cursor:pointer" onclick="${oc}">
+          <div style="position:relative"><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover">
+            <span style="position:absolute;top:6px;left:6px;background:${badge};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">${v.form}</span></div>
+          <div style="padding:10px 12px">
+            <div style="font-size:12.5px;font-weight:600;line-height:1.35;height:2.7em;overflow:hidden">${v.title}</div>
+            <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:var(--sub)">
+              <span>👁 <b style="color:var(--tx)">${fmt(v.views)}</b></span>
+              <span>👍 ${fmt(v.likes)}</span><span>💬 ${fmt(v.comments)}</span></div>
+            <div style="font-size:10px;color:var(--sub);margin-top:4px">${v.published}</div>
+          </div></div>`;
+      }).join("")||'<div class="empty">최근 영상이 없어요.</div>';
     }
     async function loadInsights(){
       const rc=document.getElementById("ruleCards"), ar=document.getElementById("aiReport"), ad=document.getElementById("aiDate");
       try{
         const r=await fetch("/api/insights").then(x=>x.json());
         if(!r.ok) throw new Error(r.error||"불러오기 실패");
-        if(r.ai&&r.ai.text){ renderAIReport(r.ai.text); ad.textContent="기준: "+r.ai.date+" (어제까지 데이터)"; }
-        else if(!r.aiEnabled){ ar.innerHTML='<span style="color:var(--sub)">AI 리포트 비활성 — Railway 환경변수에 <b>ANTHROPIC_API_KEY</b>를 등록하면 매일 09시 자동 생성돼요.</span>'; }
-        else { ar.innerHTML='<span style="color:var(--sub)">아직 생성된 리포트가 없어요. 내일 09시에 첫 리포트가 생성됩니다.</span>'; }
+        if(r.ai&&r.ai.text){ renderAIReport(r.ai.text); ad.textContent="AI 리포트 기준: "+r.ai.date+" (어제까지)"; }
+        else if(!r.aiEnabled){ ar.innerHTML='<div class="panel" style="color:var(--sub)">AI 리포트 비활성 — Railway 환경변수에 <b>ANTHROPIC_API_KEY</b> 등록 시 매일 09시 자동 생성돼요.</div>'; }
+        else { ar.innerHTML='<div class="panel" style="color:var(--sub)">아직 생성된 리포트가 없어요. 🤖 버튼으로 지금 생성하거나 내일 09시에 자동 생성됩니다.</div>'; }
+        if(r.vis){ renderInsTrend(r.vis.trend); renderInsContent(r.vis.content); }
         const ic={good:"🟢",warn:"🔴",info:"🔵"};
         rc.innerHTML=(r.rules||[]).map(x=>`
-          <div class="panel" style="padding:14px 18px">
-            <div style="font-weight:700;font-size:14px">${ic[x.level]||"🔵"} ${x.title}</div>
-            <div style="color:var(--sub);font-size:13px;margin-top:4px">${x.detail}</div>
+          <div class="panel" style="padding:13px 16px">
+            <div style="font-weight:700;font-size:13.5px">${ic[x.level]||"🔵"} ${x.title}</div>
+            <div style="color:var(--sub);font-size:12.5px;margin-top:4px;line-height:1.5">${x.detail}</div>
           </div>`).join("")||'<div class="empty">발견사항 없음</div>';
       }catch(e){ if(rc)rc.innerHTML=`<div class="empty">❌ ${e.message}</div>`; }
     }

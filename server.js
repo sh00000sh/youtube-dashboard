@@ -1280,7 +1280,9 @@ async function runAIReport(force) {
 6. 전망: 최근 일별 추이를 근거로 최신 롱폼과 채널 전체의 7일 후·30일 후 예상 누적 조회수를 범위로 제시하라. 반드시 "추정치이며 변동 가능"임을 명시.
 7. "꾸준히 업로드하라", "콘텐츠를 다양화하라", "숏폼과 롱폼을 구분하라" 같은 일반론 금지. 이 채널 데이터에서만 나올 수 있는 구체적 제안만.
 8. 준법: 이 채널은 수익률·배수 숫자를 마케팅 문구에 쓸 수 없다. 제안에 반영하라.
-9. 데이터에 없는 것을 지어내지 마라.`,
+9. 데이터에 없는 것을 지어내지 마라.
+10. 영상을 지칭할 때 "숏폼", "롱폼" 대신 실제 제목(앞 15자 정도)을 큰따옴표로 써라. 예: "한 달만에 저세상 가버린…" 영상.
+11. [실행 제안]은 번호(1. 2. 3.)로 3개. 각 항목은 한 문장으로 끝내라. 한 문장은 "무엇을 하라" + 괄호 안에 "왜(짧은 근거)"만. 전문용어·긴 수식어·여러 절을 겹친 문장 금지. 중학생이 한 번에 이해할 수 있게 쉽고 짧게.`,
     messages: [{ role: "user", content: "채널 데이터:\n" + JSON.stringify(summary, null, 1) }],
   };
   const callClaude = async (b) => {
@@ -1316,11 +1318,19 @@ async function runAIReport(force) {
 }
 
 // 인사이트 조회 (규칙=10분 캐시, AI=오늘자 캐시/시트)
+function insightVisuals(s) {
+  const todayK = kstDate(Date.now());
+  const trend = s.daily.filter((d) => d.date <= todayK).slice(-14)
+    .map((d) => ({ date: d.date, video: d.video, post: d.post, prov: !!d.잠정 }));
+  const content = [...s.videos].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)).slice(0, 8)
+    .map((v) => ({ id: v.id, title: v.title, form: v.durSec > 180 ? "롱폼" : "숏폼", views: v.views, likes: v.likes, comments: v.comments, published: v.publishedAt.slice(0, 10) }));
+  return { trend, content };
+}
 app.get("/api/insights", async (req, res) => {
   try {
     if (!ruleCache.data || Date.now() - ruleCache.at > 10 * 60 * 1000) {
       const s = await gatherStats();
-      ruleCache = { at: Date.now(), data: buildRuleInsights(s) };
+      ruleCache = { at: Date.now(), data: buildRuleInsights(s), vis: insightVisuals(s) };
     }
     if (!aiCache.text) { // 서버 재시작 후 시트에서 최신 리포트 복구
       try {
@@ -1330,17 +1340,17 @@ app.get("/api/insights", async (req, res) => {
         if (rows.length) { const lastRow = rows[rows.length - 1]; aiCache = { date: lastRow[0], text: lastRow[1] }; }
       } catch (_) {}
     }
-    res.json({ ok: true, rules: ruleCache.data, ai: aiCache.text ? { date: aiCache.date, text: aiCache.text } : null, aiEnabled: !!ANTHROPIC_API_KEY });
+    res.json({ ok: true, rules: ruleCache.data, vis: ruleCache.vis || null, ai: aiCache.text ? { date: aiCache.date, text: aiCache.text } : null, aiEnabled: !!ANTHROPIC_API_KEY });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // 수동 실행 (규칙 새로고침 / body.ai=true면 AI 강제 실행)
 app.post("/api/insights/run", async (req, res) => {
   try {
     const s = await gatherStats();
-    ruleCache = { at: Date.now(), data: buildRuleInsights(s) };
+    ruleCache = { at: Date.now(), data: buildRuleInsights(s), vis: insightVisuals(s) };
     let ai = null;
     if (req.body && req.body.ai) { const r = await runAIReport(true); ai = r.ok ? { date: aiCache.date, text: aiCache.text } : { error: r.error }; }
-    res.json({ ok: true, rules: ruleCache.data, ai });
+    res.json({ ok: true, rules: ruleCache.data, vis: ruleCache.vis, ai });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
