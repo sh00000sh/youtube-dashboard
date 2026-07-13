@@ -1256,7 +1256,8 @@ async function runAIReport(force) {
   });
   const j = await r.json();
   if (!r.ok) return { ok: false, error: j.error?.message || ("HTTP " + r.status) };
-  const text = (j.content || []).map((c) => c.text || "").join("\n").trim();
+  const text = (j.content || []).filter((c) => c.type === "text").map((c) => c.text || "").join("\n").trim();
+  if (!text) return { ok: false, error: `빈 응답 (stop_reason: ${j.stop_reason}, blocks: ${(j.content || []).map((c) => c.type).join(",") || "없음"})` };
   aiCache = { date: todayK, text };
   try {
     const sheets = getSheetsClient();
