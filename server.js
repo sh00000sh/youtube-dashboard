@@ -1186,11 +1186,13 @@ function buildRuleInsights(s) {
       const diff = Math.round((last.video - avg) / avg * 100);
       const drivers = (s.byDay[last.date] || []).filter((x) => !x.isPost).slice(0, 2)
         .map((x) => `"${x.title.slice(0, 16)}…" ${x.views}회`).join(" · ");
-      if (diff >= 30) out.push({ level: "good", title: `영상 조회수 급증 (${last.date})`, detail: `영상 전체 합계 ${Math.round(avg)}→${last.video}회 (+${diff}%) · 주요 기여: ${drivers}` });
-      else if (diff <= -30) out.push({ level: "warn", title: `영상 조회수 하락 (${last.date})`, detail: `영상 전체 합계 ${Math.round(avg)}→${last.video}회 (${diff}%) · 상위: ${drivers}` });
+      const drvTxt = drivers ? ` · 주요 기여: ${drivers}` : (last.잠정 ? " · 잠정치(영상별 내역 확정 전)" : "");
+      if (diff >= 30) out.push({ level: "good", title: `영상 조회수 급증 (${last.date})`, detail: `영상 전체 합계 ${Math.round(avg)}→${last.video}회 (+${diff}%)${drvTxt}` });
+      else if (diff <= -30) out.push({ level: "warn", title: `영상 조회수 하락 (${last.date})`, detail: `영상 전체 합계 ${Math.round(avg)}→${last.video}회 (${diff}%)${drvTxt}` });
     }
-    const pAvg = prev7.reduce((a, d) => a + d.post, 0) / prev7.length;
-    if (pAvg > 5 && last.post < pAvg * 0.4) out.push({ level: "warn", title: "게시물 조회 급감", detail: `시황 게시물 조회가 평균 ${Math.round(pAvg)}회 → ${last.post}회. 게시 누락 여부 확인` });
+    const postDays = prev7.filter((d) => d.post != null);
+    const pAvg = postDays.length ? postDays.reduce((a, d) => a + d.post, 0) / postDays.length : 0;
+    if (last.post != null && pAvg > 5 && last.post < pAvg * 0.4) out.push({ level: "warn", title: "게시물 조회 급감", detail: `시황 게시물 조회가 평균 ${Math.round(pAvg)}회 → ${last.post}회. 게시 누락 여부 확인` });
   }
   // 업로드 공백
   if (s.videos.length) {
