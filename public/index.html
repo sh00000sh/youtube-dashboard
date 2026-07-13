@@ -1398,15 +1398,19 @@
         const rows=lfDailyCache[id];
         const maxUpTo=(h)=>{ let m=0; rows.forEach(x=>{ if(x.hours<=h&&x.views>m)m=x.views; }); return m; };
         const lastH=Math.max(...rows.map(x=>x.hours));
-        const parts=[];
+        const doneDays=Math.min(7,Math.floor(lastH/24));
+        // 일별 상세는 툴팁(마우스 오버)으로
+        const detail=[];
         for(let d=1;d<=7;d++){
-          const s=(d-1)*24, e=d*24;
-          if(lastH<s) break;
-          const dv=maxUpTo(e)-maxUpTo(s);
-          const cur=lastH<e;
-          parts.push(`<span style="${cur?'color:var(--blue);font-weight:700':''}">D${d} ${fmt(Math.max(0,dv))}${cur?'…':''}</span>`);
+          const s=(d-1)*24,e=d*24; if(lastH<s)break;
+          detail.push(`D${d} ${fmt(Math.max(0,maxUpTo(e)-maxUpTo(s)))}${lastH<e?"(진행중)":""}`);
         }
-        el.innerHTML=parts.join(' <span style="color:var(--line)">|</span> ')||'<span class="muted">수집 대기</span>';
+        if(doneDays>=1){
+          const avg=Math.round(maxUpTo(doneDays*24)/doneDays);
+          el.innerHTML=`<span style="font-weight:700" title="${detail.join(' · ')}">${fmt(avg)}회/일</span><span class="muted" style="font-size:10px" title="${detail.join(' · ')}"> · D${doneDays}까지 기준</span>`;
+        }else{
+          el.innerHTML=`<span style="font-weight:700" title="${detail.join(' · ')}">${fmt(maxUpTo(24))}회</span><span class="muted" style="font-size:10px"> · 첫날 진행 중</span>`;
+        }
       }catch(_){ el.innerHTML='<span class="muted">-</span>'; }
     }
 
