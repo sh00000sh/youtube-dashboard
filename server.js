@@ -1129,6 +1129,27 @@ async function gatherStats() {
       }));
     }
   }
+  // 최근 미확정일 보강: 채널스냅샷 기반 잠정 일별(영상) 조회수 — Analytics 2~3일 지연 커버
+  try {
+    const sheets = getSheetsClient();
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
+    const snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), views: Number(x[3] || x[2] || 0) }))
+      .filter((x) => x.ts && x.views > 0).sort((a, b) => a.ts - b.ts);
+    const firstOfDay = {}; snaps.forEach((sn) => { const dk = kstDate(sn.ts); if (firstOfDay[dk] == null) firstOfDay[dk] = sn.views; });
+    const dks = Object.keys(firstOfDay).sort();
+    const lastConfirmed = daily.length ? daily[daily.length - 1].date : null;
+    const todayK0 = kstDate(Date.now());
+    for (let i = 0; i < dks.length; i++) {
+      const d = dks[i];
+      if (lastConfirmed && d <= lastConfirmed) continue;
+      if (d >= todayK0) continue; // 오늘(진행 중)은 제외
+      const next = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]] : null;
+      if (next == null) continue;
+      daily.push({ date: d, video: Math.max(0, next - firstOfDay[d]), post: null, 잠정: true });
+    }
+    daily.sort((a, b) => (a.date < b.date ? -1 : 1));
+  } catch (_) { /* 스냅샷 없으면 확정분만으로 진행 */ }
+
   // 트래픽 소스 (최근 14일 채널 전체 + 최신 롱폼 개별)
   const SRC = { YT_SEARCH: "유튜브 검색", RELATED_VIDEO: "추천 영상", SUBSCRIBER: "홈/구독 피드", YT_CHANNEL: "채널 페이지", EXT_URL: "외부 링크", NOTIFICATION: "알림", SHORTS: "쇼츠 피드", PLAYLIST: "재생목록", NO_LINK_OTHER: "직접/기타", END_SCREEN: "끝화면", YT_OTHER_PAGE: "기타 유튜브", ADVERTISING: "광고" };
   let traffic = [], lfTraffic = [], longform = null;
@@ -1226,14 +1247,14 @@ async function runAIReport(force) {
   const yD = conf2[conf2.length - 1] || null, pD = conf2[conf2.length - 2] || null;
   const pct = (a, b) => (b > 0 ? Math.round((a - b) / b * 100) + "%" : "-");
   const 전일비교 = (yD && pD) ? {
-    어제: { 날짜: yD.date, 영상조회: yD.video, 게시물조회: yD.post },
-    그제: { 날짜: pD.date, 영상조회: pD.video, 게시물조회: pD.post },
-    증감: { 영상: `${yD.video - pD.video >= 0 ? "+" : ""}${yD.video - pD.video}회 (${pct(yD.video, pD.video)})`, 게시물: `${yD.post - pD.post >= 0 ? "+" : ""}${yD.post - pD.post}회 (${pct(yD.post, pD.post)})` },
+    어제: { 날짜: yD.date, 영상조회: yD.video, 게시물조회: yD.post == null ? "확정 전" : yD.post, 상태: yD.잠정 ? "잠정치(스냅샷 기반)" : "확정" },
+    그제: { 날짜: pD.date, 영상조회: pD.video, 게시물조회: pD.post == null ? "확정 전" : pD.post, 상태: pD.잠정 ? "잠정치(스냅샷 기반)" : "확정" },
+    증감_영상: `${yD.video - pD.video >= 0 ? "+" : ""}${yD.video - pD.video}회 (${pct(yD.video, pD.video)})`,
   } : null;
   const summary = {
     기준일: todayK, 구독자: s.subs,
     전일비교,
-    최근7일_일별합계: s.daily.filter((d) => d.date < todayK).slice(-7).map((d) => ({ 날짜: d.date.slice(5), 영상: d.video, 게시물: d.post })),
+    최근7일_일별합계: s.daily.filter((d) => d.date < todayK).slice(-7).map((d) => ({ 날짜: d.date.slice(5), 영상: d.video, 게시물: d.post == null ? "확정 전" : d.post, 상태: d.잠정 ? "잠정" : "확정" })),
     주요콘텐츠_최근7일_일별추이: topContents,
     최신롱폼: s.longform ? { 제목: s.longform.title, 게시일: s.longform.publishedAt.slice(0, 10), 누적조회: s.longform.views, 좋아요: s.longform.likes, 트래픽소스: s.lfTraffic } : null,
     채널_트래픽소스_14일: s.traffic,
@@ -1252,7 +1273,7 @@ async function runAIReport(force) {
 3. 전체 1,000자 이내. 문장은 짧고 담백하게.
 
 내용 규칙:
-4. [수치 분석]은 반드시 "전일비교" 데이터로 시작하라: 어제가 그제 대비 얼마나(증감량·증감률) 변했는지, 그리고 그 변화가 무엇을 의미하는지(예: 쇼츠 유입 파도 소진, 신규 업로드 효과, 자연 감쇠 등) 해석까지. 그다음 최근 3일(어제 포함)의 일별 수치를 각각 언급하라. 급증한 날만 다루고 나머지를 생략하지 마라.
+4. [수치 분석]은 반드시 "전일비교" 데이터로 시작하라: 어제가 그제 대비 얼마나(증감량·증감률) 변했는지, 그리고 그 변화가 무엇을 의미하는지(예: 쇼츠 유입 파도 소진, 신규 업로드 효과, 자연 감쇠 등) 해석까지. 그다음 최근 3일(어제 포함)의 일별 수치를 각각 언급하라. 급증한 날만 다루고 나머지를 생략하지 마라. 데이터에 "잠정"으로 표시된 날은 실시간 스냅샷 기반 잠정치이므로 확정 시 수치가 달라질 수 있음을 언급하고, 게시물 조회가 "확정 전"인 날은 게시물 수치를 단정하지 마라.
 5. 날짜, 값, 증감률을 구체적으로. 트래픽소스 데이터가 있으면 검색·추천·쇼츠피드 노출 상태를 해석하라.
 6. 전망: 최근 일별 추이를 근거로 최신 롱폼과 채널 전체의 7일 후·30일 후 예상 누적 조회수를 범위로 제시하라. 반드시 "추정치이며 변동 가능"임을 명시.
 7. "꾸준히 업로드하라", "콘텐츠를 다양화하라", "숏폼과 롱폼을 구분하라" 같은 일반론 금지. 이 채널 데이터에서만 나올 수 있는 구체적 제안만.
