@@ -1244,6 +1244,16 @@ async function runAIReport(force) {
     ct[x.id].일별[d.slice(5)] = x.views; ct[x.id].합 += x.views;
   }));
   const topContents = Object.values(ct).sort((a, b) => b.합 - a.합).slice(0, 6);
+  // 최근 7일 내 업로드된 영상 각각의 성과 (하나도 빠짐없이 다루게)
+  const recentUploads = s.videos
+    .filter((v) => (Date.now() - new Date(v.publishedAt).getTime()) / 86400000 <= 7.5)
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+    .map((v) => {
+      const pubD = v.publishedAt.slice(0, 10);
+      const firstDay = ((s.byDay[pubD] || []).find((x) => x.id === v.id) || {}).views || null;
+      const days = Math.max(1, Math.round((Date.now() - new Date(v.publishedAt).getTime()) / 86400000));
+      return { 제목: v.title.slice(0, 30), 형태: v.durSec > 180 ? "롱폼" : "숏폼", 게시일: pubD, 게시후일수: days, 누적조회: v.views, 게시일조회: firstDay, 좋아요: v.likes, 댓글: v.comments };
+    });
   // 전일 대비 비교 (어제 vs 그제) — 서버에서 확정 계산
   const conf2 = s.daily.filter((d) => d.date < todayK);
   const yD = conf2[conf2.length - 1] || null, pD = conf2[conf2.length - 2] || null;
@@ -1256,6 +1266,7 @@ async function runAIReport(force) {
   const summary = {
     기준일: todayK, 구독자: s.subs,
     전일비교,
+    최근7일내_업로드영상_각각: recentUploads,
     최근7일_일별합계: s.daily.filter((d) => d.date < todayK).slice(-7).map((d) => ({ 날짜: d.date.slice(5), 영상: d.video, 게시물: d.post == null ? "확정 전" : d.post, 상태: d.잠정 ? "잠정" : "확정" })),
     주요콘텐츠_최근7일_일별추이: topContents,
     최신롱폼: s.longform ? { 제목: s.longform.title, 게시일: s.longform.publishedAt.slice(0, 10), 누적조회: s.longform.views, 좋아요: s.longform.likes, 트래픽소스: s.lfTraffic } : null,
@@ -1277,7 +1288,10 @@ async function runAIReport(force) {
 5. 말투: 유튜브 채널 운영자에게 옆에서 말해주듯 편하고 자연스러운 존댓말. "~했어요", "~네요", "~하면 좋아요" 처럼. '자연 감쇠', '기저 수준', '낙수 효과', '단발성 확산' 같은 딱딱한 전문·논문 용어를 절대 쓰지 마라. 대신 "반응이 식었어요", "원래대로 돌아왔어요", "타고 넘어온 조회수", "반짝 떴다가 내려왔어요" 처럼 쉬운 말로 풀어 써라.
 
 내용 규칙:
-4. [수치 분석]은 반드시 "전일비교" 데이터로 시작하라: 어제가 그제 대비 얼마나(증감량·증감률) 변했는지, 그리고 그 변화가 무엇을 의미하는지(예: 쇼츠 유입 파도 소진, 신규 업로드 효과, 자연 감쇠 등) 해석까지. 그다음 최근 3일(어제 포함)의 일별 수치를 각각 언급하라. 급증한 날만 다루고 나머지를 생략하지 마라. 데이터에 "잠정"으로 표시된 날은 실시간 스냅샷 기반 잠정치이므로 확정 시 수치가 달라질 수 있음을 언급하고, 게시물 조회가 "확정 전"인 날은 게시물 수치를 단정하지 마라.
+4. [수치 분석]은 반드시 "전일비교" 데이터로 시작하라: 어제가 그제 대비 얼마나(증감량·증감률) 변했는지와 그 의미. 그다음 최근 3일 일별 수치를 각각 언급.
+4-1. 하루 조회 합계 숫자(예: 1839회)를 말할 때는 절대 뭉뚱그리지 말고, 그 합계가 어떤 영상들 몇 회씩 합쳐진 건지 반드시 쪼개서 밝혀라. 예: "그날 1839회는 'A영상' 1302회 + 'B영상' 458회가 합쳐진 거예요". 합계를 특정 영상 하나의 조회수인 것처럼 쓰면 절대 안 된다.
+4-2. "최근7일내_업로드영상_각각" 데이터에 있는 영상은 한 개도 빠짐없이 각각 성과를 언급하라. 특히 조회수가 낮은 영상은 그냥 넘기지 말고, 왜 낮은지 데이터 근거로 추정 분석하라(예: 게시일이 최근이라 아직 확산 전 / 같은 소재라 신선도 하락 / 제목 후킹 약함 등 데이터가 뒷받침하는 범위에서).
+4-3. "잠정"일은 확정 시 달라질 수 있음을 언급하고, "확정 전" 게시물 수치는 단정하지 마라.
 5. 날짜, 값, 증감률을 구체적으로. 트래픽소스 데이터가 있으면 검색·추천·쇼츠피드 노출 상태를 해석하라.
 6. 전망: 최근 일별 추이를 근거로 최신 롱폼과 채널 전체의 7일 후·30일 후 예상 누적 조회수를 범위로 제시하라. 반드시 "추정치이며 변동 가능"임을 명시.
 7. "꾸준히 업로드하라", "콘텐츠를 다양화하라", "숏폼과 롱폼을 구분하라" 같은 일반론 금지. 이 채널 데이터에서만 나올 수 있는 구체적 제안만.
