@@ -366,7 +366,7 @@ async function readForDashboard(sheets) {
 //  API
 // ===================================================================
 
-app.post("/api/sync", async (req, res) => {
+async function runSync() {
   let step = "초기화";
   try {
     const missing = [];
@@ -375,34 +375,33 @@ app.post("/api/sync", async (req, res) => {
     if (!OAUTH_REFRESH_TOKEN) missing.push("OAUTH_REFRESH_TOKEN");
     if (!GOOGLE_SERVICE_ACCOUNT) missing.push("GOOGLE_SERVICE_ACCOUNT");
     if (!SHEET_ID) missing.push("SHEET_ID");
-    if (missing.length) {
-      return res.status(400).json({ ok: false, error: "환경변수 누락: " + missing.join(", ") });
-    }
+    if (missing.length) throw new Error("환경변수 누락: " + missing.join(", "));
 
     const auth = getOAuth();
     const sheets = getSheetsClient();
 
-    // 1) 채널 일별
     step = "채널분석(Analytics)";
     const daily = await fetchChannelDaily(auth);
 
-    // 2) 영상별
     step = "영상분석(Analytics)";
     const vids = await fetchVideoAnalytics(auth);
     step = "영상정보(Data API)";
     const meta = await fetchVideoMeta(vids.map((v) => v.video_id));
     const uploadsPerDay = await fetchUploadsPerDay(Object.values(meta));
 
-    // 3) 시트에 쓰기
     step = "시트쓰기(일별)";
     const dCount = await writeDaily(sheets, daily, uploadsPerDay);
     step = "시트쓰기(영상별)";
     const vCount = await writeVideos(sheets, vids, meta);
 
-    res.json({ ok: true, dailyRows: dCount, videoRows: vCount });
+    return { dailyRows: dCount, videoRows: vCount };
   } catch (e) {
-    res.status(500).json({ ok: false, error: `[${step}] ${e.message}` });
+    throw new Error(`[${step}] ${e.message}`);
   }
+}
+app.post("/api/sync", async (req, res) => {
+  try { res.json({ ok: true, ...(await runSync()) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // 영상 하나의 "게시 후 일자별" 추이 (조회/좋아요/댓글/공유/구독/평균조회율)
@@ -1092,6 +1091,183 @@ app.get("/api/posts", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ===================================================================
+//  인사이트 (규칙 엔진 + Claude AI 리포트) & 자동 동기화 스케줄러
+// ===================================================================
+const AILOG_TAB = process.env.AILOG_TAB || "분석로그";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+let aiCache = { date: null, text: null };
+let ruleCache = { at: 0, data: null };
+
+// 인사이트용 데이터 수집 (byDay 재활용 + 업로드 목록 + 구독자)
+async function gatherStats() {
+  const dbv = await buildDailyByVideo();
+  const days = Object.keys(dbv.byDay).sort();
+  const daily = days.map((d) => {
+    let vid = 0, post = 0;
+    dbv.byDay[d].forEach((v) => { if (v.isPost) post += v.views; else vid += v.views; });
+    return { date: d, video: vid, post };
+  });
+  // 업로드 목록 (OAuth — 예약·비공개 포함)
+  const yt = google.youtube({ version: "v3", auth: getOAuth() });
+  const ch = await yt.channels.list({ part: "statistics,contentDetails", id: CHANNEL_ID });
+  const subs = Number(ch.data.items?.[0]?.statistics?.subscriberCount || 0);
+  const uploads = ch.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  let videos = [];
+  if (uploads) {
+    const pl = await yt.playlistItems.list({ part: "contentDetails,snippet", maxResults: 10, playlistId: uploads });
+    const ids = (pl.data.items || []).map((it) => it.contentDetails.videoId);
+    if (ids.length) {
+      const vs = await yt.videos.list({ part: "snippet,statistics,status,contentDetails", id: ids.join(",") });
+      videos = (vs.data.items || []).filter((it) => it.status?.privacyStatus === "public").map((it) => ({
+        id: it.id, title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+        durSec: isoDurToSec(it.contentDetails?.duration),
+        views: Number(it.statistics?.viewCount || 0),
+        likes: Number(it.statistics?.likeCount || 0),
+        comments: Number(it.statistics?.commentCount || 0),
+      }));
+    }
+  }
+  return { daily, videos, subs, byDay: dbv.byDay };
+}
+
+// 규칙 엔진 — 팩트 기반 발견사항
+function buildRuleInsights(s) {
+  const out = [];
+  const ydayK = kstDate(Date.now() - 24 * 3600000);
+  const conf = s.daily.filter((d) => d.date < ydayK); // 어제 이전(비교적 확정)
+  const last = conf[conf.length - 1];
+  const prev7 = conf.slice(-8, -1);
+  if (last && prev7.length >= 3) {
+    const avg = prev7.reduce((a, d) => a + d.video, 0) / prev7.length;
+    if (avg > 5) {
+      const diff = Math.round((last.video - avg) / avg * 100);
+      if (diff >= 30) out.push({ level: "good", title: `영상 조회수 급증 (${last.date})`, detail: `직전 7일 평균 대비 +${diff}% (${Math.round(avg)}→${last.video}회)` });
+      else if (diff <= -30) out.push({ level: "warn", title: `영상 조회수 하락 (${last.date})`, detail: `직전 7일 평균 대비 ${diff}% (${Math.round(avg)}→${last.video}회)` });
+    }
+    const pAvg = prev7.reduce((a, d) => a + d.post, 0) / prev7.length;
+    if (pAvg > 5 && last.post < pAvg * 0.4) out.push({ level: "warn", title: "게시물 조회 급감", detail: `시황 게시물 조회가 평균 ${Math.round(pAvg)}회 → ${last.post}회. 게시 누락 여부 확인` });
+  }
+  // 업로드 공백
+  if (s.videos.length) {
+    const lastUp = Math.max(...s.videos.map((v) => new Date(v.publishedAt).getTime()));
+    const gap = Math.floor((Date.now() - lastUp) / 86400000);
+    if (gap >= 4) out.push({ level: "warn", title: `업로드 공백 ${gap}일째`, detail: "주 2~3회 리듬 유지가 알고리즘 신호에 유리해요" });
+    else out.push({ level: "info", title: `마지막 업로드 ${gap}일 전`, detail: "업로드 리듬 정상 범위" });
+  }
+  // 최신 영상 첫 3일 성과 vs 채널 평균
+  const first3 = (vid) => {
+    const ds = Object.keys(s.byDay).sort();
+    const mine = ds.map((d) => (s.byDay[d].find((x) => x.id === vid && !x.isPost) || {}).views || 0).filter((v) => v > 0);
+    return mine.slice(0, 3).reduce((a, b) => a + b, 0);
+  };
+  const recent = s.videos.filter((v) => (Date.now() - new Date(v.publishedAt).getTime()) / 86400000 <= 14)
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  if (recent.length) {
+    const newest = recent[0];
+    const mine3 = first3(newest.id);
+    const others = s.videos.filter((v) => v.id !== newest.id).map((v) => first3(v.id)).filter((x) => x > 0);
+    if (mine3 > 0 && others.length >= 2) {
+      const avg3 = others.reduce((a, b) => a + b, 0) / others.length;
+      const pct = Math.round((mine3 - avg3) / avg3 * 100);
+      if (pct >= 20) out.push({ level: "good", title: `최신 영상 초반 성과 우수`, detail: `"${newest.title.slice(0, 25)}…" 첫 3일 ${mine3}회 — 채널 평균 대비 +${pct}%. 이 훅·주제 패턴 재사용 권장` });
+      else if (pct <= -30) out.push({ level: "warn", title: `최신 영상 초반 부진`, detail: `"${newest.title.slice(0, 25)}…" 첫 3일 ${mine3}회 — 채널 평균 대비 ${pct}%. 썸네일·제목 점검 필요` });
+    }
+    // 참여율
+    if (newest.views >= 50) {
+      const lr = newest.likes / newest.views * 100;
+      if (lr >= 8) out.push({ level: "info", title: "최신 영상 좋아요 비율 높음", detail: `${lr.toFixed(1)}% — 우호 관객(구독자·배포망) 비중이 높다는 신호. 콜드 유입 확대 필요` });
+    }
+  }
+  if (!out.length) out.push({ level: "info", title: "특이사항 없음", detail: "최근 데이터에서 큰 변동이 감지되지 않았어요" });
+  return out;
+}
+
+// Claude AI 리포트 (전날까지 데이터 기준, 하루 1회)
+async function runAIReport(force) {
+  if (!ANTHROPIC_API_KEY) return { ok: false, error: "ANTHROPIC_API_KEY 미설정" };
+  const todayK = kstDate(Date.now());
+  if (!force && aiCache.date === todayK) return { ok: true, cached: true };
+  const s = await gatherStats();
+  const rules = buildRuleInsights(s);
+  const summary = {
+    기준일: todayK, 구독자: s.subs,
+    최근14일_일별조회: s.daily.slice(-15, -1),
+    최근영상: s.videos.slice(0, 6).map((v) => ({ 제목: v.title, 게시: v.publishedAt.slice(0, 10), 길이초: v.durSec, 누적조회: v.views, 좋아요: v.likes, 댓글: v.comments })),
+    규칙발견: rules.map((r) => `[${r.level}] ${r.title}: ${r.detail}`),
+  };
+  const body = {
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1000,
+    system: "너는 유튜브 채널 성장 분석가다. 채널: 유진투자선물(금융사, 미국주식옵션 교육). 준법 제약: 수익률·배수 숫자를 마케팅 문구에 쓸 수 없음. 어제까지의 데이터를 근거로 ①핵심 진단(2~3줄) ②잘된 점 ③개선점 ④이번 주 실행 제안 3개(구체적으로)를 한국어로 간결하게 작성해라. 데이터에 없는 것을 지어내지 마라.",
+    messages: [{ role: "user", content: "채널 데이터:\n" + JSON.stringify(summary, null, 1) }],
+  };
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!r.ok) return { ok: false, error: j.error?.message || ("HTTP " + r.status) };
+  const text = (j.content || []).map((c) => c.text || "").join("\n").trim();
+  aiCache = { date: todayK, text };
+  try {
+    const sheets = getSheetsClient();
+    await ensureTab(sheets, AILOG_TAB, ["날짜", "리포트"]);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${AILOG_TAB}!A:B`,
+      valueInputOption: "RAW", requestBody: { values: [[todayK, text]] },
+    });
+  } catch (_) { /* 로그 실패해도 리포트는 유지 */ }
+  return { ok: true, text };
+}
+
+// 인사이트 조회 (규칙=10분 캐시, AI=오늘자 캐시/시트)
+app.get("/api/insights", async (req, res) => {
+  try {
+    if (!ruleCache.data || Date.now() - ruleCache.at > 10 * 60 * 1000) {
+      const s = await gatherStats();
+      ruleCache = { at: Date.now(), data: buildRuleInsights(s) };
+    }
+    if (!aiCache.text) { // 서버 재시작 후 시트에서 최신 리포트 복구
+      try {
+        const sheets = getSheetsClient();
+        const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${AILOG_TAB}!A2:B` });
+        const rows = r.data.values || [];
+        if (rows.length) { const lastRow = rows[rows.length - 1]; aiCache = { date: lastRow[0], text: lastRow[1] }; }
+      } catch (_) {}
+    }
+    res.json({ ok: true, rules: ruleCache.data, ai: aiCache.text ? { date: aiCache.date, text: aiCache.text } : null, aiEnabled: !!ANTHROPIC_API_KEY });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// 수동 실행 (규칙 새로고침 / body.ai=true면 AI 강제 실행)
+app.post("/api/insights/run", async (req, res) => {
+  try {
+    const s = await gatherStats();
+    ruleCache = { at: Date.now(), data: buildRuleInsights(s) };
+    let ai = null;
+    if (req.body && req.body.ai) { const r = await runAIReport(true); ai = r.ok ? { date: aiCache.date, text: aiCache.text } : { error: r.error }; }
+    res.json({ ok: true, rules: ruleCache.data, ai });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// 스케줄러: 매일 KST 09:00 동기화+AI리포트, 18:00 동기화
+const schedDone = {};
+setInterval(async () => {
+  const now = new Date(Date.now() + 9 * 3600000); // KST
+  const hh = now.getUTCHours(), key = now.toISOString().slice(0, 10) + "-" + hh;
+  if (hh === 9 && !schedDone["s" + key]) {
+    schedDone["s" + key] = 1;
+    try { await runSync(); console.log("⏰ 자동 동기화(09시) 완료"); } catch (e) { console.log("자동 동기화 실패:", e.message); }
+    try { const r = await runAIReport(false); console.log("🤖 AI 리포트:", r.ok ? "완료" : r.error); } catch (e) { console.log("AI 리포트 실패:", e.message); }
+    try { const s = await gatherStats(); ruleCache = { at: Date.now(), data: buildRuleInsights(s) }; } catch (_) {}
+  }
+  if (hh === 18 && !schedDone["s" + key]) {
+    schedDone["s" + key] = 1;
+    try { await runSync(); console.log("⏰ 자동 동기화(18시) 완료"); } catch (e) { console.log("자동 동기화 실패:", e.message); }
+  }
+}, 60 * 1000);
 
 // 수동 채널 스냅샷 트리거
 app.post("/api/channel-snapshot", async (req, res) => {

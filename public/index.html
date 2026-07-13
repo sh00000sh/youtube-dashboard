@@ -378,6 +378,16 @@
     <div class="panel"><div class="chart-box"><canvas id="cmpChart"></canvas></div></div>
     </div>
 
+    <div class="sec" id="sec-insight" style="display:none">
+    <h2>💡 인사이트 <span class="kpi-badge">규칙 분석 실시간 · AI 리포트 매일 09시(전날까지 데이터 기준)</span>
+      <button onclick="refreshInsights()" style="margin-left:auto;padding:7px 14px;font-size:13px">🔄 분석 새로고침</button>
+    </h2>
+    <h2 style="font-size:15px">🤖 AI 데일리 리포트 <span class="kpi-badge" id="aiDate"></span></h2>
+    <div class="panel"><div id="aiReport" style="white-space:pre-wrap;line-height:1.65;font-size:14px;color:var(--tx)">불러오는 중…</div></div>
+    <h2 style="font-size:15px;margin-top:20px">📌 자동 감지 발견사항</h2>
+    <div id="ruleCards" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+
     <div class="sec" id="sec-posts" style="display:none">
     <h2>📝 게시물 성과 <span class="kpi-badge">커뮤니티 게시물 · 최근 30일</span></h2>
     <div class="desc">유튜브 커뮤니티 게시물(데일리 Options Trend 시황)의 조회수를 영상과 분리해서 집계해요. 제목은 첫 조회일 기준 자동 생성이에요. ※ 좋아요·댓글은 유튜브 API가 게시물에 대해 제공하지 않아 0으로 표시될 수 있어요(스튜디오에서 확인).</div>
@@ -1059,6 +1069,10 @@
     // 초기 반응 속도: 수동입력(영상초기반응 탭, 6h)이 있으면 우선, 없으면 Analytics 첫 N일 기준
     let earlyMap={}, earlyDays=1;
     function earlyCell(v){
+      // 롱폼(3분+)은 시간당 대신 첫 7일 일별 조회수 (스냅샷 기반)
+      if(durSec(v.duration)>180){
+        return `<span id="lfd_${v.id}" style="font-size:11px">일별 불러오는 중…</span>`;
+      }
       const e=earlyMap[v.id];
       if(e&&e.source==="manual"&&e.perHour!=null){
         const w=e.window||6;
@@ -1100,6 +1114,8 @@
           <td><span style="font-weight:700">${agoStr(v.publishedAt)}</span><br>${earlyCell(v)}</td></tr>`;
       });
       el.innerHTML = rows.join("") || '<tr><td colspan="7" class="empty">해당 형태의 영상이 없어요.</td></tr>';
+      // 롱폼 카드에 D+1~7 일별 조회수 채우기
+      lastLiveVideos.filter(v=>!v.scheduled&&durSec(v.duration)>180&&liveFormMatch(v,ff)).forEach(v=>fillLongformDaily(v.id));
     }
     function toggleLiveAuto(){
       const btn=document.getElementById("liveAutoBtn");
@@ -1292,6 +1308,9 @@
         {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
         {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
       ]},
+      {cat:"insight", label:"💡 인사이트", subs:[
+        {id:"sec-insight", label:"AI 분석", secs:["sec-insight"], draw:()=>loadInsights()},
+      ]},
       {cat:"posts", label:"📝 게시물", subs:[
         {id:"sec-posts", label:"게시물 성과", secs:["sec-posts"], draw:()=>loadPosts()},
       ]},
@@ -1330,6 +1349,55 @@
       ALL_SECS.forEach(secId=>{ const el=document.getElementById(secId); if(el) el.style.display=(sub.secs.includes(secId)?"":"none"); });
       document.getElementById("navSub").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
       if(sub.draw) sub.draw();
+    }
+
+    // ===== 인사이트 탭 =====
+    async function loadInsights(){
+      const rc=document.getElementById("ruleCards"), ar=document.getElementById("aiReport"), ad=document.getElementById("aiDate");
+      try{
+        const r=await fetch("/api/insights").then(x=>x.json());
+        if(!r.ok) throw new Error(r.error||"불러오기 실패");
+        if(r.ai&&r.ai.text){ ar.textContent=r.ai.text; ad.textContent="기준: "+r.ai.date; }
+        else if(!r.aiEnabled){ ar.innerHTML='<span style="color:var(--sub)">AI 리포트 비활성 — Railway 환경변수에 <b>ANTHROPIC_API_KEY</b>를 등록하면 매일 09시 자동 생성돼요.</span>'; }
+        else { ar.innerHTML='<span style="color:var(--sub)">아직 생성된 리포트가 없어요. 내일 09시에 첫 리포트가 생성됩니다.</span>'; }
+        const ic={good:"🟢",warn:"🔴",info:"🔵"};
+        rc.innerHTML=(r.rules||[]).map(x=>`
+          <div class="panel" style="padding:14px 18px">
+            <div style="font-weight:700;font-size:14px">${ic[x.level]||"🔵"} ${x.title}</div>
+            <div style="color:var(--sub);font-size:13px;margin-top:4px">${x.detail}</div>
+          </div>`).join("")||'<div class="empty">발견사항 없음</div>';
+      }catch(e){ if(rc)rc.innerHTML=`<div class="empty">❌ ${e.message}</div>`; }
+    }
+    async function refreshInsights(){
+      const rc=document.getElementById("ruleCards");
+      rc.innerHTML='<div class="empty">분석 중…</div>';
+      try{ await fetch("/api/insights/run",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});}catch(_){}
+      loadInsights();
+    }
+
+    // ===== 롱폼 D+1~D+7 일별 조회수 =====
+    const lfDailyCache={};
+    async function fillLongformDaily(id){
+      const el=document.getElementById("lfd_"+id); if(!el)return;
+      try{
+        if(!lfDailyCache[id]){
+          const r=await fetch("/api/video-hourly?id="+id).then(x=>x.json());
+          if(!r.ok||!r.rows||!r.rows.length){ el.innerHTML='<span class="muted">수집 대기</span>'; return; }
+          lfDailyCache[id]=r.rows;
+        }
+        const rows=lfDailyCache[id];
+        const maxUpTo=(h)=>{ let m=0; rows.forEach(x=>{ if(x.hours<=h&&x.views>m)m=x.views; }); return m; };
+        const lastH=Math.max(...rows.map(x=>x.hours));
+        const parts=[];
+        for(let d=1;d<=7;d++){
+          const s=(d-1)*24, e=d*24;
+          if(lastH<s) break;
+          const dv=maxUpTo(e)-maxUpTo(s);
+          const cur=lastH<e;
+          parts.push(`<span style="${cur?'color:var(--blue);font-weight:700':''}">D${d} ${fmt(Math.max(0,dv))}${cur?'…':''}</span>`);
+        }
+        el.innerHTML=parts.join(' <span style="color:var(--line)">|</span> ')||'<span class="muted">수집 대기</span>';
+      }catch(_){ el.innerHTML='<span class="muted">-</span>'; }
     }
 
     // ===== 게시물 성과 탭 =====
