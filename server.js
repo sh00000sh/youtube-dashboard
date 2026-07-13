@@ -1129,7 +1129,27 @@ async function gatherStats() {
       }));
     }
   }
-  return { daily, videos, subs, byDay: dbv.byDay };
+  // 트래픽 소스 (최근 14일 채널 전체 + 최신 롱폼 개별)
+  const SRC = { YT_SEARCH: "유튜브 검색", RELATED_VIDEO: "추천 영상", SUBSCRIBER: "홈/구독 피드", YT_CHANNEL: "채널 페이지", EXT_URL: "외부 링크", NOTIFICATION: "알림", SHORTS: "쇼츠 피드", PLAYLIST: "재생목록", NO_LINK_OTHER: "직접/기타", END_SCREEN: "끝화면", YT_OTHER_PAGE: "기타 유튜브", ADVERTISING: "광고" };
+  let traffic = [], lfTraffic = [], longform = null;
+  try {
+    const ya = google.youtubeAnalytics({ version: "v2", auth: getOAuth() });
+    const tr = await ya.reports.query({
+      ids: "channel==MINE", startDate: ymd(daysAgo(14)), endDate: ymd(new Date()),
+      dimensions: "insightTrafficSourceType", metrics: "views", sort: "-views",
+    });
+    traffic = (tr.data.rows || []).map((r) => ({ 소스: SRC[r[0]] || r[0], 조회: Number(r[1] || 0) }));
+    longform = videos.filter((v) => v.durSec > 180).sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))[0] || null;
+    if (longform) {
+      const tr2 = await ya.reports.query({
+        ids: "channel==MINE", filters: "video==" + longform.id,
+        startDate: longform.publishedAt.slice(0, 10), endDate: ymd(new Date()),
+        dimensions: "insightTrafficSourceType", metrics: "views", sort: "-views",
+      });
+      lfTraffic = (tr2.data.rows || []).map((r) => ({ 소스: SRC[r[0]] || r[0], 조회: Number(r[1] || 0) }));
+    }
+  } catch (_) { /* 트래픽 소스 실패해도 나머지 분석은 진행 */ }
+  return { daily, videos, subs, byDay: dbv.byDay, traffic, lfTraffic, longform };
 }
 
 // 규칙 엔진 — 팩트 기반 발견사항
@@ -1193,16 +1213,40 @@ async function runAIReport(force) {
   if (!force && aiCache.date === todayK) return { ok: true, cached: true };
   const s = await gatherStats();
   const rules = buildRuleInsights(s);
+  // 최근 7일(어제까지) 콘텐츠별 일별 추이
+  const dates7 = s.daily.map((d) => d.date).filter((d) => d < todayK).slice(-7);
+  const ct = {};
+  dates7.forEach((d) => (s.byDay[d] || []).forEach((x) => {
+    if (!ct[x.id]) ct[x.id] = { 제목: x.title.slice(0, 30), 형태: x.isPost ? "게시물" : "영상", 일별: {}, 합: 0 };
+    ct[x.id].일별[d.slice(5)] = x.views; ct[x.id].합 += x.views;
+  }));
+  const topContents = Object.values(ct).sort((a, b) => b.합 - a.합).slice(0, 6);
   const summary = {
     기준일: todayK, 구독자: s.subs,
-    최근14일_일별조회: s.daily.slice(-15, -1),
-    최근영상: s.videos.slice(0, 6).map((v) => ({ 제목: v.title, 게시: v.publishedAt.slice(0, 10), 길이초: v.durSec, 누적조회: v.views, 좋아요: v.likes, 댓글: v.comments })),
-    규칙발견: rules.map((r) => `[${r.level}] ${r.title}: ${r.detail}`),
+    최근7일_일별합계: s.daily.filter((d) => d.date < todayK).slice(-7).map((d) => ({ 날짜: d.date.slice(5), 영상: d.video, 게시물: d.post })),
+    주요콘텐츠_최근7일_일별추이: topContents,
+    최신롱폼: s.longform ? { 제목: s.longform.title, 게시일: s.longform.publishedAt.slice(0, 10), 누적조회: s.longform.views, 좋아요: s.longform.likes, 트래픽소스: s.lfTraffic } : null,
+    채널_트래픽소스_14일: s.traffic,
+    최근영상: s.videos.slice(0, 6).map((v) => ({ 제목: v.title.slice(0, 30), 게시: v.publishedAt.slice(0, 10), 형태: v.durSec > 180 ? "롱폼" : "숏폼", 누적조회: v.views, 좋아요: v.likes, 댓글: v.comments })),
+    자동감지: rules.map((r) => `${r.title}: ${r.detail}`),
   };
   const body = {
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1000,
-    system: "너는 유튜브 채널 성장 분석가다. 채널: 유진투자선물(금융사, 미국주식옵션 교육). 준법 제약: 수익률·배수 숫자를 마케팅 문구에 쓸 수 없음. 어제까지의 데이터를 근거로 ①핵심 진단(2~3줄) ②잘된 점 ③개선점 ④이번 주 실행 제안 3개(구체적으로)를 한국어로 간결하게 작성해라. 데이터에 없는 것을 지어내지 마라.",
+    model: "claude-sonnet-5",
+    max_tokens: 1500,
+    system: `너는 유진투자선물(금융사, 미국주식옵션 교육 채널)의 유튜브 데이터 분석가다. 어제까지의 데이터로 데일리 리포트를 작성한다.
+
+형식 규칙:
+1. 마크다운 기호(#, *, -, ##)와 이모지를 절대 쓰지 마라. 평문 문장과 "1." 번호만 사용.
+2. 섹션은 정확히 [핵심 진단] [수치 분석] [전망] [실행 제안] 4개의 대괄호 헤더로만 구분.
+3. 전체 1,000자 이내. 문장은 짧고 담백하게.
+
+내용 규칙:
+4. 최근 3일(어제 포함)의 일별 수치를 각각 언급하라. 급증한 날만 다루고 나머지를 생략하지 마라.
+5. 수치 분석에는 날짜, 값, 증감률을 구체적으로. 트래픽소스 데이터가 있으면 검색·추천·쇼츠피드 노출 상태를 해석하라.
+6. 전망: 최근 일별 추이를 근거로 최신 롱폼과 채널 전체의 7일 후·30일 후 예상 누적 조회수를 범위로 제시하라. 반드시 "추정치이며 변동 가능"임을 명시.
+7. "꾸준히 업로드하라", "콘텐츠를 다양화하라", "숏폼과 롱폼을 구분하라" 같은 일반론 금지. 이 채널 데이터에서만 나올 수 있는 구체적 제안만.
+8. 준법: 이 채널은 수익률·배수 숫자를 마케팅 문구에 쓸 수 없다. 제안에 반영하라.
+9. 데이터에 없는 것을 지어내지 마라.`,
     messages: [{ role: "user", content: "채널 데이터:\n" + JSON.stringify(summary, null, 1) }],
   };
   const r = await fetch("https://api.anthropic.com/v1/messages", {

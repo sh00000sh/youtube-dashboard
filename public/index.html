@@ -1353,12 +1353,31 @@
     }
 
     // ===== 인사이트 탭 =====
+    // AI 리포트 텍스트를 섹션 카드로 렌더링
+    function renderAIReport(text){
+      const ar=document.getElementById("aiReport");
+      const META={"핵심 진단":["🩺","var(--blue)"],"수치 분석":["📊","#8b5cf6"],"전망":["🔮","#f0a020"],"실행 제안":["✅","#19a974"]};
+      const parts=text.split(/\[(핵심 진단|수치 분석|전망|실행 제안)\]/).map(x=>x.trim()).filter(Boolean);
+      let html='<div style="color:var(--sub);font-size:12px;margin-bottom:12px">※ 실시간 집계 기준이라 아래 수치는 이후 변동될 수 있어요.</div>';
+      if(parts.length<2){ // 섹션 구분 실패 시 원문 그대로
+        html+=`<div style="white-space:pre-wrap;line-height:1.65">${text.replace(/[#*]/g,"")}</div>`;
+      }else{
+        for(let i=0;i<parts.length-1;i+=2){
+          const name=parts[i], body=(parts[i+1]||"").replace(/[#*]/g,"");
+          const m=META[name]||["📌","var(--sub)"];
+          html+=`<div style="border-left:3px solid ${m[1]};padding:10px 14px;margin-bottom:12px;background:var(--panel2,rgba(128,128,128,.05));border-radius:0 10px 10px 0">
+            <div style="font-weight:800;font-size:13.5px;margin-bottom:6px">${m[0]} ${name}</div>
+            <div style="white-space:pre-wrap;line-height:1.65;font-size:13.5px;color:var(--tx)">${body}</div></div>`;
+        }
+      }
+      ar.innerHTML=html;
+    }
     async function loadInsights(){
       const rc=document.getElementById("ruleCards"), ar=document.getElementById("aiReport"), ad=document.getElementById("aiDate");
       try{
         const r=await fetch("/api/insights").then(x=>x.json());
         if(!r.ok) throw new Error(r.error||"불러오기 실패");
-        if(r.ai&&r.ai.text){ ar.textContent=r.ai.text; ad.textContent="기준: "+r.ai.date; }
+        if(r.ai&&r.ai.text){ renderAIReport(r.ai.text); ad.textContent="기준: "+r.ai.date+" (어제까지 데이터)"; }
         else if(!r.aiEnabled){ ar.innerHTML='<span style="color:var(--sub)">AI 리포트 비활성 — Railway 환경변수에 <b>ANTHROPIC_API_KEY</b>를 등록하면 매일 09시 자동 생성돼요.</span>'; }
         else { ar.innerHTML='<span style="color:var(--sub)">아직 생성된 리포트가 없어요. 내일 09시에 첫 리포트가 생성됩니다.</span>'; }
         const ic={good:"🟢",warn:"🔴",info:"🔵"};
