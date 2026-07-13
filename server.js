@@ -1242,7 +1242,8 @@ async function runAIReport(force) {
   };
   const body = {
     model: "claude-sonnet-5",
-    max_tokens: 1500,
+    max_tokens: 2500,
+    thinking: { type: "disabled" },
     system: `너는 유진투자선물(금융사, 미국주식옵션 교육 채널)의 유튜브 데이터 분석가다. 어제까지의 데이터로 데일리 리포트를 작성한다.
 
 형식 규칙:
@@ -1259,15 +1260,26 @@ async function runAIReport(force) {
 9. 데이터에 없는 것을 지어내지 마라.`,
     messages: [{ role: "user", content: "채널 데이터:\n" + JSON.stringify(summary, null, 1) }],
   };
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify(body),
-  });
-  const j = await r.json();
-  if (!r.ok) return { ok: false, error: j.error?.message || ("HTTP " + r.status) };
-  const text = (j.content || []).filter((c) => c.type === "text").map((c) => c.text || "").join("\n").trim();
-  if (!text) return { ok: false, error: `빈 응답 (stop_reason: ${j.stop_reason}, blocks: ${(j.content || []).map((c) => c.type).join(",") || "없음"})` };
+  const callClaude = async (b) => {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify(b),
+    });
+    const j = await r.json();
+    if (!r.ok) return { err: j.error?.message || ("HTTP " + r.status) };
+    const text = (j.content || []).filter((c) => c.type === "text").map((c) => c.text || "").join("\n").trim();
+    if (!text) return { err: `빈 응답 (stop_reason: ${j.stop_reason}, blocks: ${(j.content || []).map((c) => c.type).join(",") || "없음"})` };
+    return { text };
+  };
+  let out = await callClaude(body);
+  if (out.err) { // 폴백: thinking 미지원/빈 응답 등 → haiku로 재시도
+    const fb = { ...body, model: "claude-haiku-4-5-20251001", max_tokens: 1500 };
+    delete fb.thinking;
+    out = await callClaude(fb);
+  }
+  if (out.err) return { ok: false, error: out.err };
+  const text = out.text;
   aiCache = { date: todayK, text };
   try {
     const sheets = getSheetsClient();
