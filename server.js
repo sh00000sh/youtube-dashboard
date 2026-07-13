@@ -852,6 +852,31 @@ app.get("/api/video-hourly", async (req, res) => {
   }
 });
 
+// 특정 영상 실시간 현재 지표 (ID 직접 지정) — 업로드 목록 색인 전이라도 즉시 추적
+//   OAuth 사용 → 본인 소유 비공개/일부공개/예약 영상도 조회 가능
+app.get("/api/video-live", async (req, res) => {
+  try {
+    const id = String(req.query.id || "").trim();
+    if (!id) return res.status(400).json({ ok: false, error: "id 없음" });
+    const yt = google.youtube({ version: "v3", auth: getOAuth() });
+    const vs = await yt.videos.list({ part: "snippet,statistics,status,contentDetails", id });
+    const it = (vs.data.items || [])[0];
+    if (!it) return res.status(404).json({ ok: false, error: "영상을 찾을 수 없어요(ID 확인 또는 접근 권한)" });
+    res.json({ ok: true, video: {
+      id: it.id, title: it.snippet.title, publishedAt: it.snippet.publishedAt,
+      duration: isoDurToMMSS(it.contentDetails?.duration),
+      privacy: it.status?.privacyStatus,
+      views: Number(it.statistics?.viewCount || 0),
+      likes: Number(it.statistics?.likeCount || 0),
+      comments: Number(it.statistics?.commentCount || 0),
+      scheduled: it.status?.privacyStatus !== "public" && !!it.status?.publishAt,
+      publishAt: it.status?.publishAt || null,
+    } });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ===================================================================
 //  채널 스냅샷 로봇 + 일일 실시간 (지연 없는 어제/오늘 조회수)
 //   - 유튜브 Analytics는 최근 1~2일이 미확정이라 "어제 조회수"를 못 봄

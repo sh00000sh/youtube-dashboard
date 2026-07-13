@@ -502,6 +502,10 @@
       <button onclick="loadLongformLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
     </h2>
     <div class="desc">최근 7일 내 올린 롱폼을 실시간 조회수로 보여줘요. <b>현재 조회수는 지연 없이 즉시</b> 반영되고, 시간대별 곡선은 스냅샷(1시간 간격)이 쌓이며 채워져요. 자동 갱신은 30초마다. <span id="lfAt"></span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <input id="lfPinInput" placeholder="방금 올린 영상 URL 또는 ID 붙여넣기 → 목록에 없어도 즉시 추적" onkeydown="if(event.key==='Enter')addLfPin()" style="flex:1;min-width:240px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+      <button onclick="addLfPin()" style="background:var(--blue);color:#fff;padding:9px 16px;border-radius:10px;font-size:13px">+ 추적 추가</button>
+    </div>
     <div id="lfCards"><div class="empty">불러오는 중…</div></div>
     </div>
 
@@ -1206,17 +1210,38 @@
     // ===== 롱폼 실시간 (오늘 A/B 테스트 등 최근 롱폼 조회수 추적) =====
     let lfTimer=null, lfCharts={};
     const kstToday=()=> new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+    // 직접 추가(핀) 영상 — 업로드 목록 색인 전에도 ID로 즉시 추적
+    function parseVideoId(s){ s=(s||"").trim(); const m=s.match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})/); if(m)return m[1]; return /^[A-Za-z0-9_-]{11}$/.test(s)?s:null; }
+    function getLfPins(){ try{return JSON.parse(localStorage.getItem("lfPins")||"[]");}catch(_){return[];} }
+    function setLfPins(a){ try{localStorage.setItem("lfPins",JSON.stringify(a));}catch(_){} }
+    function addLfPin(){
+      const inp=document.getElementById("lfPinInput"); const id=parseVideoId(inp.value);
+      if(!id){ alert("유효한 유튜브 영상 URL 또는 11자리 ID를 입력해 주세요."); return; }
+      const pins=getLfPins(); if(!pins.includes(id)){ pins.unshift(id); setLfPins(pins); }
+      inp.value=""; loadLongformLive();
+    }
+    function removeLfPin(id){ setLfPins(getLfPins().filter(x=>x!==id)); loadLongformLive(); }
     async function loadLongformLive(){
       const at=document.getElementById("lfAt"), wrap=document.getElementById("lfCards");
       if(at) at.textContent="(불러오는 중...)";
       try{
-        const lv=await fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false}));
-        if(!lv.ok){ wrap.innerHTML='<div class="empty">불러오기 실패</div>'; if(at)at.textContent=""; return; }
-        // 롱폼(3분+)만, 최신 업로드 순 (오늘 올린 A/B 테스트 영상이 맨 위로)
-        const longs=(lv.videos||[]).filter(v=>durSec(v.duration)>180).sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
-        if(!longs.length){ wrap.innerHTML='<div class="empty">최근 7일 내 롱폼이 없어요. (롱폼 업로드 후 이 탭에서 실시간 추적돼요)</div>'; if(at)at.textContent=""; return; }
-        wrap.innerHTML=longs.map(v=>lfCardHtml(v)).join("");
-        longs.forEach(v=>{ if(!v.scheduled) fillLfHourly(v.id); });
+        const pins=getLfPins();
+        const [lv,...pinRes]=await Promise.all([
+          fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false})),
+          ...pins.map(id=>fetch("/api/video-live?id="+encodeURIComponent(id)).then(r=>r.json()).catch(()=>({ok:false}))),
+        ]);
+        // 직접 추가 영상(핀) — 형태 무관, 항상 맨 위. 실패한 ID는 안내 카드
+        const pinVids=[], pinFail=[];
+        pinRes.forEach((r,i)=>{ if(r&&r.ok&&r.video) pinVids.push({...r.video, pinned:true}); else pinFail.push(pins[i]); });
+        const pinIds=new Set(pinVids.map(v=>v.id));
+        // 자동 감지 롱폼(3분+), 핀과 중복 제거, 최신순
+        let longs = lv.ok ? (lv.videos||[]).filter(v=>durSec(v.duration)>180 && !pinIds.has(v.id)) : [];
+        longs.sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
+        const all=[...pinVids, ...longs];
+        let html = all.map(v=>lfCardHtml(v)).join("");
+        pinFail.forEach(id=>{ html+=`<div class="panel" style="padding:12px 14px;margin-bottom:14px;color:var(--sub)">추가한 ID <b>${id}</b> 를 아직 못 불러왔어요(업로드 직후면 잠시 후 다시 시도, 또는 ID 확인). <button onclick="removeLfPin('${id}')" style="margin-left:8px;font-size:12px;padding:4px 10px;border-radius:8px">제거</button></div>`; });
+        wrap.innerHTML = html || '<div class="empty">최근 7일 내 롱폼이 없어요. 방금 올린 영상은 위 칸에 URL을 붙여넣어 바로 추적하세요.</div>';
+        all.forEach(v=>{ if(!v.scheduled) fillLfHourly(v.id); });
         if(at) at.textContent="· 갱신: "+new Date().toLocaleTimeString("ko-KR");
       }catch(e){ if(at)at.textContent="❌ "+e.message; }
     }
@@ -1224,13 +1249,16 @@
       const oc=`openVideo('${v.id}',\`${(v.title||'').replace(/\`/g,'')}\`,'${(v.publishedAt||'').slice(2,10)}')`;
       const isToday=(v.publishedAt||'').slice(0,10)===kstToday();
       const todayBadge=isToday?'<span style="background:#e5484d;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:6px">오늘 업로드</span>':'';
+      const pinTag=v.pinned?'<span style="background:#19a974;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:6px">📌 직접 추적</span>':'';
+      const rmBtn=v.pinned?`<button onclick="removeLfPin('${v.id}')" title="추적 목록에서 제거" style="margin-left:8px;font-size:11px;padding:3px 9px;border-radius:8px;background:var(--chip);color:var(--sub);border:1px solid var(--line)">제거</button>`:'';
+      const privTag=(v.pinned&&v.privacy&&v.privacy!=="public")?`<span style="background:#8b5cf6;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:6px">${v.privacy==="unlisted"?"일부공개":v.privacy==="private"?"비공개/예약":v.privacy}</span>`:'';
       if(v.scheduled){
         const when=v.publishAt? new Date(v.publishAt).toLocaleString("ko-KR"):"";
         return `<div class="panel" style="padding:0;overflow:hidden;margin-bottom:14px;opacity:.8">
           <div style="display:flex;gap:14px;flex-wrap:wrap;padding:12px 14px">
             <img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" style="width:180px;max-width:40%;aspect-ratio:16/9;object-fit:cover;border-radius:8px">
             <div style="flex:1;min-width:220px">
-              <div style="font-weight:700;font-size:14px;line-height:1.4">${v.title} ${todayBadge}</div>
+              <div style="font-weight:700;font-size:14px;line-height:1.4">${v.title} ${todayBadge}${pinTag}${privTag}${rmBtn}</div>
               <div style="margin-top:10px;color:var(--y-tx,#b8860b);font-weight:700">🕒 공개 예정: ${when}</div>
               <div style="color:var(--sub);font-size:12px;margin-top:4px">공개되면 여기서 조회수가 실시간으로 잡혀요.</div>
             </div></div></div>`;
@@ -1245,7 +1273,7 @@
             <span style="position:absolute;top:6px;left:6px;background:#378add;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px">롱폼</span>
           </div>
           <div style="flex:1;min-width:220px">
-            <div style="font-weight:700;font-size:14px;line-height:1.4;cursor:pointer" onclick="${oc}">${v.title} ${todayBadge}</div>
+            <div style="font-weight:700;font-size:14px;line-height:1.4"><span style="cursor:pointer" onclick="${oc}">${v.title}</span> ${todayBadge}${pinTag}${privTag}${rmBtn}</div>
             <div style="display:flex;gap:22px;margin-top:10px;align-items:flex-end;flex-wrap:wrap">
               <div><div style="font-size:11px;color:var(--sub)">현재 조회수 <span style="color:var(--blue)">실시간</span></div><div style="font-size:26px;font-weight:800;line-height:1.1">${fmt(v.views)}</div></div>
               <div><div style="font-size:11px;color:var(--sub)">좋아요</div><div style="font-size:17px;font-weight:700">${fmt(v.likes)}</div></div>
