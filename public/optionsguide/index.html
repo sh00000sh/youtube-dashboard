@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유진투자선물</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            color: #1b1b1b;
+            background: #ffffff;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 히어로 : 화면 전체 폭으로 퍼지는 그라데이션 */
+        .hero {
+            width: 100%;
+            background: radial-gradient(140% 92% at 50% -12%, #c7dcf7 0%, #dde9fb 34%, #eef4fd 58%, #ffffff 82%);
+            text-align: center;
+            padding: 52px 24px 42px;
+            opacity: 0; animation: fadeDown .7s ease forwards;
+        }
+        .hero-inner { max-width: 440px; margin: 0 auto; }
+        .hero .avatar {
+            width: 84px; height: 84px; border-radius: 24px; object-fit: cover;
+            box-shadow: 0 12px 28px rgba(37,99,235,0.20); margin-bottom: 18px; background: #2563eb;
+        }
+        .hero h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; color: #16233b; }
+        .hero .sub { font-size: 14px; color: #55698c; margin-top: 8px; }
+        .hero .socials { display: flex; justify-content: center; gap: 22px; margin-top: 22px; }
+        .hero .socials a {
+            color: #2b3a55; font-size: 23px; text-decoration: none; line-height: 1;
+            transition: transform .15s ease, color .15s ease;
+        }
+        .hero .socials a:hover { transform: translateY(-2px); color: #16233b; }
+
+        /* 본문 */
+        .content { max-width: 440px; margin: 0 auto; padding: 22px 22px 28px; }
+        .list { display: flex; flex-direction: column; gap: 12px; }
+
+        /* 카드 : 왼쪽 대표사진 + 오른쪽 텍스트 */
+        .card {
+            display: flex; align-items: center; gap: 14px;
+            background: #fff; border: 1px solid #ecedf0; border-radius: 16px;
+            padding: 12px; text-decoration: none; color: inherit;
+            box-shadow: 0 2px 10px rgba(30,60,120,0.05);
+            opacity: 0; transform: translateY(18px);
+            animation: riseUp .6s cubic-bezier(.22,.61,.36,1) forwards;
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(30,60,120,0.10); }
+        .card:nth-child(1){animation-delay:.10s}
+        .card:nth-child(2){animation-delay:.18s}
+        .card:nth-child(3){animation-delay:.26s}
+        .card:nth-child(4){animation-delay:.34s}
+        .card:nth-child(5){animation-delay:.42s}
+
+        .card .thumb {
+            flex-shrink: 0; width: 64px; height: 64px; border-radius: 13px; overflow: hidden;
+            position: relative; display: flex; align-items: center; justify-content: center;
+        }
+        .card .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+        .card .thumb i { font-size: 24px; color: #fff; z-index: 0; }
+        .th-a { background: linear-gradient(135deg,#f87171,#ef4444); }
+        .th-b { background: linear-gradient(135deg,#60a5fa,#2563eb); }
+        .th-c { background: linear-gradient(135deg,#fbbf24,#f59e0b); }
+        .th-d { background: linear-gradient(135deg,#34d399,#10b981); }
+        .th-e { background: linear-gradient(135deg,#4b5563,#1f2937); }
+
+        .card .tx { flex: 1; min-width: 0; }
+        .card .tx .desc { display: block; font-size: 11.5px; color: #9aa0ab; margin-bottom: 3px; }
+        .card .tx b { display: block; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: #1b1b1b; }
+        .card .go { flex-shrink: 0; color: #cfd2d8; font-size: 14px; padding-right: 4px; transition: transform .2s ease, color .2s ease; }
+        .card:hover .go { color: #1b1b1b; transform: translateX(3px); }
+
+        /* 푸터 */
+        .footer { text-align: center; padding: 30px 22px 26px; opacity: 0; animation: riseUp .6s ease .5s forwards; }
+        .footer .copy { font-size: 11px; letter-spacing: 0.1em; color: #9c998f; }
+        .footer .notice { font-size: 10.5px; line-height: 1.8; color: #b7b4ab; margin: 10px auto 0; max-width: 400px; word-break: keep-all; }
+
+        @keyframes riseUp { to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) { .hero, .card, .footer { animation: none; opacity: 1; transform: none; } }
+    </style>
+</head>
+<body>
+
+    <!-- 히어로 (전체 폭 그라데이션) -->
+    <header class="hero">
+        <div class="hero-inner">
+            <img class="avatar" src="https://yt3.ggpht.com/I30OhWLQzcIwxuu7-e8ToOMfr4RtRmOWjZ1uekGWiiyA5g2_jCc5Zx2wDgbFjJh5pcSqPHwnXs8=s240-c-k-c0x00ffffff-no-rj" alt="유진투자선물" onerror="this.style.display='none'">
+            <h1>유진투자선물</h1>
+            <p class="sub">미국 주식옵션 인사이트</p>
+            <div class="socials">
+                <a href="#" title="인스타그램 (링크 준비중)" aria-label="인스타그램"><i class="fab fa-instagram"></i></a>
+                <a href="https://www.youtube.com/@유진투자선물_official" target="_blank" rel="noopener" aria-label="유튜브"><i class="fab fa-youtube"></i></a>
+                <a href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener" aria-label="블로그"><i class="fas fa-blog"></i></a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 본문 카드 -->
+    <main class="content">
+        <div class="list">
+
+            <a class="card" href="https://www.youtube.com/@유진투자선물_official" target="_blank" rel="noopener">
+                <span class="thumb th-a"><i class="fab fa-youtube"></i></span>
+                <span class="tx"><span class="desc">옵션 개념·전략 영상</span><b>유튜브</b></span>
+                <span class="go"><i class="fas fa-chevron-right"></i></span>
+            </a>
+
+            <a class="card" href="https://options.eugenefutures.com/usoguide/index.html" target="_blank" rel="noopener">
+                <span class="thumb th-b"><i class="fas fa-book"></i></span>
+                <span class="tx"><span class="desc">미국주식옵션 입문</span><b>가이드북</b></span>
+                <span class="go"><i class="fas fa-chevron-right"></i></span>
+            </a>
+
+            <a class="card" href="https://eugeneoptions.pages.dev/" target="_blank" rel="noopener">
+                <span class="thumb th-c"><i class="fas fa-chart-line"></i></span>
+                <span class="tx"><span class="desc">데일리 옵션 마켓 시황</span><b>시황</b></span>
+                <span class="go"><i class="fas fa-chevron-right"></i></span>
+            </a>
+
+            <a class="card" href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener">
+                <span class="thumb th-d"><i class="fas fa-feather"></i></span>
+                <span class="tx"><span class="desc">옵션 기초 개념·용어</span><b>블로그</b></span>
+                <span class="go"><i class="fas fa-chevron-right"></i></span>
+            </a>
+
+            <a class="card" href="https://options.eugenefutures.com/wts/works/MK_0001" target="_blank" rel="noopener">
+                <span class="thumb th-e"><i class="fas fa-graduation-cap"></i></span>
+                <span class="tx"><span class="desc">거래 전 필수 · 무료</span><b>사전교육 · 모의거래</b></span>
+                <span class="go"><i class="fas fa-chevron-right"></i></span>
+            </a>
+
+        </div>
+
+        <footer class="footer">
+            <div class="copy">EUGENE FUTURES</div>
+            <p class="notice">
+                투자 권유가 아닌 정보 제공용이며, 일부는 외부 사이트로 연결돼요.<br>
+                정보는 지연·변경될 수 있어 투자 결과의 법적 증빙이 될 수 없어요.
+            </p>
+        </footer>
+    </main>
+
+</body>
+</html>
