@@ -1328,7 +1328,9 @@
     // ===== 썸네일 A/B 테스트 실시간 =====
     let abChart=null, abInited=false;
     const pad2=(n)=>String(n).padStart(2,"0");
-    function defaultAbStart(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T16:30`; }
+    function defaultAbStart(){ const d=new Date(); // 지나간 가장 최근 16:30 (아직 16:30 전이면 어제)
+      if(d.getHours()<16 || (d.getHours()===16 && d.getMinutes()<30)) d.setDate(d.getDate()-1);
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T16:30`; }
     function saveAbCfg(){ try{ localStorage.setItem("abVideo",document.getElementById("abVideo").value||""); localStorage.setItem("abStart",document.getElementById("abStart").value||""); }catch(_){} }
     async function initAb(){
       const sel=document.getElementById("abVideo"), st=document.getElementById("abStart");
