@@ -200,16 +200,21 @@ async function fetchVideoMeta(ids) {
     const chunk = ids.slice(i, i + 50);
     const url =
       "https://www.googleapis.com/youtube/v3/videos" +
-      "?part=snippet,contentDetails&id=" + chunk.join(",") +
+      "?part=snippet,contentDetails,statistics&id=" + chunk.join(",") +
       "&key=" + YOUTUBE_API_KEY;
     const data = await (await fetch(url)).json();
     if (data.error) throw new Error(data.error.message);
     for (const it of data.items || []) {
+      const st = it.statistics || {};
       out[it.id] = {
         title: it.snippet.title,
         publishedAt: it.snippet.publishedAt.slice(0, 10),
         publishedFull: it.snippet.publishedAt,           // 전체 게시시각(ISO, 시간 포함)
         duration: isoDurToMMSS(it.contentDetails.duration),
+        // 실제 누적 지표(유튜브 표기값) — 30일 윈도우 Analytics 대신 이걸 시트에 기록
+        realViews: st.viewCount != null ? Number(st.viewCount) : null,
+        realLikes: st.likeCount != null ? Number(st.likeCount) : null,
+        realComments: st.commentCount != null ? Number(st.commentCount) : null,
       };
     }
   }
@@ -323,13 +328,15 @@ async function writeVideos(sheets, videos, meta) {
       values: [[title, m.duration || ""]],
     });
     // H~M 채움 (F노출수 G CTR 은 안 건드림)
+    // 조회수·좋아요·댓글은 유튜브 실제 누적값(Data API) 우선 — 30일 윈도우 Analytics는 실제와 달라 혼동됨.
+    // (평균조회율·공유·구독전환은 Analytics 기간 지표 그대로 — Data API가 제공 안 함)
     updates.push({
       range: `${VIDEO_TAB}!H${row}:M${row}`,
       values: [[
         v.avgViewPct / 100, // 평균조회율
-        v.views,
-        v.likes,
-        v.comments,
+        m.realViews != null ? m.realViews : v.views,       // 조회수(실제 누적)
+        m.realLikes != null ? m.realLikes : v.likes,       // 좋아요(실제 누적)
+        m.realComments != null ? m.realComments : v.comments, // 댓글(실제 누적)
         v.shares,
         v.subsGained,       // 구독전환
       ]],
@@ -872,6 +879,66 @@ app.get("/api/video-live", async (req, res) => {
       scheduled: it.status?.privacyStatus !== "public" && !!it.status?.publishAt,
       publishAt: it.status?.publishAt || null,
     } });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 썸네일 A/B 테스트 실시간 추적 — 특정 영상의 "A/B 시작시각 이후" 조회수/유입속도/시계열
+//   start(ISO 또는 ms) 이후 = 현재 실제 조회수 - (start 직전 스냅샷 조회수)
+//   시간별스냅샷(1시간 간격)으로 시작 이후 곡선을 그림. 현재 조회수는 지연 없이 즉시.
+app.get("/api/ab-test", async (req, res) => {
+  try {
+    const id = String(req.query.id || "").trim();
+    if (!id) return res.status(400).json({ ok: false, error: "id 없음" });
+    const startTs = req.query.start ? new Date(isNaN(+req.query.start) ? req.query.start : +req.query.start).getTime() : null;
+
+    // 현재 실시간 지표(Data API, OAuth → 본인 소유 영상)
+    const yt = google.youtube({ version: "v3", auth: getOAuth() });
+    const vs = await yt.videos.list({ part: "snippet,statistics,contentDetails,status", id });
+    const it = (vs.data.items || [])[0];
+    if (!it) return res.status(404).json({ ok: false, error: "영상을 찾을 수 없어요(ID 확인)" });
+    const cur = { views: Number(it.statistics?.viewCount || 0), likes: Number(it.statistics?.likeCount || 0), comments: Number(it.statistics?.commentCount || 0) };
+
+    // 이 영상의 시간별 스냅샷(타임스탬프 포함)
+    const sheets = getSheetsClient();
+    let snaps = [];
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:G` });
+      snaps = (r.data.values || []).filter((x) => x[1] === id)
+        .map((x) => ({ ts: new Date(x[0]).getTime(), views: Number(x[4] || 0) }))
+        .filter((s) => s.ts).sort((a, b) => a.ts - b.ts);
+    } catch (_) { /* 스냅샷 탭 없음 */ }
+
+    // baseline = 시작시각 이하 마지막 스냅샷(없으면 시작 이상 첫 스냅샷)
+    let baseline = null;
+    if (startTs != null && snaps.length) {
+      const before = snaps.filter((s) => s.ts <= startTs);
+      baseline = before.length ? before[before.length - 1] : (snaps.find((s) => s.ts >= startTs) || null);
+    }
+    const nowTs = Date.now();
+    const sinceViews = baseline ? Math.max(0, cur.views - baseline.views) : null;
+    const elapsedH = (startTs != null) ? Math.max(0, (nowTs - startTs) / 3600000) : null;
+    const perHour = (sinceViews != null && elapsedH > 0) ? Math.round(sinceViews / elapsedH) : null;
+
+    // 시작 이후 시계열(baseline 대비 증가분) + 현재 시점
+    let series = [];
+    if (baseline) {
+      series = snaps.filter((s) => s.ts >= baseline.ts).map((s) => ({ ts: new Date(s.ts).toISOString(), since: Math.max(0, s.views - baseline.views) }));
+      const lastTs = series.length ? new Date(series[series.length - 1].ts).getTime() : 0;
+      if (nowTs - lastTs > 60000) series.push({ ts: new Date(nowTs).toISOString(), since: Math.max(0, cur.views - baseline.views) });
+    }
+
+    res.json({
+      ok: true, at: new Date(nowTs).toISOString(),
+      video: { id, title: it.snippet.title, publishedAt: it.snippet.publishedAt, duration: isoDurToMMSS(it.contentDetails?.duration), privacy: it.status?.privacyStatus },
+      current: cur,
+      start: startTs != null ? new Date(startTs).toISOString() : null,
+      baseline: baseline ? { at: new Date(baseline.ts).toISOString(), views: baseline.views } : null,
+      sinceStart: { views: sinceViews, hours: elapsedH != null ? Number(elapsedH.toFixed(2)) : null, perHour },
+      hasSnapshots: snaps.length > 0,
+      series,
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

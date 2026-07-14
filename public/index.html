@@ -497,11 +497,24 @@
     </div>
 
     <div class="sec" id="sec-longform" style="display:none">
-    <h2>🎬 롱폼 실시간 <span class="kpi-badge">최근 롱폼 조회수 실시간 추적</span>
+    <h2>🅰️🅱️ 썸네일 A/B 테스트 실시간 <span class="kpi-badge">등록 시각 이후 조회수만 추적</span>
       <button id="lfAutoBtn" onclick="toggleLfAuto()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">▶ 자동 갱신</button>
-      <button onclick="loadLongformLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
+      <button onclick="loadAbTest();loadLongformLive()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
     </h2>
-    <div class="desc">최근 7일 내 올린 롱폼을 실시간 조회수로 보여줘요. <b>현재 조회수는 지연 없이 즉시</b> 반영되고, 시간대별 곡선은 스냅샷(1시간 간격)이 쌓이며 채워져요. 자동 갱신은 30초마다. <span id="lfAt"></span></div>
+    <div class="desc">썸네일 A/B 테스트를 <b>등록한 시각</b>을 넣으면, 그 시각 이후로 쌓인 조회수만 뽑아 실시간으로 보여줘요. (유튜브 API가 A/B 변형별 수치는 안 주므로, 전체 조회수·유입 속도로 효과를 가늠합니다.) <span id="abAt"></span></div>
+    <div class="panel" style="padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <label style="font-size:12px;color:var(--sub)">영상</label>
+        <select id="abVideo" onchange="saveAbCfg();loadAbTest()" style="min-width:240px;max-width:100%;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px"></select>
+        <label style="font-size:12px;color:var(--sub)">A/B 시작 시각</label>
+        <input type="datetime-local" id="abStart" onchange="saveAbCfg();loadAbTest()" style="padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+      </div>
+      <div class="cards" id="abCards" style="grid-template-columns:repeat(4,1fr)"></div>
+      <div style="position:relative;height:200px;margin-top:14px"><canvas id="abChart"></canvas></div>
+      <div id="abNote" class="note" style="margin-top:6px"></div>
+    </div>
+    <h2 style="font-size:15px;margin-top:6px">🎬 최근 롱폼 실시간 <span class="kpi-badge">현재 조회수는 즉시 · 시간대별 곡선</span></h2>
+    <div class="desc">최근 7일 내 올린 롱폼을 실시간 조회수로 보여줘요. 자동 갱신은 30초마다. <span id="lfAt"></span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <input id="lfPinInput" placeholder="방금 올린 영상 URL 또는 ID 붙여넣기 → 목록에 없어도 즉시 추적" onkeydown="if(event.key==='Enter')addLfPin()" style="flex:1;min-width:240px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
       <button onclick="addLfPin()" style="background:var(--blue);color:#fff;padding:9px 16px;border-radius:10px;font-size:13px">+ 추적 추가</button>
@@ -1305,10 +1318,80 @@
             scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()},beginAtZero:true}}}});
       }catch(_){ if(note) note.textContent="시간대별 데이터를 불러오지 못했어요."; }
     }
+    function refreshLfTab(){ loadAbTest(); loadLongformLive(); }
     function toggleLfAuto(){
       const btn=document.getElementById("lfAutoBtn");
       if(lfTimer){ clearInterval(lfTimer); lfTimer=null; btn.textContent="▶ 자동 갱신"; btn.style.background="var(--chip)"; btn.style.color="var(--text)"; }
-      else { loadLongformLive(); lfTimer=setInterval(loadLongformLive,30000); btn.textContent="⏸ 자동 갱신 중"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
+      else { refreshLfTab(); lfTimer=setInterval(refreshLfTab,30000); btn.textContent="⏸ 자동 갱신 중"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
+    }
+
+    // ===== 썸네일 A/B 테스트 실시간 =====
+    let abChart=null, abInited=false;
+    const pad2=(n)=>String(n).padStart(2,"0");
+    function defaultAbStart(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T16:30`; }
+    function saveAbCfg(){ try{ localStorage.setItem("abVideo",document.getElementById("abVideo").value||""); localStorage.setItem("abStart",document.getElementById("abStart").value||""); }catch(_){} }
+    async function initAb(){
+      const sel=document.getElementById("abVideo"), st=document.getElementById("abStart");
+      if(!sel||!st) return;
+      if(!st.value){ st.value = localStorage.getItem("abStart") || defaultAbStart(); }
+      if(!abInited){
+        try{
+          const lv=await fetch("/api/live").then(r=>r.json()).catch(()=>({ok:false}));
+          if(lv.ok){
+            const vids=(lv.videos||[]);
+            sel.innerHTML=vids.map(v=>`<option value="${v.id}">${(durSec(v.duration)>180?"[롱폼] ":"[숏폼] ")}${(v.title||'').slice(0,34)}</option>`).join("");
+            const saved=localStorage.getItem("abVideo");
+            if(saved && vids.some(v=>v.id===saved)) sel.value=saved;
+            else { const lf=vids.find(v=>durSec(v.duration)>180); if(lf) sel.value=lf.id; }
+            abInited=true;
+          }
+        }catch(_){}
+      }
+      loadAbTest();
+    }
+    async function loadAbTest(){
+      const sel=document.getElementById("abVideo"), st=document.getElementById("abStart");
+      const cards=document.getElementById("abCards"), at=document.getElementById("abAt");
+      if(!sel||!sel.value){ if(cards)cards.innerHTML='<div class="empty" style="grid-column:1/-1">영상을 선택하세요.</div>'; return; }
+      const id=sel.value; const ms=(st&&st.value)? new Date(st.value).getTime() : "";
+      if(at) at.textContent="(불러오는 중...)";
+      try{
+        const d=await fetch(`/api/ab-test?id=${encodeURIComponent(id)}${ms?("&start="+ms):""}`).then(r=>r.json());
+        if(!d.ok){ if(cards)cards.innerHTML=`<div class="empty" style="grid-column:1/-1">❌ ${d.error||"불러오기 실패"}</div>`; if(at)at.textContent=""; return; }
+        renderAbTest(d);
+        if(at) at.textContent="· 갱신: "+new Date().toLocaleTimeString("ko-KR");
+      }catch(e){ if(at)at.textContent="❌ "+e.message; }
+    }
+    function renderAbTest(d){
+      const cards=document.getElementById("abCards"), note=document.getElementById("abNote");
+      const nz=(v)=> v==null? '<span style="color:var(--sub);font-size:15px">집계 대기</span>' : fmt(v);
+      const since=d.sinceStart||{};
+      const startLbl=d.start? new Date(d.start).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"-";
+      const baseLbl=d.baseline? new Date(d.baseline.at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):null;
+      const hrs = since.hours!=null? (since.hours<1? Math.round(since.hours*60)+"분" : since.hours.toFixed(1)+"시간") : "-";
+      cards.innerHTML=`
+        <div class="card"><div class="label">A/B 시작 이후 조회수 <span style="font-size:10px;color:var(--blue)">실시간</span></div><div class="value">${nz(since.views)}</div><div class="note">${startLbl} 이후</div></div>
+        <div class="card"><div class="label">현재 총 조회수</div><div class="value">${fmt(d.current.views)}</div><div class="note">좋아요 ${fmt(d.current.likes)} · 댓글 ${fmt(d.current.comments)}</div></div>
+        <div class="card"><div class="label">경과 시간</div><div class="value" style="font-size:22px">${hrs}</div></div>
+        <div class="card"><div class="label">시간당 유입</div><div class="value" style="font-size:22px">${since.perHour!=null?fmt(since.perHour)+"회/h":"-"}</div></div>`;
+      const series=d.series||[];
+      const ctx=document.getElementById("abChart");
+      if(ctx){
+        if(series.length<1){ if(abChart){abChart.destroy();abChart=null;} }
+        else {
+          const labels=series.map(p=>new Date(p.ts).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"}));
+          const data=series.map(p=>p.since);
+          if(abChart)abChart.destroy();
+          abChart=new Chart(ctx,{type:"line",data:{labels,datasets:[{label:"A/B 시작 이후 조회수",data,borderColor:"#19a974",backgroundColor:"rgba(25,169,116,.12)",fill:true,tension:.3,pointRadius:2}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>fmt(c.parsed.y)+"회"}}},
+              scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()},beginAtZero:true}}}});
+        }
+      }
+      let msg="";
+      if(!d.start) msg="A/B 시작 시각을 입력하면 그 이후 조회수를 뽑아요.";
+      else if(!d.hasSnapshots || !d.baseline) msg="이 영상의 시간별 스냅샷이 아직 없어요. 스냅샷 로봇이 정시마다 기록하니 곧 '시작 이후' 값이 채워져요. (현재 총 조회수는 지금도 정확)";
+      else if(baseLbl) msg=`기준 스냅샷 ${baseLbl} (${fmt(d.baseline.views)}회)에서 현재까지의 증가분이에요. A/B 등록 시각과 가장 가까운 정시 스냅샷을 기준으로 잡아요.`;
+      if(note) note.textContent=msg;
     }
 
     // 과거 vs 현재 비교 (광고 제외)
@@ -1486,7 +1569,7 @@
     const NAV=[
       {cat:"daily", label:"📅 일일", subs:[
         {id:"sec-live",     label:"실시간",        secs:["sec-live"],     draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
-        {id:"sec-longform", label:"롱폼 실시간",   secs:["sec-longform"], draw:()=>loadLongformLive()},
+        {id:"sec-longform", label:"A/B·롱폼 실시간", secs:["sec-longform"], draw:()=>{ initAb(); loadLongformLive(); }},
         {id:"sec-dchart",   label:"일일 그래프",   secs:["sec-dchart"],   draw:()=>drawChart()},
         {id:"sec-dtable",   label:"일일 상세",     secs:["sec-dtable"],   draw:()=>renderDailyTable()},
       ]},
