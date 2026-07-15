@@ -1064,17 +1064,19 @@ app.get("/api/daily-live", async (req, res) => {
       });
     } catch (_) { /* 탭 없음 */ }
 
-    // 4) 병합: 수동 보정 > (오늘/어제) 스냅샷 > Analytics 확정 > 스냅샷
+    // 4) 병합 우선순위:
+    //    - 오늘: 지연 없는 라이브 추정(스냅샷) — Analytics가 아직 없으니 어쩔 수 없음(잠정)
+    //    - 과거일: 확정(Analytics) 최우선 → 수동보정 → 스냅샷 추정(확정 전 잠정)
+    //    ※ 스냅샷 추정치는 '공개 viewCount 합계 차분'이라 실제(Analytics) 조회수보다 몇 배 부풀 수 있음
+    //      (특히 숏폼 카운트 배치 갱신). 그래서 확정되면 무조건 Analytics 값으로 대체한다.
     const dates = [...new Set([...Object.keys(anaDaily), ...Object.keys(snapDaily), ...Object.keys(manualFix)])].sort();
     const days = dates.map((d) => {
       const hasSnap = snapDaily[d] != null, hasAna = anaDaily[d] != null, hasFix = manualFix[d] != null;
       let views, source;
-      // 오늘은 항상 라이브(스냅샷) — 수동입력에 묶이면 갱신이 멈춤
-      if (d === todayK && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
-      else if (hasFix) { views = manualFix[d]; source = "manual"; }
-      else if (d === ydayK && hasSnap) { views = snapDaily[d]; source = "snapshot"; }
-      else if (hasAna) { views = anaDaily[d].views; source = "analytics"; }
-      else if (hasSnap) { views = snapDaily[d]; source = "snapshot"; }
+      if (d === todayK && hasSnap) { views = snapDaily[d]; source = "snapshot"; }   // 오늘: 라이브 추정(잠정)
+      else if (hasAna) { views = anaDaily[d].views; source = "analytics"; }          // 과거일: 확정값(스튜디오와 동일)
+      else if (hasFix) { views = manualFix[d]; source = "manual"; }                  // 확정 전 수동 보정값
+      else if (hasSnap) { views = snapDaily[d]; source = "snapshot"; }               // 그래도 없으면 스냅샷 추정(잠정)
       else { views = 0; source = "none"; }
       return { date: d, views, source };
     });
@@ -1083,9 +1085,11 @@ app.get("/api/daily-live", async (req, res) => {
     // 오늘 = 라이브(영상합계 - 새벽 baseline). 수동값은 baseline 스냅샷이 아예 없을 때만 폴백
     const todayViews = todayStart ? Math.max(0, gainNow - todayStart.views) : (manualFix[todayK] != null ? manualFix[todayK] : null);
     const todaySubs = todayStart ? (nowSubs - todayStart.subs) : (anaDaily[todayK] ? anaDaily[todayK].subsNet : null);
-    const yesterdayViews = (manualFix[ydayK] != null) ? manualFix[ydayK]
+    // 어제: 확정(Analytics) 최우선 → 수동보정 → 스냅샷 추정. (스냅샷 추정은 부풀 수 있어 확정값을 먼저 씀)
+    const yesterdayViews = (anaDaily[ydayK] != null) ? anaDaily[ydayK].views
+      : (manualFix[ydayK] != null) ? manualFix[ydayK]
       : (snapDaily[ydayK] != null) ? snapDaily[ydayK]
-      : (anaDaily[ydayK] ? anaDaily[ydayK].views : null);
+      : null;
 
     res.json({
       ok: true, at: new Date(nowTs).toISOString(),
