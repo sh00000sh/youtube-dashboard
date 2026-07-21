@@ -635,6 +635,8 @@
     const fmt=(n)=>N(n).toLocaleString("ko-KR");
     const toPctNum=(n)=>{const x=N(n);return x<=1?x*100:x;};
     const pctStr=(n)=>{ if(n==null||n==="")return "-"; return toPctNum(n).toFixed(1)+"%"; };
+    // CTR은 시트에서 이미 '0.6%'처럼 %값으로 옴 → ×100 하면 안 됨(그대로 %). 평균조회율(분수)과 규칙 다름.
+    const ctrStr=(n)=>{ if(n==null||n==="")return "-"; return N(n).toFixed(1)+"%"; };
     const kCls=(a,t)=>{if(!t)return "";const r=a/t;return r>=1?"g":r>=0.5?"y":"r";};
     const eCls=(v)=>{v=N(v);return v>=ENG.green?"g":v>=ENG.yellow?"y":"r";};
     // 영상 길이(0:42 / 1:02:03) → 초. 180초(3분) 이하면 숏폼
@@ -1486,7 +1488,7 @@
     // CTR × 평균조회율 산점도
     let scatter=null;
     function drawScatter(){
-      const pts=VIDEOS.filter(x=>x[6]).map(x=>({x:toPctNum(x[6]),y:toPctNum(x[7]),t:x[3]}));
+      const pts=VIDEOS.filter(x=>x[6]).map(x=>({x:N(x[6]),y:toPctNum(x[7]),t:x[3]}));
       if(scatter)scatter.destroy();
       scatter=new Chart(document.getElementById("scatterChart"),{type:"scatter",
         data:{datasets:[{label:"영상",data:pts,backgroundColor:"#3182f6",pointRadius:6,pointHoverRadius:9}]},
@@ -1521,7 +1523,7 @@
         <td>${x[0]??""}</td>
         <td class="${kCls(N(x[1]),KPI.daily.subs)}">${fmt(x[1])}</td>
         <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
-        <td class="${x[8]?kCls(toPctNum(x[8]),KPI.daily.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?pctStr(x[8]):"-"}</td>
+        <td class="${x[8]?kCls(N(x[8]),KPI.daily.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?ctrStr(x[8]):"-"}</td>
         <td class="${kCls(N(x[6]),KPI.daily.views)}">${fmt(x[6])}</td>
         <td class="${kCls(toPctNum(x[9]),KPI.daily.avp)}">${pctStr(x[9])}</td>
         <td class="muted">${x[11]??"-"}</td>
@@ -1553,7 +1555,7 @@
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td class="muted">${x[4]??""}</td>
         <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','impr','${x[5]??''}')"`:''}>${x[5]?fmt(x[5]):"-"}</td>
-        <td class="${x[6]?kCls(toPctNum(x[6]),KPI.video.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?pctStr(x[6]):"-"}</td>
+        <td class="${x[6]?kCls(N(x[6]),KPI.video.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?ctrStr(x[6]):"-"}</td>
         <td class="${kCls(toPctNum(x[7]),KPI.video.avp)}">${pctStr(x[7])}</td>
         <td class="${kCls(N(x[8]),KPI.video.views)}">${fmt(x[8])}</td>
         <td>${fmt(x[9])}</td>
@@ -1883,7 +1885,7 @@
       if(!ADMIN||cellEditing) return;
       cellEditing=true;
       const isCtr=field==="ctr";
-      const cur=(curRaw===""||curRaw==null)?"":(isCtr?toPctNum(curRaw):N(curRaw));
+      const cur=(curRaw===""||curRaw==null)?"":N(curRaw);   // CTR도 이미 %숫자라 그대로 표시(0.6 → 0.6)
       td.innerHTML=`<input class="cell-inp" type="text" inputmode="decimal" value="${cur}">`;
       const inp=td.querySelector("input");
       inp.focus(); inp.select();
@@ -1897,8 +1899,8 @@
         else{
           const n=Number(raw.replace(/[^0-9.\-]/g,""));
           if(isNaN(n)){ if(type==="daily")renderDailyTable(); else renderVideos(); return; }
-          // CTR은 % 입력 → 시트엔 비율(0.055)로 저장 (평균조회율과 동일 규칙)
-          store = isCtr ? n/100 : n; sheetVal = store;
+          // CTR: 화면/로컬은 %숫자(0.6), 시트는 %서식 셀이라 비율(0.006)로 저장
+          store = n; sheetVal = isCtr ? n/100 : n;
         }
         try{
           const r=await fetch("/api/cell",{method:"POST",headers:{"Content-Type":"application/json"},
