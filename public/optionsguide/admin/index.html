@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유입경로 방문 분석 · 관리자</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Noto Sans KR',sans-serif; color:#1b1b1b; background:#f4f5f7; -webkit-font-smoothing:antialiased; }
+        .wrap { max-width:920px; margin:0 auto; padding:26px 18px 40px; }
+        h1 { font-size:20px; font-weight:700; letter-spacing:-0.01em; }
+        .sub { font-size:12.5px; color:#8a8f98; margin-top:4px; }
+
+        .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; background:#fff; border:1px solid #ecedf0; border-radius:14px; padding:14px 16px; margin:18px 0; box-shadow:0 2px 10px rgba(30,60,120,.05); }
+        .fld { display:flex; flex-direction:column; gap:4px; }
+        .fld label { font-size:11px; color:#8a8f98; }
+        .bar input { padding:8px 10px; border:1px solid #d7dae0; border-radius:9px; font-size:13px; font-family:inherit; }
+        .quick { display:flex; gap:6px; }
+        .quick button, .go { padding:8px 12px; border:1px solid #d7dae0; background:#fff; border-radius:9px; font-size:12.5px; cursor:pointer; font-family:inherit; }
+        .quick button:hover { background:#f1f3f5; }
+        .go { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:600; margin-left:auto; }
+        .err { color:#e5484d; font-size:12.5px; margin:8px 2px 0; }
+
+        .total { background:#111827; color:#fff; border-radius:14px; padding:18px 20px; margin-bottom:14px; display:flex; align-items:baseline; gap:12px; }
+        .total .n { font-size:32px; font-weight:700; }
+        .total .lbl { font-size:13px; color:#c7cbd3; }
+        .total .rng { margin-left:auto; font-size:12px; color:#9aa0ab; }
+
+        .cards { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+        .card { background:#fff; border:1px solid #ecedf0; border-radius:12px; padding:13px 14px; box-shadow:0 1px 4px rgba(30,60,120,.04); }
+        .card .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px; }
+        .card .name { font-size:12px; color:#6b7280; }
+        .card .cnt { font-size:22px; font-weight:700; margin-top:5px; }
+        .card .pct { font-size:11px; color:#9aa0ab; margin-top:2px; }
+        @media (max-width:640px){ .cards{ grid-template-columns:repeat(2,1fr); } }
+
+        .panel { background:#fff; border:1px solid #ecedf0; border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(30,60,120,.05); margin-bottom:16px; }
+        .panel h2 { font-size:14px; font-weight:600; margin-bottom:10px; }
+        .chart-box { position:relative; height:260px; }
+
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        th, td { padding:9px 8px; text-align:right; border-bottom:1px solid #f0f1f3; white-space:nowrap; }
+        th:first-child, td:first-child { text-align:left; }
+        thead th { color:#6b7280; font-weight:600; font-size:12px; background:#fafbfc; }
+        tbody tr:hover { background:#fafbfc; }
+        tfoot td { font-weight:700; border-top:2px solid #e5e7eb; }
+        .empty { text-align:center; color:#9aa0ab; padding:24px; font-size:13px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>📊 유입경로 방문 분석</h1>
+        <div class="sub">통합 사이트(/optionsguide) 유입경로별 방문수 · 날짜별 확인</div>
+
+        <div class="bar">
+            <div class="fld"><label>비밀번호</label><input id="pw" type="password" placeholder="관리자 비밀번호" style="width:130px"></div>
+            <div class="fld"><label>시작일</label><input id="from" type="date"></div>
+            <div class="fld"><label>종료일</label><input id="to" type="date"></div>
+            <div class="quick">
+                <button data-r="today">오늘</button>
+                <button data-r="7">최근 7일</button>
+                <button data-r="30">최근 30일</button>
+            </div>
+            <button class="go" id="go">조회</button>
+        </div>
+        <div class="err" id="err"></div>
+
+        <div id="result" style="display:none">
+            <div class="total"><span class="n" id="tTotal">0</span><span class="lbl">총 방문</span><span class="rng" id="tRange"></span></div>
+            <div class="cards" id="cards"></div>
+            <div class="panel"><h2>일별 방문 추이 (경로별 누적)</h2><div class="chart-box"><canvas id="chart"></canvas></div></div>
+            <div class="panel">
+                <h2>일별 상세</h2>
+                <div style="overflow-x:auto"><table id="tbl"></table></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var SRC = [
+            {k:"youtube",   name:"유튜브",     c:"#ef4444"},
+            {k:"instagram", name:"인스타그램", c:"#d6336c"},
+            {k:"plus",      name:"플러스친구", c:"#f5b301"},
+            {k:"blog",      name:"네이버블로그", c:"#22a06b"},
+            {k:"etc",       name:"기타",       c:"#9aa0ab"},
+        ];
+        var pad = function(n){ return String(n).padStart(2,"0"); };
+        var ymd = function(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
+        var fmt = function(n){ return (n||0).toLocaleString("ko-KR"); };
+        var chart = null;
+
+        function setRange(r){
+            var to = new Date(), from = new Date();
+            if(r==="today"){ /* from=to=today */ }
+            else { from.setDate(from.getDate() - (Number(r)-1)); }
+            document.getElementById("from").value = ymd(from);
+            document.getElementById("to").value = ymd(to);
+        }
+        // 기본: 최근 7일
+        setRange("7");
+
+        document.querySelectorAll(".quick button").forEach(function(b){
+            b.onclick = function(){ setRange(b.dataset.r); load(); };
+        });
+        document.getElementById("go").onclick = load;
+        document.getElementById("pw").addEventListener("keydown", function(e){ if(e.key==="Enter") load(); });
+
+        function load(){
+            var pw = document.getElementById("pw").value;
+            var from = document.getElementById("from").value, to = document.getElementById("to").value;
+            var err = document.getElementById("err"); err.textContent = "조회 중…";
+            if(!pw){ err.textContent = "비밀번호를 입력하세요."; return; }
+            fetch("/api/visits?pw="+encodeURIComponent(pw)+"&from="+from+"&to="+to)
+                .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
+                .then(function(o){
+                    if(o.status===401){ err.textContent="❌ 비밀번호가 올바르지 않습니다."; return; }
+                    if(!o.j.ok){ err.textContent="❌ "+(o.j.error||"조회 실패"); return; }
+                    err.textContent=""; render(o.j);
+                })
+                .catch(function(e){ err.textContent="❌ "+e.message; });
+        }
+
+        function render(d){
+            document.getElementById("result").style.display="";
+            document.getElementById("tTotal").textContent = fmt(d.total);
+            document.getElementById("tRange").textContent = d.from+" ~ "+d.to;
+
+            // 경로별 카드
+            var cards = SRC.map(function(s){
+                var c = (d.totals[s.k]||0);
+                var pct = d.total ? Math.round(c/d.total*100) : 0;
+                return '<div class="card"><div class="name"><span class="dot" style="background:'+s.c+'"></span>'+s.name+'</div>'+
+                       '<div class="cnt">'+fmt(c)+'</div><div class="pct">'+pct+'%</div></div>';
+            }).join("");
+            document.getElementById("cards").innerHTML = cards;
+
+            // 날짜 정렬
+            var dates = Object.keys(d.byDate).sort();
+
+            // 차트 (경로별 누적 막대)
+            var ctx = document.getElementById("chart");
+            if(chart) chart.destroy();
+            if(dates.length){
+                chart = new Chart(ctx, {
+                    type:"bar",
+                    data:{ labels:dates.map(function(x){return x.slice(5);}),
+                        datasets: SRC.map(function(s){ return {
+                            label:s.name, backgroundColor:s.c, borderRadius:3,
+                            data: dates.map(function(dt){ return (d.byDate[dt]&&d.byDate[dt][s.k])||0; })
+                        }; }) },
+                    options:{ responsive:true, maintainAspectRatio:false,
+                        plugins:{ legend:{ position:"bottom", labels:{ boxWidth:12, font:{size:11} } } },
+                        scales:{ x:{ stacked:true, grid:{display:false} }, y:{ stacked:true, beginAtZero:true } } }
+                });
+            }
+
+            // 일별 표 (최신순)
+            var head = "<thead><tr><th>날짜</th>"+SRC.map(function(s){return "<th>"+s.name+"</th>";}).join("")+"<th>합계</th></tr></thead>";
+            var body = dates.slice().reverse().map(function(dt){
+                var row = d.byDate[dt]||{}; var sum=0;
+                var tds = SRC.map(function(s){ var c=row[s.k]||0; sum+=c; return "<td>"+fmt(c)+"</td>"; }).join("");
+                return "<tr><td>"+dt+"</td>"+tds+"<td><b>"+fmt(sum)+"</b></td></tr>";
+            }).join("");
+            var foot = "<tfoot><tr><td>합계</td>"+SRC.map(function(s){return "<td>"+fmt(d.totals[s.k]||0)+"</td>";}).join("")+"<td>"+fmt(d.total)+"</td></tr></tfoot>";
+            document.getElementById("tbl").innerHTML = head + "<tbody>" + (body || '<tr><td colspan="7" class="empty">이 기간 방문 데이터가 없어요.</td></tr>') + "</tbody>" + foot;
+        }
+    </script>
+</body>
+</html>

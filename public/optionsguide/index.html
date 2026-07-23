@@ -147,5 +147,15 @@
         </footer>
     </main>
 
+    <!-- 유입경로 추적: ?src=youtube|instagram|plus|blog|etc -->
+    <script>
+      (function(){
+        try{
+          var src=(new URLSearchParams(location.search).get('src')||'etc').toLowerCase();
+          if(['youtube','instagram','plus','blog','etc'].indexOf(src)<0) src='etc';
+          fetch('/api/track?src='+encodeURIComponent(src),{keepalive:true}).catch(function(){});
+        }catch(e){}
+      })();
+    </script>
 </body>
 </html>
