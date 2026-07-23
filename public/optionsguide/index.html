@@ -34,7 +34,8 @@
           linear-gradient(var(--angle), var(--g1) 0%, var(--g2) 52%, var(--g3) 100%);
         background-attachment:fixed;
       }
-      .page{max-width:462px; margin:0 auto; padding:56px 22px 40px}
+      .page{max-width:462px; margin:0 auto; padding:56px 22px 40px; opacity:0}
+      .page.ready{opacity:1; transition:opacity .28s ease}
 
       /* 히어로 */
       .hero{text-align:center; opacity:0; animation:fadeDown .7s ease forwards}
@@ -209,18 +210,23 @@
     });
   }
 
-  // 미리보기 모드(?preview=1): 서버 설정 대신 부모창(관리자 수정탭)이 postMessage로 넘긴 설정을 실시간 적용
+  // 렌더는 설정 확정 후 딱 한 번(기본값 먼저 그렸다 덮어쓰는 깜빡임 방지). 그전까지 .page는 숨김.
+  var page=document.querySelector('.page');
+  function reveal(){ if(page) page.classList.add('ready'); }
+  var painted=false;
+  function renderOnce(cfg){ if(painted) return; painted=true; apply(cfg); reveal(); }
+
   if(new URLSearchParams(location.search).get('preview')){
-    apply(DEFAULT);
+    // 미리보기 모드: 부모창(관리자 수정탭)이 postMessage로 넘긴 설정을 실시간 적용
+    apply(DEFAULT); reveal();
     window.addEventListener('message',function(e){
       if(e.data&&e.data.type==='hubcfg'&&e.data.config) apply(e.data.config);
     });
   } else {
-    // 1) 즉시 기본값으로 렌더 → 2) 서버 설정 도착하면 덮어쓰기
-    apply(DEFAULT);
+    var to=setTimeout(function(){ renderOnce(DEFAULT); }, 2500);  // 응답 지연 시 폴백
     fetch('/api/hub-config').then(function(r){return r.json();}).then(function(j){
-      if(j&&j.ok&&j.config) apply(j.config);
-    }).catch(function(){});
+      clearTimeout(to); renderOnce(j&&j.ok&&j.config ? j.config : DEFAULT);
+    }).catch(function(){ clearTimeout(to); renderOnce(DEFAULT); });
   }
 })();
 </script>
