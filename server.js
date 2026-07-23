@@ -1937,6 +1937,7 @@ app.post("/api/hub-config", async (req, res) => {
       cards: cards.map((c) => ({
         id: String(c.id || "").replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24) || ("c" + Math.random().toString(36).slice(2, 8)),
         title: String(c.title || ""), desc: String(c.desc || ""), url: String(c.url || ""),
+        urlYoutube: String(c.urlYoutube || ""), urlInstagram: String(c.urlInstagram || ""),
         icon: String(c.icon || "link"), tint: String(c.tint || "#6366f1"), opacity: Math.max(0, Math.min(100, Number(c.opacity) || 0)),
         cardBg: String(c.cardBg || "#ffffff"), textColor: String(c.textColor || "#ffffff"),
         cardStyle: ["fill", "outline", "none"].indexOf(c.cardStyle) >= 0 ? c.cardStyle : "fill",

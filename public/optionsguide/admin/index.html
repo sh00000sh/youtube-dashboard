@@ -559,7 +559,9 @@
             +'<button class="btn-s danger" data-a="del" type="button">✕</button></span></div>'
             +'<div class="frow"><label>제목</label><input class="fin" data-f="title"></div>'
             +'<div class="frow"><label>설명</label><input class="fin" data-f="desc"></div>'
-            +'<div class="frow"><label>링크</label><input class="fin" data-f="url" placeholder="https://"></div>'
+            +'<div class="frow"><label>링크</label><input class="fin" data-f="url" placeholder="기본 링크 https://"></div>'
+            +'<div class="frow"><label>ㄴ유튜브용</label><input class="fin" data-f="urlYoutube" placeholder="유튜브 유입(?src=youtube) 시 링크 · 비우면 기본"></div>'
+            +'<div class="frow"><label>ㄴ인스타용</label><input class="fin" data-f="urlInstagram" placeholder="인스타 유입(?src=instagram) 시 링크 · 비우면 기본"></div>'
             +'<div class="frow"><label>아이콘</label><select class="fin" data-f="icon" style="max-width:150px">'
             + ICON_OPTS.map(function(o){return '<option value="'+o.v+'">'+o.n+'</option>';}).join("")
             +'</select><input type="color" class="fin" data-f="tint" title="아이콘 배경색"></div>'
@@ -583,6 +585,8 @@
           d.querySelector('[data-f=title]').value = c.title||"";
           d.querySelector('[data-f=desc]').value = c.desc||"";
           d.querySelector('[data-f=url]').value = c.url||"";
+          d.querySelector('[data-f=urlYoutube]').value = c.urlYoutube||"";
+          d.querySelector('[data-f=urlInstagram]').value = c.urlInstagram||"";
           d.querySelector('[data-f=icon]').value = c.icon||"link";
           d.querySelector('[data-f=tint]').value = c.tint||"#6366f1";
           d.querySelector('[data-f=imgurl]').value = (c.img && c.img.indexOf("data:")!==0) ? c.img : "";
@@ -600,7 +604,7 @@
           setThumb(d.querySelector('[data-t=thumb]'), c.img||"");
 
           // 텍스트/선택/투명도 → 실시간
-          ["title","desc","url"].forEach(function(f){
+          ["title","desc","url","urlYoutube","urlInstagram"].forEach(function(f){
             d.querySelector('[data-f='+f+']').addEventListener("input", function(e){ c[f]=e.target.value; pushPreview(); });
           });
           d.querySelector('[data-f=icon]').addEventListener("change", function(e){ c.icon=e.target.value; pushPreview(); });

@@ -197,8 +197,11 @@
         ? '<span class="tile" style="'+trot+'"><img src="'+esc(c.img)+'" alt="" style="opacity:'+iop+'"></span>'
         : '<span class="tile" style="background:linear-gradient(140deg,'+esc(c.tint||'#6366f1')+','+shade(c.tint||'#6366f1',.28)+');'+trot+'">'+(ICONS[c.icon]||ICONS.link)+'</span>';
       var dst=KNOWN_DST.indexOf(c.id)>=0?c.id:'etc';
+      var href=c.url;   // 유입 소스별 링크 분기(비어있으면 기본 링크)
+      if(curSrc==='youtube'&&c.urlYoutube) href=c.urlYoutube;
+      else if(curSrc==='instagram'&&c.urlInstagram) href=c.urlInstagram;
       var scls=c.cardStyle==='outline'?' st-outline':(c.cardStyle==='none'?' st-none':'');
-      return '<a class="card'+scls+'" style="'+style+'" href="'+esc(c.url)+'" target="_blank" rel="noopener" data-dst="'+dst+'">'
+      return '<a class="card'+scls+'" style="'+style+'" href="'+esc(href)+'" target="_blank" rel="noopener" data-dst="'+dst+'">'
         +tile+'<span class="tx"><span class="desc">'+esc(c.desc)+'</span><b>'+esc(c.title)+'</b></span>'
         +'<span class="go">'+CHEV+'</span></a>';
     }).join('');
@@ -206,7 +209,7 @@
   }
 
   /* ===== 유입/클릭 추적 ===== */
-  var trackBase='';
+  var trackBase='', curSrc='';
   (function initTrack(){
     try{
       var known=['youtube','instagram','plus','blog','chatmenu','chatbtn','etc'];
@@ -219,6 +222,7 @@
         else if(/kakao/.test(ref)) src='plus';
         else src='etc';
       }
+      curSrc=src;   // 카드 링크 분기용(유튜브용/인스타용)
       var vid="";
       try{ vid=localStorage.getItem('ef_vid'); if(!vid){ vid=Date.now().toString(36)+Math.random().toString(36).slice(2,10); localStorage.setItem('ef_vid',vid); } }catch(e){}
       trackBase='/api/track?src='+encodeURIComponent(src)+'&vid='+encodeURIComponent(vid);
