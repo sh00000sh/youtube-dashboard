@@ -1883,21 +1883,36 @@ const HUB_DEFAULT = {
   ],
 };
 
+// 서버 메모리 캐시: 방문마다 시트를 읽지 않도록(느림) 60초간 재사용. 저장(POST) 시 무효화.
+let hubCache = { at: 0, config: null };
+const HUB_CACHE_MS = 60 * 1000;
+
 app.get("/api/hub-config", async (req, res) => {
   try {
-    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, config: HUB_DEFAULT });
-    const sheets = getSheetsClient();
-    let rows = [];
-    try { const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A:B` }); rows = r.data.values || []; } catch (_) { /* 탭 없음 */ }
-    const map = {};
-    rows.forEach((r) => { if (r && r[0]) map[r[0]] = r[1] || ""; });
-    if (!map.meta) return res.json({ ok: true, config: HUB_DEFAULT });
-    let meta;
-    try { meta = JSON.parse(map.meta); } catch (_) { return res.json({ ok: true, config: HUB_DEFAULT }); }
-    meta.emblem = map.img_emblem || "";
-    (meta.cards || []).forEach((c) => { c.img = map["img_" + c.id] || ""; });
-    res.set("Cache-Control", "no-store");
-    res.json({ ok: true, config: meta });
+    const now = Date.now();
+    if (hubCache.config && (now - hubCache.at) < HUB_CACHE_MS) {
+      res.set("Cache-Control", "public, max-age=20");
+      return res.json({ ok: true, config: hubCache.config });
+    }
+    let config = HUB_DEFAULT;
+    if (GOOGLE_SERVICE_ACCOUNT && SHEET_ID) {
+      try {
+        const sheets = getSheetsClient();
+        const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A:B` });
+        const rows = r.data.values || [];
+        const map = {};
+        rows.forEach((x) => { if (x && x[0]) map[x[0]] = x[1] || ""; });
+        if (map.meta) {
+          const meta = JSON.parse(map.meta);
+          meta.emblem = map.img_emblem || "";
+          (meta.cards || []).forEach((c) => { c.img = map["img_" + c.id] || ""; });
+          config = meta;
+        }
+      } catch (_) { /* 탭 없음/파싱 실패 → 기본값 */ }
+    }
+    hubCache = { at: now, config };
+    res.set("Cache-Control", "public, max-age=20");
+    res.json({ ok: true, config });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -1928,6 +1943,7 @@ app.post("/api/hub-config", async (req, res) => {
     await ensureTabExists(sheets, HUB_TAB);
     await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A:B` });
     await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A1`, valueInputOption: "RAW", requestBody: { values } });
+    hubCache = { at: 0, config: null };   // 저장 즉시 캐시 무효화
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

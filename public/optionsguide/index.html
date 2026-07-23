@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>try{if(!/[?&]preview=/.test(location.search)){window.__hubP=fetch('/api/hub-config').then(function(r){return r.json();}).catch(function(){return null;});}}catch(e){}</script>
     <title>유진투자선물 옵션 링크 허브</title>
     <meta name="description" content="유진투자선물 공식 링크 허브">
     <meta property="og:type" content="website">
@@ -35,7 +36,7 @@
         background-attachment:fixed;
       }
       .page{max-width:462px; margin:0 auto; padding:56px 22px 40px; opacity:0}
-      .page.ready{opacity:1; transition:opacity .28s ease}
+      .page.ready{opacity:1; transition:opacity .16s ease}
 
       /* 히어로 */
       .hero{text-align:center; opacity:0; animation:fadeDown .7s ease forwards}
@@ -224,9 +225,10 @@
     });
   } else {
     var to=setTimeout(function(){ renderOnce(DEFAULT); }, 2500);  // 응답 지연 시 폴백
-    fetch('/api/hub-config').then(function(r){return r.json();}).then(function(j){
-      clearTimeout(to); renderOnce(j&&j.ok&&j.config ? j.config : DEFAULT);
-    }).catch(function(){ clearTimeout(to); renderOnce(DEFAULT); });
+    // head에서 미리 시작한 요청(window.__hubP) 재사용 → 더 빨리 확정
+    var p = window.__hubP || fetch('/api/hub-config').then(function(r){return r.json();}).catch(function(){return null;});
+    p.then(function(j){ clearTimeout(to); renderOnce(j&&j.ok&&j.config ? j.config : DEFAULT); })
+     .catch(function(){ clearTimeout(to); renderOnce(DEFAULT); });
   }
 })();
 </script>
