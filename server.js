@@ -1695,6 +1695,9 @@ setTimeout(() => channelSnapshotJob().catch(() => {}), 20000);
 // ===================================================================
 const VISIT_TAB = process.env.VISIT_TAB || "링크방문로그";
 const VISIT_SRCS = ["youtube", "instagram", "plus", "blog", "etc"];
+// 유입경로 관리자 전용 비밀번호(대시보드 ADMIN_PASSWORD와 분리). 미설정 시 대시보드 비번으로 폴백.
+const VISITS_PW = process.env.VISITS_PW || "";
+function checkVisitsPw(pw) { const p = VISITS_PW || ADMIN_PASSWORD; return !!p && pw === p; }
 let visitBuffer = [];  // {ts, src}
 function normSrc(s) { s = String(s || "").toLowerCase().trim(); return VISIT_SRCS.includes(s) ? s : "etc"; }
 
@@ -1724,7 +1727,7 @@ setInterval(() => flushVisits().catch(() => {}), 30 * 1000);
 // 관리자: 유입경로별·날짜별 방문수 집계
 app.get("/api/visits", async (req, res) => {
   try {
-    if (!checkPw(req.query.pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    if (!checkVisitsPw(req.query.pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
     const from = String(req.query.from || "2000-01-01");
     const to = String(req.query.to || "2999-12-31");
     let rows = [];
