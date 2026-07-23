@@ -45,24 +45,22 @@
         filter:drop-shadow(0 10px 22px rgba(30,20,90,.35))}
       h1{font-size:26px; font-weight:800; letter-spacing:-.02em; text-wrap:balance}
       .sub{font-size:13.5px; color:var(--w70); margin-top:9px}
-      .socials{display:inline-flex; gap:6px; margin-top:20px; padding:7px 9px;
-        background:var(--glass); border:1px solid var(--stroke); border-radius:100px;
-        backdrop-filter:blur(14px) saturate(140%); -webkit-backdrop-filter:blur(14px) saturate(140%)}
-      .socials a{width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-        color:var(--w); text-decoration:none; transition:background .16s ease, transform .16s ease}
-      .socials a:hover{background:rgba(255,255,255,.16); transform:translateY(-2px)}
-      .socials svg{width:19px; height:19px}
+      .socials{display:inline-flex; gap:18px; margin-top:22px}
+      .socials a{width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+        color:var(--w); text-decoration:none; opacity:.94; transition:transform .16s ease, opacity .16s ease}
+      .socials a:hover{transform:translateY(-2px); opacity:1}
+      .socials svg{width:27px; height:27px; filter:drop-shadow(0 2px 6px rgba(20,15,60,.28))}
 
       /* 링크 카드 */
       .list{display:flex; flex-direction:column; gap:12px; margin-top:30px}
-      .card{display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--w);
-        background:rgba(255,255,255,var(--op,.10)); border:1px solid var(--stroke); border-radius:18px; padding:13px 14px;
+      .card{display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--tcol,#fff);
+        background:var(--cbg,rgba(255,255,255,.10)); border:1px solid var(--stroke); border-radius:18px; padding:13px 14px;
         backdrop-filter:blur(16px) saturate(140%); -webkit-backdrop-filter:blur(16px) saturate(140%);
         box-shadow:0 8px 22px rgba(35,25,95,.16);
         opacity:0; transform:translateY(16px); animation:rise .6s cubic-bezier(.22,.61,.36,1) forwards;
         transition:background .18s ease, transform .18s ease, box-shadow .18s ease, border-color .18s ease}
       .card:hover{transform:translateY(-3px); border-color:rgba(255,255,255,.34); box-shadow:0 14px 30px rgba(35,25,95,.24);
-        background:rgba(255,255,255,calc(var(--op,.10) + .06))}
+        background:var(--cbgh,rgba(255,255,255,.16))}
       .card:nth-child(1){animation-delay:.10s}.card:nth-child(2){animation-delay:.17s}
       .card:nth-child(3){animation-delay:.24s}.card:nth-child(4){animation-delay:.31s}
       .card:nth-child(5){animation-delay:.38s}.card:nth-child(6){animation-delay:.45s}
@@ -74,11 +72,11 @@
       .tile svg{width:25px; height:25px; color:#fff}
       .tile img{width:100%; height:100%; object-fit:cover}
       .tx{flex:1; min-width:0}
-      .tx .desc{display:block; font-size:11.5px; color:var(--w55); margin-bottom:3px}
-      .tx b{display:block; font-size:16px; font-weight:700; letter-spacing:-.01em}
-      .go{flex-shrink:0; color:var(--w40); display:flex; transition:color .18s ease, transform .18s ease}
+      .tx .desc{display:block; font-size:11.5px; color:var(--tcol,#fff); opacity:.62; margin-bottom:3px}
+      .tx b{display:block; font-size:16px; font-weight:700; letter-spacing:-.01em; color:var(--tcol,#fff)}
+      .go{flex-shrink:0; color:var(--tcol,#fff); opacity:.4; display:flex; transition:opacity .18s ease, transform .18s ease}
       .go svg{width:17px; height:17px}
-      .card:hover .go{color:var(--w); transform:translateX(3px)}
+      .card:hover .go{opacity:1; transform:translateX(3px)}
 
       .foot{text-align:center; padding:34px 8px 6px; opacity:0; animation:rise .6s ease .5s forwards}
       .foot p{font-size:10.5px; line-height:1.85; color:var(--w40); max-width:400px; margin:0 auto}
@@ -97,7 +95,7 @@
         <nav class="socials" aria-label="소셜">
           <a href="https://www.instagram.com/eugeneoptions/" target="_blank" rel="noopener" aria-label="인스타그램"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor" stroke="none"/></svg></a>
           <a href="https://www.youtube.com/@유진투자선물_official" target="_blank" rel="noopener" aria-label="유튜브"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.7-1.7C19.3 5.2 12 5.2 12 5.2s-7.3 0-8.9.4A2.5 2.5 0 0 0 1.4 7.3C1 8.8 1 12 1 12s0 3.2.4 4.7a2.5 2.5 0 0 0 1.7 1.7c1.6.4 8.9.4 8.9.4s7.3 0 8.9-.4a2.5 2.5 0 0 0 1.7-1.7C23 15.2 23 12 23 12ZM9.8 15.3V8.7l6 3.3-6 3.3Z"/></svg></a>
-          <a href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener" aria-label="블로그"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h11a4 4 0 0 1 4 4v10H8a4 4 0 0 1-4-4V5Z"/><path d="M8.5 14V9.5L12 14V9.5"/></svg></a>
+          <a href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener" aria-label="네이버 블로그"><svg viewBox="0 0 24 24"><defs><mask id="nblogmask"><rect x="2.5" y="3" width="19" height="18" rx="5.6" fill="#fff"/><path d="M8.8 16.6V7.8L15.2 16.2V7.4" fill="none" stroke="#000" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><rect x="2.5" y="3" width="19" height="18" rx="5.6" fill="currentColor" mask="url(#nblogmask)"/></svg></a>
         </nav>
       </header>
 
@@ -135,15 +133,16 @@
     bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
     title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
     cards:[
-      {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,img:""},
-      {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,img:""},
-      {id:"guide",title:"가이드북",desc:"미국주식옵션 입문",url:"https://options.eugenefutures.com/usoguide/index.html",icon:"book",tint:"#0ea5e9",opacity:12,img:""},
-      {id:"blog",title:"블로그",desc:"옵션 기초 개념·용어",url:"https://blog.naver.com/eugenefutures",icon:"feather",tint:"#10b981",opacity:12,img:""},
-      {id:"edu",title:"사전교육 · 모의거래",desc:"거래 전 필수 · 무료",url:"https://options.eugenefutures.com/wts/works/MK_0001",icon:"grad",tint:"#475569",opacity:12,img:""}
+      {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",img:""},
+      {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",img:""},
+      {id:"guide",title:"가이드북",desc:"미국주식옵션 입문",url:"https://options.eugenefutures.com/usoguide/index.html",icon:"book",tint:"#0ea5e9",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",img:""},
+      {id:"blog",title:"블로그",desc:"옵션 기초 개념·용어",url:"https://blog.naver.com/eugenefutures",icon:"feather",tint:"#10b981",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",img:""},
+      {id:"edu",title:"사전교육 · 모의거래",desc:"거래 전 필수 · 무료",url:"https://options.eugenefutures.com/wts/works/MK_0001",icon:"grad",tint:"#475569",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",img:""}
     ]
   };
 
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function hexRgb(h){ var m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h||'#ffffff'); if(!m) return '255,255,255'; return parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16); }
   function shade(hex,f){ // 색을 f만큼 어둡게
     var m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex||"#6366f1"); if(!m) return hex;
     var r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16);
@@ -167,11 +166,14 @@
     var list=document.getElementById('list');
     list.innerHTML=(cfg.cards||[]).map(function(c){
       var op=(Number(c.opacity)||0)/100;
+      var rgb=hexRgb(c.cardBg||'#ffffff');
+      var tcol=esc(c.textColor||'#ffffff');
+      var style='--cbg:rgba('+rgb+','+op+');--cbgh:rgba('+rgb+','+Math.min(1,op+0.06)+');--tcol:'+tcol;
       var tile = c.img
         ? '<span class="tile"><img src="'+esc(c.img)+'" alt=""></span>'
         : '<span class="tile" style="background:linear-gradient(140deg,'+esc(c.tint||'#6366f1')+','+shade(c.tint||'#6366f1',.28)+')">'+(ICONS[c.icon]||ICONS.link)+'</span>';
       var dst=KNOWN_DST.indexOf(c.id)>=0?c.id:'etc';
-      return '<a class="card" style="--op:'+op+'" href="'+esc(c.url)+'" target="_blank" rel="noopener" data-dst="'+dst+'">'
+      return '<a class="card" style="'+style+'" href="'+esc(c.url)+'" target="_blank" rel="noopener" data-dst="'+dst+'">'
         +tile+'<span class="tx"><span class="desc">'+esc(c.desc)+'</span><b>'+esc(c.title)+'</b></span>'
         +'<span class="go">'+CHEV+'</span></a>';
     }).join('');
