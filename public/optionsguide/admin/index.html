@@ -141,6 +141,9 @@
         document.getElementById("go").onclick = load;
         document.getElementById("pw").addEventListener("keydown", function(e){ if(e.key==="Enter") load(); });
 
+        // 세션 자동 로그인: 성공한 비번을 세션에 저장 → 새로고침해도 재입력 없이 유지, 창 닫으면 해제
+        (function autoLogin(){ try{ var s=sessionStorage.getItem("efv_pw"); if(s){ document.getElementById("pw").value=s; load(); } }catch(e){} })();
+
         function load(){
             var pw = document.getElementById("pw").value;
             var from = document.getElementById("from").value, to = document.getElementById("to").value;
@@ -149,9 +152,9 @@
             fetch("/api/visits?pw="+encodeURIComponent(pw)+"&from="+from+"&to="+to)
                 .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
                 .then(function(o){
-                    if(o.status===401){ err.textContent="❌ 비밀번호가 올바르지 않습니다."; return; }
+                    if(o.status===401){ try{sessionStorage.removeItem("efv_pw");}catch(e){} err.textContent="❌ 비밀번호가 올바르지 않습니다."; return; }
                     if(!o.j.ok){ err.textContent="❌ "+(o.j.error||"조회 실패"); return; }
-                    err.textContent=""; render(o.j);
+                    try{sessionStorage.setItem("efv_pw", pw);}catch(e){} err.textContent=""; render(o.j);
                 })
                 .catch(function(e){ err.textContent="❌ "+e.message; });
         }
