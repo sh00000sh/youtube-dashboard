@@ -474,11 +474,11 @@
         bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
         title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
         cards:[
-          {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",img:""},
-          {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",img:""},
-          {id:"guide",title:"가이드북",desc:"미국주식옵션 입문",url:"https://options.eugenefutures.com/usoguide/index.html",icon:"book",tint:"#0ea5e9",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",img:""},
-          {id:"blog",title:"블로그",desc:"옵션 기초 개념·용어",url:"https://blog.naver.com/eugenefutures",icon:"feather",tint:"#10b981",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",img:""},
-          {id:"edu",title:"사전교육 · 모의거래",desc:"거래 전 필수 · 무료",url:"https://options.eugenefutures.com/wts/works/MK_0001",icon:"grad",tint:"#475569",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",img:""}
+          {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,img:""},
+          {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,img:""},
+          {id:"guide",title:"가이드북",desc:"미국주식옵션 입문",url:"https://options.eugenefutures.com/usoguide/index.html",icon:"book",tint:"#0ea5e9",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,img:""},
+          {id:"blog",title:"블로그",desc:"옵션 기초 개념·용어",url:"https://blog.naver.com/eugenefutures",icon:"feather",tint:"#10b981",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,img:""},
+          {id:"edu",title:"사전교육 · 모의거래",desc:"거래 전 필수 · 무료",url:"https://options.eugenefutures.com/wts/works/MK_0001",icon:"grad",tint:"#475569",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,img:""}
         ]
       };
       var PALETTES = [
@@ -560,6 +560,7 @@
             +'<input type="file" accept="image/*" hidden data-a="file">'
             +'<input class="fin" data-f="imgurl" placeholder="또는 이미지 URL" style="min-width:130px">'
             +'<button class="btn-s danger" type="button" data-a="imgclr">제거</button></div></div>'
+            +'<div class="frow"><label>사진 투명도</label><input type="range" min="0" max="100" step="1" data-f="imgOpacity"><span class="rngval" data-t="iopv"></span></div>'
             +'<div class="frow"><label>카드 스타일</label><select class="fin" data-f="cardStyle" style="max-width:160px"><option value="fill">채움 (글래스)</option><option value="outline">테두리만</option><option value="none">없음 (투명)</option></select></div>'
             +'<div class="frow"><label>투명도</label><input type="range" min="0" max="100" step="1" data-f="opacity">'
             +'<span class="rngval" data-t="opv"></span></div>'
@@ -579,6 +580,8 @@
           d.querySelector('[data-f=cardBg]').value = c.cardBg||"#ffffff";
           d.querySelector('[data-f=textColor]').value = c.textColor||"#ffffff";
           d.querySelector('[data-f=cardStyle]').value = c.cardStyle||"fill";
+          d.querySelector('[data-f=imgOpacity]').value = c.imgOpacity==null?100:c.imgOpacity;
+          d.querySelector('[data-t=iopv]').textContent = (c.imgOpacity==null?100:c.imgOpacity)+"%";
           setThumb(d.querySelector('[data-t=thumb]'), c.img||"");
 
           // 텍스트/선택/투명도 → 실시간
@@ -593,6 +596,7 @@
           d.querySelector('[data-f=cardBg]').addEventListener("input", function(e){ c.cardBg=e.target.value; pushPreview(); });
           d.querySelector('[data-f=textColor]').addEventListener("input", function(e){ c.textColor=e.target.value; pushPreview(); });
           d.querySelector('[data-f=cardStyle]').addEventListener("change", function(e){ c.cardStyle=e.target.value; pushPreview(); });
+          d.querySelector('[data-f=imgOpacity]').addEventListener("input", function(e){ c.imgOpacity=Number(e.target.value); d.querySelector('[data-t=iopv]').textContent=e.target.value+"%"; pushPreview(); });
           // 이미지 URL
           d.querySelector('[data-f=imgurl]').addEventListener("input", function(e){
             c.img=e.target.value.trim(); setThumb(d.querySelector('[data-t=thumb]'), c.img); pushPreview();
@@ -644,7 +648,7 @@
         // 메뉴 추가
         $("addCard").addEventListener("click", function(){
           var id="c"+Date.now().toString(36);
-          hub.cards.push({id:id,title:"새 메뉴",desc:"설명",url:"https://",icon:"link",tint:"#6366f1",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",img:""});
+          hub.cards.push({id:id,title:"새 메뉴",desc:"설명",url:"https://",icon:"link",tint:"#6366f1",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,img:""});
           buildCards(); pushPreview();
         });
       }
