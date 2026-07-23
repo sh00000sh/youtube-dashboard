@@ -152,7 +152,7 @@
       (function(){
         try{
           var src=(new URLSearchParams(location.search).get('src')||'etc').toLowerCase();
-          if(['youtube','instagram','plus','blog','etc'].indexOf(src)<0) src='etc';
+          if(['youtube','instagram','plus','blog','chatmenu','chatbtn','etc'].indexOf(src)<0) src='etc';
           var vid="";
           try{
             vid=localStorage.getItem('ef_vid');

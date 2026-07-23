@@ -1694,7 +1694,7 @@ setTimeout(() => channelSnapshotJob().catch(() => {}), 20000);
 //   - /api/visits (관리자) 로 날짜·경로별 방문수 집계 조회
 // ===================================================================
 const VISIT_TAB = process.env.VISIT_TAB || "링크방문로그";
-const VISIT_SRCS = ["youtube", "instagram", "plus", "blog", "etc"];
+const VISIT_SRCS = ["youtube", "instagram", "plus", "blog", "chatmenu", "chatbtn", "etc"];
 // 유입경로 관리자 전용 비밀번호(대시보드 ADMIN_PASSWORD와 분리). 미설정 시 대시보드 비번으로 폴백.
 const VISITS_PW = process.env.VISITS_PW || "";
 function checkVisitsPw(pw) { const p = VISITS_PW || ADMIN_PASSWORD; return !!p && pw === p; }

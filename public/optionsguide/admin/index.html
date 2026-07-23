@@ -28,7 +28,7 @@
         .total .lbl { font-size:13px; color:#c7cbd3; }
         .total .rng { margin-left:auto; font-size:12px; color:#9aa0ab; }
 
-        .cards { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+        .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:10px; margin-bottom:16px; }
         .card { background:#fff; border:1px solid #ecedf0; border-radius:12px; padding:13px 14px; box-shadow:0 1px 4px rgba(30,60,120,.04); }
         .card .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px; }
         .card .name { font-size:12px; color:#6b7280; }
@@ -99,6 +99,8 @@
             {k:"instagram", name:"인스타그램", c:"#d6336c"},
             {k:"plus",      name:"플러스친구", c:"#f5b301"},
             {k:"blog",      name:"네이버블로그", c:"#22a06b"},
+            {k:"chatmenu",  name:"채팅방 메뉴", c:"#14b8a6"},
+            {k:"chatbtn",   name:"채팅 버튼",   c:"#f97316"},
             {k:"etc",       name:"기타",       c:"#9aa0ab"},
         ];
         var pad = function(n){ return String(n).padStart(2,"0"); };
@@ -203,7 +205,7 @@
                 return "<tr><td>"+dt+"</td>"+tds+"<td><b>"+fmt(sum)+"</b></td></tr>";
             }).join("");
             var foot = "<tfoot><tr><td>합계</td>"+SRC.map(function(s){return "<td>"+fmt(d.totals[s.k]||0)+"</td>";}).join("")+"<td>"+fmt(d.total)+"</td></tr></tfoot>";
-            document.getElementById("tbl").innerHTML = head + "<tbody>" + (body || '<tr><td colspan="7" class="empty">이 기간 방문 데이터가 없어요.</td></tr>') + "</tbody>" + foot;
+            document.getElementById("tbl").innerHTML = head + "<tbody>" + (body || '<tr><td colspan="'+(SRC.length+2)+'" class="empty">이 기간 방문 데이터가 없어요.</td></tr>') + "</tbody>" + foot;
         }
     </script>
 </body>
