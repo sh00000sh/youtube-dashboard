@@ -174,6 +174,11 @@
             <div id="pane-out" style="display:none">
                 <div class="total"><span class="n" id="cTotal">0</span><span class="lbl">총 클릭</span><span class="n" id="cUnique" style="margin-left:20px">0</span><span class="lbl">순클릭(중복제거)</span><span class="rng" id="cRange"></span></div>
                 <div class="cards" id="clkCards"></div>
+                <div class="panel">
+                    <h2>유입경로별 아웃바운드 <span class="muted">— 경로를 선택하면 그 경로로 들어온 사람이 어떤 메뉴를 눌렀는지</span></h2>
+                    <div id="srcTabs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+                    <div style="overflow-x:auto"><table id="srcDstTbl"></table></div>
+                </div>
                 <div class="panel"><h2>일별 클릭 추이 (링크별 누적)</h2><div class="chart-box"><canvas id="clkChart"></canvas></div></div>
                 <div class="panel">
                     <h2 style="display:flex;align-items:center">일별 상세
@@ -431,6 +436,40 @@
                 footAll: uniq ? d.uTotal : d.total
             });
         }
+        // 유입경로별 아웃바운드(경로×메뉴)
+        var outSrc = null;
+        function buildSrcTabs(){
+            var d = lastData; if(!d) return;
+            var el = document.getElementById("srcTabs");
+            var avail = SRC.filter(function(s){ return d.clicksBySrc && d.clicksBySrc[s.k]; });
+            if(!avail.length){
+                el.innerHTML = '<span style="font-size:12.5px;color:#9aa0ab">이 기간 아웃바운드 클릭 데이터가 없어요.</span>';
+                document.getElementById("srcDstTbl").innerHTML = ""; outSrc = null; return;
+            }
+            if(!avail.some(function(s){ return s.k===outSrc; })) outSrc = avail[0].k;
+            el.innerHTML = avail.map(function(s){
+                return '<button class="mtoggle'+(s.k===outSrc?' on':'')+'" type="button" data-src="'+s.k+'" style="margin-left:0">'+s.name+'</button>';
+            }).join("");
+            el.querySelectorAll("button").forEach(function(b){
+                b.onclick = function(){ outSrc = b.dataset.src; buildSrcTabs(); };
+            });
+            renderSrcDst();
+        }
+        function renderSrcDst(){
+            var d = lastData; if(!d || !outSrc) return;
+            var clk = (d.clicksBySrc && d.clicksBySrc[outSrc]) || {};
+            var clkU = (d.clicksBySrcU && d.clicksBySrcU[outSrc]) || {};
+            var tot = sumVals(clk);
+            var body = DST.filter(function(t){ return t.k!=="etc" || clk.etc; }).map(function(t){
+                var c=clk[t.k]||0, u=clkU[t.k]||0, pct=tot?Math.round(c/tot*100):0;
+                return '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+t.c+';margin-right:7px"></span>'+t.name+'</td><td>'+fmt(c)+'</td><td>'+fmt(u)+'</td><td>'+pct+'%</td></tr>';
+            }).join("");
+            document.getElementById("srcDstTbl").innerHTML =
+                '<thead><tr><th>메뉴</th><th>클릭</th><th>순클릭</th><th>비중</th></tr></thead>'+
+                '<tbody>'+(tot?body:'<tr><td colspan="4" class="empty">이 경로의 클릭이 없어요.</td></tr>')+'</tbody>'+
+                (tot?'<tfoot><tr><td>합계</td><td>'+fmt(tot)+'</td><td></td><td>100%</td></tr></tfoot>':'');
+        }
+
         function renderOutDaily(){
             var d = lastData; if(!d) return;
             var uniq = outMode==="uniq";
@@ -463,6 +502,7 @@
             document.getElementById("cUnique").textContent = fmt(cuTotal);
             document.getElementById("cRange").textContent  = d.from+" ~ "+d.to;
             renderCards("clkCards", DST, d.clicks||{}, d.clicksU||{}, d.clickTotal);
+            buildSrcTabs();
             chartOut = stackedChart("clkChart", chartOut, DST, d.byDateClick||{}, Object.keys(d.byDateClick||{}).sort());
             renderOutDaily();
             monthlyRatioTable("moDstTbl", d.monthlyByDst, DST, "clicks");

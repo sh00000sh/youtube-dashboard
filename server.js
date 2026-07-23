@@ -1758,6 +1758,7 @@ app.get("/api/visits", async (req, res) => {
     VISIT_DSTS.forEach((k) => { clicks[k] = 0; clkVid[k] = new Set(); clkAnon[k] = 0; });
     const byDateClick = {}, byDateClickVid = {}, byDateClickAnon = {};   // 일별 클릭/순클릭
     const byMonthDst = {};                               // 월별 링크별 {dst:{c,vids,anon}}
+    const clkSD = {}, clkSDvid = {}, clkSDanon = {};     // 유입경로×메뉴 클릭 {src:{dst:...}}
 
     for (const v of all) {
       if (!v.ts) continue;
@@ -1766,6 +1767,7 @@ app.get("/api/visits", async (req, res) => {
       const vid = String(v.vid || "").trim();
       const dst = String(v.dst || "").trim();
       const m = d.slice(0, 7);
+      const src = normSrc(v.src);
 
       if (dst) {   // 아웃바운드 클릭(방문 카운트에서 제외)
         if (!(dst in clicks)) { clicks[dst] = 0; clkVid[dst] = new Set(); clkAnon[dst] = 0; }
@@ -1780,10 +1782,15 @@ app.get("/api/visits", async (req, res) => {
         const mdd = byMonthDst[m] || (byMonthDst[m] = {});
         const da = mdd[dst] || (mdd[dst] = { c: 0, vids: new Set(), anon: 0 });
         da.c++; if (vid) da.vids.add(vid); else da.anon++;
+        // 유입경로×메뉴 클릭
+        (clkSD[src] = clkSD[src] || {})[dst] = ((clkSD[src] || {})[dst] || 0) + 1;
+        clkSDvid[src] = clkSDvid[src] || {};
+        if (!clkSDvid[src][dst]) clkSDvid[src][dst] = new Set();
+        if (vid) clkSDvid[src][dst].add(vid);
+        else { clkSDanon[src] = clkSDanon[src] || {}; clkSDanon[src][dst] = (clkSDanon[src][dst] || 0) + 1; }
         continue;
       }
 
-      const src = normSrc(v.src);
       totals[src]++; total++;
       (byDate[d] = byDate[d] || {})[src] = ((byDate[d] || {})[src] || 0) + 1;
       if (vid) { vidSet[src].add(vid); allVid.add(vid); } else { anon[src]++; allAnon++; }
@@ -1832,7 +1839,17 @@ app.get("/api/visits", async (req, res) => {
     const clicksU = {}; Object.keys(clicks).forEach((k) => (clicksU[k] = clkVid[k].size + clkAnon[k]));
     const clickTotal = Object.keys(clicks).reduce((a, k) => a + clicks[k], 0);
 
-    res.json({ ok: true, from, to, srcs: VISIT_SRCS, dsts: VISIT_DSTS, totals, uniques, total, uTotal, byDate, byDateU, byDateClick, byDateClickU, monthly, monthlyBySrc, monthlyByDst, clicks, clicksU, clickTotal });
+    // 유입경로별 아웃바운드(경로×메뉴) 클릭/순클릭
+    const clicksBySrc = {}, clicksBySrcU = {};
+    Object.keys(clkSD).forEach((s) => {
+      clicksBySrc[s] = {}; clicksBySrcU[s] = {};
+      Object.keys(clkSD[s]).forEach((k) => {
+        clicksBySrc[s][k] = clkSD[s][k];
+        clicksBySrcU[s][k] = clkSDvid[s][k].size + ((clkSDanon[s] && clkSDanon[s][k]) || 0);
+      });
+    });
+
+    res.json({ ok: true, from, to, srcs: VISIT_SRCS, dsts: VISIT_DSTS, totals, uniques, total, uTotal, byDate, byDateU, byDateClick, byDateClickU, monthly, monthlyBySrc, monthlyByDst, clicks, clicksU, clickTotal, clicksBySrc, clicksBySrcU });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
