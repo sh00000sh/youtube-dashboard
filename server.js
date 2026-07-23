@@ -1875,11 +1875,11 @@ const HUB_DEFAULT = {
   subtitle: "유진투자선물 공식 링크 허브",
   emblem: "",
   cards: [
-    { id: "sihwang", title: "시황", desc: "데일리 옵션 마켓 시황", url: "https://eugeneoptions.pages.dev/?s=1", icon: "chart", tint: "#f59e0b", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, img: "" },
-    { id: "youtube", title: "유튜브", desc: "옵션 개념·전략 영상", url: "https://www.youtube.com/@유진투자선물_official", icon: "youtube", tint: "#ef4444", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, img: "" },
-    { id: "guide", title: "가이드북", desc: "미국주식옵션 입문", url: "https://options.eugenefutures.com/usoguide/index.html", icon: "book", tint: "#0ea5e9", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, img: "" },
-    { id: "blog", title: "블로그", desc: "옵션 기초 개념·용어", url: "https://blog.naver.com/eugenefutures", icon: "feather", tint: "#10b981", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, img: "" },
-    { id: "edu", title: "사전교육 · 모의거래", desc: "거래 전 필수 · 무료", url: "https://options.eugenefutures.com/wts/works/MK_0001", icon: "grad", tint: "#475569", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, img: "" },
+    { id: "sihwang", title: "시황", desc: "데일리 옵션 마켓 시황", url: "https://eugeneoptions.pages.dev/?s=1", icon: "chart", tint: "#f59e0b", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
+    { id: "youtube", title: "유튜브", desc: "옵션 개념·전략 영상", url: "https://www.youtube.com/@유진투자선물_official", icon: "youtube", tint: "#ef4444", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
+    { id: "guide", title: "가이드북", desc: "미국주식옵션 입문", url: "https://options.eugenefutures.com/usoguide/index.html", icon: "book", tint: "#0ea5e9", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
+    { id: "blog", title: "블로그", desc: "옵션 기초 개념·용어", url: "https://blog.naver.com/eugenefutures", icon: "feather", tint: "#10b981", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
+    { id: "edu", title: "사전교육 · 모의거래", desc: "거래 전 필수 · 무료", url: "https://options.eugenefutures.com/wts/works/MK_0001", icon: "grad", tint: "#475569", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
   ],
 };
 
@@ -1937,6 +1937,8 @@ app.post("/api/hub-config", async (req, res) => {
         cardBg: String(c.cardBg || "#ffffff"), textColor: String(c.textColor || "#ffffff"),
         cardStyle: ["fill", "outline", "none"].indexOf(c.cardStyle) >= 0 ? c.cardStyle : "fill",
         imgOpacity: c.imgOpacity == null ? 100 : Math.max(0, Math.min(100, Number(c.imgOpacity) || 0)),
+        rotY: Math.max(-180, Math.min(180, Number(c.rotY) || 0)),
+        rotX: Math.max(-90, Math.min(90, Number(c.rotX) || 0)),
       })),
     };
     const values = [["meta", JSON.stringify(meta)], ["img_emblem", emblem]];
