@@ -232,6 +232,12 @@
             </div>
 
             <div class="esec">
+              <h3>🧩 메뉴 구분 <span class="muted">— 테두리 없는 메뉴 나눌 때 (둘 다 켜도 됨)</span></h3>
+              <div class="frow"><label style="width:auto;display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" id="sep_divider" style="width:16px;height:16px;accent-color:#4f46e5">구분선 표시</label></div>
+              <div class="frow"><label style="width:auto;display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" id="sep_soft" style="width:16px;height:16px;accent-color:#4f46e5">은은한 반투명 배경</label></div>
+            </div>
+
+            <div class="esec">
               <h3>🔗 메뉴 <span class="muted">— 위/아래로 순서 변경, 각 메뉴 편집</span></h3>
               <div id="cardEditor"></div>
               <button class="btn-s" type="button" id="addCard" style="margin-top:4px">＋ 메뉴 추가</button>
@@ -473,6 +479,7 @@
       var DEFAULT = {
         bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
         title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
+        sepDivider:false, sepSoft:false,
         cards:[
           {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,rotY:0,rotX:0,img:""},
           {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,cardBg:"#ffffff",textColor:"#ffffff",cardStyle:"fill",imgOpacity:100,rotY:0,rotX:0,img:""},
@@ -534,6 +541,8 @@
         $("bg_angle").value = hub.bg.angle==null?146:hub.bg.angle;
         $("bg_angle_v").textContent = ($("bg_angle").value)+"°";
         $("f_font").value = hub.font||"noto";
+        $("sep_divider").checked = !!hub.sepDivider;
+        $("sep_soft").checked = !!hub.sepSoft;
         $("url_emblem").value = (hub.emblem && hub.emblem.indexOf("data:")!==0) ? hub.emblem : "";
         setThumb($("th_emblem"), hub.emblem||"");
         buildCards();
@@ -641,6 +650,8 @@
         });
         $("bg_angle").addEventListener("input", function(e){ hub.bg.angle=Number(e.target.value); $("bg_angle_v").textContent=e.target.value+"°"; pushPreview(); });
         $("f_font").addEventListener("change", function(e){ hub.font=e.target.value; pushPreview(); });
+        $("sep_divider").addEventListener("change", function(e){ hub.sepDivider=e.target.checked; pushPreview(); });
+        $("sep_soft").addEventListener("change", function(e){ hub.sepSoft=e.target.checked; pushPreview(); });
         $("bg_swap").addEventListener("click", function(){
           palIdx=(palIdx+1)%PALETTES.length; var p=PALETTES[palIdx];
           hub.bg.c1=p[0]; hub.bg.c2=p[1]; hub.bg.c3=p[2];

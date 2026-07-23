@@ -1874,6 +1874,8 @@ const HUB_DEFAULT = {
   title: "유진투자선물",
   subtitle: "유진투자선물 공식 링크 허브",
   emblem: "",
+  sepDivider: false,
+  sepSoft: false,
   cards: [
     { id: "sihwang", title: "시황", desc: "데일리 옵션 마켓 시황", url: "https://eugeneoptions.pages.dev/?s=1", icon: "chart", tint: "#f59e0b", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
     { id: "youtube", title: "유튜브", desc: "옵션 개념·전략 영상", url: "https://www.youtube.com/@유진투자선물_official", icon: "youtube", tint: "#ef4444", opacity: 12, cardBg: "#ffffff", textColor: "#ffffff", cardStyle: "fill", imgOpacity: 100, rotY: 0, rotX: 0, img: "" },
@@ -1930,6 +1932,8 @@ app.post("/api/hub-config", async (req, res) => {
       font: config.font || "noto",
       title: String(config.title || ""),
       subtitle: String(config.subtitle || ""),
+      sepDivider: !!config.sepDivider,
+      sepSoft: !!config.sepSoft,
       cards: cards.map((c) => ({
         id: String(c.id || "").replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24) || ("c" + Math.random().toString(36).slice(2, 8)),
         title: String(c.title || ""), desc: String(c.desc || ""), url: String(c.url || ""),
