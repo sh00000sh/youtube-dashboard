@@ -66,13 +66,66 @@
         .linkrow .copy:hover { background:#f1f3f5; }
         .linkrow .copy.ok { background:#22a06b; color:#fff; border-color:#22a06b; }
         @media (max-width:560px){ .linkrow{ flex-wrap:wrap; } .linkrow .lname{ width:auto; } .linkrow input.lurl{ order:3; flex-basis:100%; } }
+
+        /* ===== 상단 모드 전환 ===== */
+        .modebar { display:flex; gap:8px; margin:16px 0 4px; }
+        .modebtn { flex:1; padding:13px 14px; border:1px solid #e3e5ea; background:#fff; border-radius:12px;
+                   font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; color:#6b7280; transition:.12s; }
+        .modebtn:hover { background:#f7f8fa; }
+        .modebtn.on { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+
+        /* ===== 수정 탭 ===== */
+        .edit-grid { display:grid; grid-template-columns:1fr 380px; gap:18px; align-items:start; margin-top:16px; }
+        @media (max-width:860px){ .edit-grid{ grid-template-columns:1fr; } .edit-prev{ position:static !important; } }
+        .edit-form { display:flex; flex-direction:column; gap:14px; min-width:0; }
+        .esec { background:#fff; border:1px solid #ecedf0; border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(30,60,120,.05); }
+        .esec > h3 { font-size:13px; font-weight:700; color:#374151; margin-bottom:12px; letter-spacing:-.01em; }
+        .frow { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+        .frow:last-child { margin-bottom:0; }
+        .frow label { font-size:12px; color:#6b7280; width:64px; flex-shrink:0; }
+        .fin { flex:1; min-width:120px; padding:8px 10px; border:1px solid #d7dae0; border-radius:9px; font-size:13px; font-family:inherit; }
+        textarea.fin { resize:vertical; min-height:38px; }
+        select.fin { cursor:pointer; }
+        input[type=color].fin { padding:2px; height:34px; width:44px; flex:none; min-width:44px; }
+        input[type=range] { flex:1; min-width:100px; accent-color:#4f46e5; }
+        .rngval { font-size:12px; color:#4f46e5; font-weight:700; width:44px; text-align:right; }
+
+        .imgrow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .imgthumb { width:46px; height:46px; border-radius:10px; border:1px solid #e5e7eb; background:#f4f5f7 center/cover no-repeat; flex-shrink:0; }
+        .btn-s { padding:7px 11px; border:1px solid #d7dae0; background:#fff; border-radius:9px; font-size:12px; cursor:pointer; font-family:inherit; }
+        .btn-s:hover { background:#f1f3f5; }
+        .btn-s.danger { color:#e5484d; border-color:#f3c6c6; }
+        .btn-s.danger:hover { background:#fdecec; }
+
+        .cardhead { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+        .cardhead .cnum { font-size:12px; font-weight:800; color:#4f46e5; }
+        .cardhead .sp { margin-left:auto; display:flex; gap:5px; }
+        .card-edit { border:1px solid #e8e9ee; border-radius:12px; padding:13px; margin-bottom:10px; background:#fbfbfd; }
+
+        .save-bar { position:sticky; bottom:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+                    background:#111827; color:#fff; border-radius:14px; padding:13px 16px; margin-top:6px; }
+        .save-bar input { padding:8px 10px; border:1px solid #374151; background:#1f2937; color:#fff; border-radius:9px; font-size:13px; font-family:inherit; width:150px; }
+        .save-bar .save { margin-left:auto; padding:10px 20px; background:#4f46e5; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .save-bar .save:hover { background:#4338ca; }
+        .save-bar .save:disabled { opacity:.5; cursor:default; }
+        .save-bar .st { font-size:12.5px; color:#9aa0ab; }
+
+        .edit-prev { position:sticky; top:16px; }
+        .edit-prev .pf { width:100%; height:680px; border:none; border-radius:22px; box-shadow:0 12px 40px rgba(30,40,90,.22); background:#4b45d1; display:block; }
+        .edit-prev .pcap { font-size:11.5px; color:#8a8f98; text-align:center; margin-top:8px; }
     </style>
 </head>
 <body>
     <div class="wrap">
         <h1>📊 유입경로 방문 분석</h1>
-        <div class="sub">통합 사이트(/optionsguide) 유입경로(인바운드) · 카드 클릭(아웃바운드) 분석</div>
+        <div class="sub">통합 사이트(/optionsguide) 방문 분석 · 링크허브 디자인 수정</div>
 
+        <div class="modebar">
+            <button class="modebtn on" id="modeAnalyticsBtn" type="button">📊 방문 분석</button>
+            <button class="modebtn" id="modeEditBtn" type="button">🎨 링크허브 수정</button>
+        </div>
+
+      <div id="mode-analytics">
         <div class="bar">
             <div class="fld"><label>비밀번호</label><input id="pw" type="password" placeholder="관리자 비밀번호" style="width:130px"></div>
             <div class="fld"><label>시작일</label><input id="from" type="date"></div>
@@ -137,6 +190,67 @@
                 </div>
             </div>
         </div>
+      </div><!-- /mode-analytics -->
+
+      <!-- ===== 링크허브 수정 ===== -->
+      <div id="mode-edit" style="display:none">
+        <div class="edit-grid">
+          <div class="edit-form">
+            <div class="esec">
+              <h3>🖼 상단 (엠블럼 · 제목)</h3>
+              <div class="frow"><label>엠블럼</label>
+                <div class="imgrow" style="flex:1">
+                  <span class="imgthumb" id="th_emblem"></span>
+                  <button class="btn-s" type="button" onclick="document.getElementById('file_emblem').click()">파일 선택</button>
+                  <input type="file" id="file_emblem" accept="image/*" hidden>
+                  <input class="fin" id="url_emblem" placeholder="또는 이미지 URL 붙여넣기" style="min-width:150px">
+                  <button class="btn-s danger" type="button" id="clr_emblem">제거</button>
+                </div>
+              </div>
+              <div class="frow"><label>제목</label><input class="fin" id="f_title" placeholder="유진투자선물"></div>
+              <div class="frow"><label>소개문구</label><input class="fin" id="f_subtitle" placeholder="유진투자선물 공식 링크 허브"></div>
+            </div>
+
+            <div class="esec">
+              <h3>🎨 배경 그라데이션 · 폰트</h3>
+              <div class="frow"><label>색상</label>
+                <input type="color" class="fin" id="bg_c1"><input type="color" class="fin" id="bg_c2"><input type="color" class="fin" id="bg_c3">
+                <button class="btn-s" type="button" id="bg_swap" title="추천 조합으로">🎲 추천</button>
+              </div>
+              <div class="frow"><label>각도</label><input type="range" id="bg_angle" min="0" max="360" step="1"><span class="rngval" id="bg_angle_v">146°</span></div>
+              <div class="frow"><label>폰트</label>
+                <select class="fin" id="f_font">
+                  <option value="noto">노토 산스 (기본)</option>
+                  <option value="pretendard">프리텐다드</option>
+                  <option value="nanum">나눔고딕</option>
+                  <option value="plex">IBM Plex Sans KR</option>
+                  <option value="gowun">고운돋움</option>
+                  <option value="blackhan">검은고딕 (제목형)</option>
+                  <option value="dohyeon">도현 (둥근 제목형)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="esec">
+              <h3>🔗 메뉴 <span class="muted">— 위/아래로 순서 변경, 각 메뉴 편집</span></h3>
+              <div id="cardEditor"></div>
+              <button class="btn-s" type="button" id="addCard" style="margin-top:4px">＋ 메뉴 추가</button>
+            </div>
+
+            <div class="save-bar">
+              <input type="password" id="editPw" placeholder="관리자 비밀번호">
+              <span class="st" id="editSt"></span>
+              <button class="save" id="btnReload" type="button" style="background:#374151">불러오기</button>
+              <button class="save" id="btnSave" type="button">저장</button>
+            </div>
+          </div>
+
+          <div class="edit-prev">
+            <iframe class="pf" id="hubPrev" src="/optionsguide/?preview=1" title="미리보기"></iframe>
+            <div class="pcap">실시간 미리보기 · 저장하면 실제 페이지에 반영됩니다</div>
+          </div>
+        </div>
+      </div><!-- /mode-edit -->
     </div>
 
     <script>
@@ -347,6 +461,235 @@
             renderOutDaily();
             monthlyRatioTable("moDstTbl", d.monthlyByDst, DST, "clicks");
         }
+    </script>
+
+    <!-- ===== 링크허브 수정 로직 ===== -->
+    <script>
+    (function(){
+      var ICON_OPTS = [
+        {v:"chart",n:"📈 차트"},{v:"youtube",n:"▶ 유튜브"},{v:"book",n:"📖 책"},
+        {v:"feather",n:"🖋 깃펜"},{v:"grad",n:"🎓 학사모"},{v:"link",n:"🔗 링크"}
+      ];
+      var DEFAULT = {
+        bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
+        title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
+        cards:[
+          {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,img:""},
+          {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,img:""},
+          {id:"guide",title:"가이드북",desc:"미국주식옵션 입문",url:"https://options.eugenefutures.com/usoguide/index.html",icon:"book",tint:"#0ea5e9",opacity:12,img:""},
+          {id:"blog",title:"블로그",desc:"옵션 기초 개념·용어",url:"https://blog.naver.com/eugenefutures",icon:"feather",tint:"#10b981",opacity:12,img:""},
+          {id:"edu",title:"사전교육 · 모의거래",desc:"거래 전 필수 · 무료",url:"https://options.eugenefutures.com/wts/works/MK_0001",icon:"grad",tint:"#475569",opacity:12,img:""}
+        ]
+      };
+      var PALETTES = [
+        ["#4b45d1","#6d6ef0","#9294f7"],["#0ea5e9","#3b82f6","#6366f1"],["#7c3aed","#a855f7","#ec4899"],
+        ["#0f766e","#0ea5e9","#22d3ee"],["#b91c1c","#f97316","#f59e0b"],["#1e293b","#4f46e5","#818cf8"],
+        ["#065f46","#10b981","#a3e635"]
+      ];
+      var hub = null, iframe = null, iframeReady = false, palIdx = 0;
+
+      function $(id){ return document.getElementById(id); }
+      function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+      function pushPreview(){
+        if(!iframe || !iframeReady || !hub) return;
+        try{ iframe.contentWindow.postMessage({type:"hubcfg", config:hub}, location.origin); }catch(e){}
+      }
+
+      // 이미지 축소 → dataURI (셀 저장 대비 base64 45k 이하로)
+      function fileToResized(file, maxDim, cb){
+        var fr = new FileReader();
+        fr.onload = function(){
+          var img = new Image();
+          img.onload = function(){
+            var w=img.width, h=img.height, s=Math.min(1, maxDim/Math.max(w,h));
+            function render(scale, q, png){
+              var cw=Math.max(1,Math.round(w*s*scale)), ch=Math.max(1,Math.round(h*s*scale));
+              var cv=document.createElement("canvas"); cv.width=cw; cv.height=ch;
+              cv.getContext("2d").drawImage(img,0,0,cw,ch);
+              return cv.toDataURL(png?"image/png":"image/jpeg", q);
+            }
+            var isPng = file.type==="image/png";
+            var out = isPng ? render(1,1,true) : render(1,0.72,false);
+            if(out.length>45000) out = render(1,0.68,false);
+            if(out.length>45000) out = render(0.75,0.66,false);
+            if(out.length>45000) out = render(0.6,0.6,false);
+            cb(out);
+          };
+          img.onerror=function(){ cb(""); };
+          img.src = fr.result;
+        };
+        fr.readAsDataURL(file);
+      }
+
+      function setThumb(el, src){ el.style.backgroundImage = src ? "url('"+src.replace(/'/g,"%27")+"')" : ""; }
+
+      // ── 폼 채우기 ──
+      function fillForm(){
+        $("f_title").value = hub.title||"";
+        $("f_subtitle").value = hub.subtitle||"";
+        $("bg_c1").value = hub.bg.c1||"#4b45d1";
+        $("bg_c2").value = hub.bg.c2||"#6d6ef0";
+        $("bg_c3").value = hub.bg.c3||"#9294f7";
+        $("bg_angle").value = hub.bg.angle==null?146:hub.bg.angle;
+        $("bg_angle_v").textContent = ($("bg_angle").value)+"°";
+        $("f_font").value = hub.font||"noto";
+        $("url_emblem").value = (hub.emblem && hub.emblem.indexOf("data:")!==0) ? hub.emblem : "";
+        setThumb($("th_emblem"), hub.emblem||"");
+        buildCards();
+      }
+
+      function buildCards(){
+        var box = $("cardEditor"); box.innerHTML="";
+        hub.cards.forEach(function(c, i){
+          var d = document.createElement("div"); d.className="card-edit";
+          d.innerHTML =
+            '<div class="cardhead"><span class="cnum">메뉴 '+(i+1)+'</span>'
+            +'<span class="sp"><button class="btn-s" data-a="up" type="button">▲</button>'
+            +'<button class="btn-s" data-a="down" type="button">▼</button>'
+            +'<button class="btn-s danger" data-a="del" type="button">✕</button></span></div>'
+            +'<div class="frow"><label>제목</label><input class="fin" data-f="title"></div>'
+            +'<div class="frow"><label>설명</label><input class="fin" data-f="desc"></div>'
+            +'<div class="frow"><label>링크</label><input class="fin" data-f="url" placeholder="https://"></div>'
+            +'<div class="frow"><label>아이콘</label><select class="fin" data-f="icon" style="max-width:150px">'
+            + ICON_OPTS.map(function(o){return '<option value="'+o.v+'">'+o.n+'</option>';}).join("")
+            +'</select><input type="color" class="fin" data-f="tint" title="아이콘 배경색"></div>'
+            +'<div class="frow"><label>대표사진</label><div class="imgrow" style="flex:1">'
+            +'<span class="imgthumb" data-t="thumb"></span>'
+            +'<button class="btn-s" type="button" data-a="pick">파일 선택</button>'
+            +'<input type="file" accept="image/*" hidden data-a="file">'
+            +'<input class="fin" data-f="imgurl" placeholder="또는 이미지 URL" style="min-width:130px">'
+            +'<button class="btn-s danger" type="button" data-a="imgclr">제거</button></div></div>'
+            +'<div class="frow"><label>투명도</label><input type="range" min="0" max="100" step="1" data-f="opacity">'
+            +'<span class="rngval" data-t="opv"></span></div>';
+          box.appendChild(d);
+
+          // 값 채우기
+          d.querySelector('[data-f=title]').value = c.title||"";
+          d.querySelector('[data-f=desc]').value = c.desc||"";
+          d.querySelector('[data-f=url]').value = c.url||"";
+          d.querySelector('[data-f=icon]').value = c.icon||"link";
+          d.querySelector('[data-f=tint]').value = c.tint||"#6366f1";
+          d.querySelector('[data-f=imgurl]').value = (c.img && c.img.indexOf("data:")!==0) ? c.img : "";
+          d.querySelector('[data-f=opacity]').value = c.opacity==null?12:c.opacity;
+          d.querySelector('[data-t=opv]').textContent = (c.opacity==null?12:c.opacity)+"%";
+          setThumb(d.querySelector('[data-t=thumb]'), c.img||"");
+
+          // 텍스트/선택/투명도 → 실시간
+          ["title","desc","url"].forEach(function(f){
+            d.querySelector('[data-f='+f+']').addEventListener("input", function(e){ c[f]=e.target.value; pushPreview(); });
+          });
+          d.querySelector('[data-f=icon]').addEventListener("change", function(e){ c.icon=e.target.value; pushPreview(); });
+          d.querySelector('[data-f=tint]').addEventListener("input", function(e){ c.tint=e.target.value; pushPreview(); });
+          d.querySelector('[data-f=opacity]').addEventListener("input", function(e){
+            c.opacity=Number(e.target.value); d.querySelector('[data-t=opv]').textContent=e.target.value+"%"; pushPreview();
+          });
+          // 이미지 URL
+          d.querySelector('[data-f=imgurl]').addEventListener("input", function(e){
+            c.img=e.target.value.trim(); setThumb(d.querySelector('[data-t=thumb]'), c.img); pushPreview();
+          });
+          // 이미지 업로드
+          var fileInp = d.querySelector('[data-a=file]');
+          d.querySelector('[data-a=pick]').addEventListener("click", function(){ fileInp.click(); });
+          fileInp.addEventListener("change", function(e){
+            var f=e.target.files[0]; if(!f) return;
+            fileToResized(f, 220, function(uri){
+              c.img=uri; d.querySelector('[data-f=imgurl]').value="";
+              setThumb(d.querySelector('[data-t=thumb]'), uri); pushPreview();
+            });
+          });
+          d.querySelector('[data-a=imgclr]').addEventListener("click", function(){
+            c.img=""; d.querySelector('[data-f=imgurl]').value=""; setThumb(d.querySelector('[data-t=thumb]'),""); pushPreview();
+          });
+          // 순서/삭제
+          d.querySelector('[data-a=up]').addEventListener("click", function(){ if(i>0){ hub.cards.splice(i-1,0,hub.cards.splice(i,1)[0]); buildCards(); pushPreview(); } });
+          d.querySelector('[data-a=down]').addEventListener("click", function(){ if(i<hub.cards.length-1){ hub.cards.splice(i+1,0,hub.cards.splice(i,1)[0]); buildCards(); pushPreview(); } });
+          d.querySelector('[data-a=del]').addEventListener("click", function(){
+            if(hub.cards.length<=1){ alert("메뉴는 최소 1개 필요합니다."); return; }
+            if(confirm("이 메뉴를 삭제할까요?")){ hub.cards.splice(i,1); buildCards(); pushPreview(); }
+          });
+        });
+      }
+
+      // ── 전역 입력 핸들러 ──
+      function bindGlobal(){
+        $("f_title").addEventListener("input", function(e){ hub.title=e.target.value; pushPreview(); });
+        $("f_subtitle").addEventListener("input", function(e){ hub.subtitle=e.target.value; pushPreview(); });
+        ["c1","c2","c3"].forEach(function(k){
+          $("bg_"+k).addEventListener("input", function(e){ hub.bg[k]=e.target.value; pushPreview(); });
+        });
+        $("bg_angle").addEventListener("input", function(e){ hub.bg.angle=Number(e.target.value); $("bg_angle_v").textContent=e.target.value+"°"; pushPreview(); });
+        $("f_font").addEventListener("change", function(e){ hub.font=e.target.value; pushPreview(); });
+        $("bg_swap").addEventListener("click", function(){
+          palIdx=(palIdx+1)%PALETTES.length; var p=PALETTES[palIdx];
+          hub.bg.c1=p[0]; hub.bg.c2=p[1]; hub.bg.c3=p[2];
+          $("bg_c1").value=p[0]; $("bg_c2").value=p[1]; $("bg_c3").value=p[2]; pushPreview();
+        });
+        // 앰블럼
+        $("url_emblem").addEventListener("input", function(e){ hub.emblem=e.target.value.trim(); setThumb($("th_emblem"),hub.emblem); pushPreview(); });
+        $("file_emblem").addEventListener("change", function(e){
+          var f=e.target.files[0]; if(!f) return;
+          fileToResized(f, 240, function(uri){ hub.emblem=uri; $("url_emblem").value=""; setThumb($("th_emblem"),uri); pushPreview(); });
+        });
+        $("clr_emblem").addEventListener("click", function(){ hub.emblem=""; $("url_emblem").value=""; setThumb($("th_emblem"),""); pushPreview(); });
+        // 메뉴 추가
+        $("addCard").addEventListener("click", function(){
+          var id="c"+Date.now().toString(36);
+          hub.cards.push({id:id,title:"새 메뉴",desc:"설명",url:"https://",icon:"link",tint:"#6366f1",opacity:12,img:""});
+          buildCards(); pushPreview();
+        });
+      }
+
+      // ── 불러오기 / 저장 ──
+      function loadHub(){
+        $("editSt").textContent="불러오는 중…";
+        fetch("/api/hub-config").then(function(r){return r.json();}).then(function(j){
+          hub = (j&&j.ok&&j.config) ? j.config : clone(DEFAULT);
+          if(!hub.bg) hub.bg=clone(DEFAULT.bg);
+          if(!Array.isArray(hub.cards)) hub.cards=clone(DEFAULT.cards);
+          fillForm(); pushPreview(); $("editSt").textContent="";
+        }).catch(function(){ hub=clone(DEFAULT); fillForm(); pushPreview(); $("editSt").textContent="기본값 로드"; });
+      }
+      function saveHub(){
+        var pw = $("editPw").value || (function(){try{return sessionStorage.getItem("efv_pw")||"";}catch(e){return"";}})();
+        if(!pw){ $("editSt").textContent="❌ 비밀번호를 입력하세요."; return; }
+        $("btnSave").disabled=true; $("editSt").textContent="저장 중…";
+        fetch("/api/hub-config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pw:pw,config:hub})})
+          .then(function(r){return r.json().then(function(j){return{status:r.status,j:j};});})
+          .then(function(o){
+            $("btnSave").disabled=false;
+            if(o.status===401){ $("editSt").textContent="❌ 비밀번호가 올바르지 않습니다."; return; }
+            if(!o.j.ok){ $("editSt").textContent="❌ "+(o.j.error||"저장 실패"); return; }
+            try{sessionStorage.setItem("efv_pw",pw);}catch(e){}
+            $("editSt").textContent="✅ 저장됐어요. 실제 페이지에 반영됩니다.";
+            setTimeout(function(){ $("editSt").textContent=""; }, 4000);
+          })
+          .catch(function(e){ $("btnSave").disabled=false; $("editSt").textContent="❌ "+e.message; });
+      }
+
+      // ── 모드 전환 ──
+      var loaded=false;
+      function setMode(edit){
+        $("mode-analytics").style.display = edit?"none":"";
+        $("mode-edit").style.display = edit?"":"none";
+        $("modeAnalyticsBtn").classList.toggle("on", !edit);
+        $("modeEditBtn").classList.toggle("on", edit);
+        if(edit && !loaded){ loaded=true; loadHub(); }
+        if(edit) pushPreview();
+      }
+
+      document.addEventListener("DOMContentLoaded", function(){
+        iframe = $("hubPrev");
+        iframe.addEventListener("load", function(){ iframeReady=true; pushPreview(); });
+        // 세션 비번 있으면 채우기
+        try{ var s=sessionStorage.getItem("efv_pw"); if(s) $("editPw").value=s; }catch(e){}
+        bindGlobal();
+        $("modeAnalyticsBtn").addEventListener("click", function(){ setMode(false); });
+        $("modeEditBtn").addEventListener("click", function(){ setMode(true); });
+        $("btnReload").addEventListener("click", loadHub);
+        $("btnSave").addEventListener("click", saveHub);
+      });
+    })();
     </script>
 </body>
 </html>

@@ -23,7 +23,7 @@ try { PAST_COMPARE = JSON.parse(fs.readFileSync(path.join(__dirname, "compare_pa
 catch (_) { console.log("compare_past.json 없음 — 과거 비교 데이터 비어있음"); }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "3mb" }));  // 허브 설정 이미지(base64) 업로드 대비
 app.use(express.static(path.join(__dirname, "public")));
 
 // ----- 환경변수(열쇠들) -----
@@ -1862,6 +1862,74 @@ async function rollupMonthly() {
 }
 setInterval(() => rollupMonthly().catch(() => {}), 24 * 60 * 60 * 1000);
 setTimeout(() => rollupMonthly().catch(() => {}), 60 * 1000);
+
+// ===================================================================
+//  옵션 링크허브 설정 (배경/폰트/앰블럼/메뉴) — 공개 GET, 관리자 POST
+//  저장: "허브설정" 탭 key-value (이미지는 커서 셀 분리 저장, 셀당 5만자 한도)
+// ===================================================================
+const HUB_TAB = process.env.HUB_TAB || "허브설정";
+const HUB_DEFAULT = {
+  bg: { c1: "#4b45d1", c2: "#6d6ef0", c3: "#9294f7", angle: 146 },
+  font: "noto",
+  title: "유진투자선물",
+  subtitle: "유진투자선물 공식 링크 허브",
+  emblem: "",
+  cards: [
+    { id: "sihwang", title: "시황", desc: "데일리 옵션 마켓 시황", url: "https://eugeneoptions.pages.dev/?s=1", icon: "chart", tint: "#f59e0b", opacity: 12, img: "" },
+    { id: "youtube", title: "유튜브", desc: "옵션 개념·전략 영상", url: "https://www.youtube.com/@유진투자선물_official", icon: "youtube", tint: "#ef4444", opacity: 12, img: "" },
+    { id: "guide", title: "가이드북", desc: "미국주식옵션 입문", url: "https://options.eugenefutures.com/usoguide/index.html", icon: "book", tint: "#0ea5e9", opacity: 12, img: "" },
+    { id: "blog", title: "블로그", desc: "옵션 기초 개념·용어", url: "https://blog.naver.com/eugenefutures", icon: "feather", tint: "#10b981", opacity: 12, img: "" },
+    { id: "edu", title: "사전교육 · 모의거래", desc: "거래 전 필수 · 무료", url: "https://options.eugenefutures.com/wts/works/MK_0001", icon: "grad", tint: "#475569", opacity: 12, img: "" },
+  ],
+};
+
+app.get("/api/hub-config", async (req, res) => {
+  try {
+    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, config: HUB_DEFAULT });
+    const sheets = getSheetsClient();
+    let rows = [];
+    try { const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A:B` }); rows = r.data.values || []; } catch (_) { /* 탭 없음 */ }
+    const map = {};
+    rows.forEach((r) => { if (r && r[0]) map[r[0]] = r[1] || ""; });
+    if (!map.meta) return res.json({ ok: true, config: HUB_DEFAULT });
+    let meta;
+    try { meta = JSON.parse(map.meta); } catch (_) { return res.json({ ok: true, config: HUB_DEFAULT }); }
+    meta.emblem = map.img_emblem || "";
+    (meta.cards || []).forEach((c) => { c.img = map["img_" + c.id] || ""; });
+    res.set("Cache-Control", "no-store");
+    res.json({ ok: true, config: meta });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.post("/api/hub-config", async (req, res) => {
+  try {
+    const { pw, config } = req.body || {};
+    if (!checkVisitsPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    if (!config || typeof config !== "object") return res.status(400).json({ ok: false, error: "config 없음" });
+    const emblem = String(config.emblem || "");
+    const cards = Array.isArray(config.cards) ? config.cards : [];
+    const tooBig = [emblem, ...cards.map((c) => String(c.img || ""))].find((s) => s.length > 49000);
+    if (tooBig) return res.status(413).json({ ok: false, error: "이미지가 너무 큽니다. 더 작은 파일이나 이미지 URL을 사용하세요." });
+    const meta = {
+      bg: config.bg || HUB_DEFAULT.bg,
+      font: config.font || "noto",
+      title: String(config.title || ""),
+      subtitle: String(config.subtitle || ""),
+      cards: cards.map((c) => ({
+        id: String(c.id || "").replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24) || ("c" + Math.random().toString(36).slice(2, 8)),
+        title: String(c.title || ""), desc: String(c.desc || ""), url: String(c.url || ""),
+        icon: String(c.icon || "link"), tint: String(c.tint || "#6366f1"), opacity: Math.max(0, Math.min(100, Number(c.opacity) || 0)),
+      })),
+    };
+    const values = [["meta", JSON.stringify(meta)], ["img_emblem", emblem]];
+    meta.cards.forEach((c, i) => values.push(["img_" + c.id, String((cards[i] && cards[i].img) || "")]));
+    const sheets = getSheetsClient();
+    await ensureTabExists(sheets, HUB_TAB);
+    await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A:B` });
+    await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${HUB_TAB}!A1`, valueInputOption: "RAW", requestBody: { values } });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 대시보드 실행 중: http://localhost:${PORT}`));

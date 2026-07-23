@@ -11,183 +11,216 @@
     <meta property="og:image" content="https://yt3.ggpht.com/I30OhWLQzcIwxuu7-e8ToOMfr4RtRmOWjZ1uekGWiiyA5g2_jCc5Zx2wDgbFjJh5pcSqPHwnXs8=s400-c-k-c0x00ffffff-no-rj">
     <meta property="og:url" content="https://eugenefn.up.railway.app/optionsguide/">
     <meta name="twitter:card" content="summary">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M7 21l5-6 4 3 6-8' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='white' stroke-width='2.6'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Nanum+Gothic:wght@400;700;800&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=Gowun+Dodum&family=Black+Han+Sans&family=Do+Hyeon&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Noto Sans KR', sans-serif;
-            color: #1b1b1b;
-            background: #ffffff;
-            min-height: 100vh;
-            -webkit-font-smoothing: antialiased;
-        }
+      :root{
+        --g1:#4b45d1; --g2:#6d6ef0; --g3:#9294f7; --angle:146deg;
+        --font:'Noto Sans KR',sans-serif;
+        --glass:rgba(255,255,255,.10);
+        --glass-hi:rgba(255,255,255,.17);
+        --stroke:rgba(255,255,255,.20);
+        --w:#fff; --w70:rgba(255,255,255,.72); --w55:rgba(255,255,255,.55); --w40:rgba(255,255,255,.40);
+      }
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{
+        font-family:var(--font); color:var(--w); min-height:100vh; -webkit-font-smoothing:antialiased;
+        word-break:keep-all;
+        background:
+          radial-gradient(120% 90% at 82% 88%, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 42%),
+          linear-gradient(var(--angle), var(--g1) 0%, var(--g2) 52%, var(--g3) 100%);
+        background-attachment:fixed;
+      }
+      .page{max-width:462px; margin:0 auto; padding:56px 22px 40px}
 
-        /* 히어로 : 화면 전체 폭으로 퍼지는 그라데이션 */
-        .hero {
-            width: 100%;
-            background: radial-gradient(140% 92% at 50% -12%, #c7dcf7 0%, #dde9fb 34%, #eef4fd 58%, #ffffff 82%);
-            text-align: center;
-            padding: 52px 24px 42px;
-            opacity: 0; animation: fadeDown .7s ease forwards;
-        }
-        .hero-inner { max-width: 440px; margin: 0 auto; }
-        .hero .avatar {
-            width: 84px; height: 84px; border-radius: 24px; object-fit: cover;
-            box-shadow: 0 12px 28px rgba(37,99,235,0.20); margin-bottom: 18px; background: #2563eb;
-        }
-        .hero h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; color: #16233b; }
-        .hero .sub { font-size: 14px; color: #55698c; margin-top: 8px; }
-        .hero .socials { display: flex; justify-content: center; gap: 22px; margin-top: 22px; }
-        .hero .socials a {
-            color: #2b3a55; font-size: 23px; text-decoration: none; line-height: 1;
-            transition: transform .15s ease, color .15s ease;
-        }
-        .hero .socials a:hover { transform: translateY(-2px); color: #16233b; }
+      /* 히어로 */
+      .hero{text-align:center; opacity:0; animation:fadeDown .7s ease forwards}
+      .emblem{position:relative; width:104px; height:104px; margin:0 auto 20px; display:flex; align-items:center; justify-content:center}
+      .emblem::before{content:""; position:absolute; inset:-18px; border-radius:50%;
+        background:radial-gradient(closest-side, rgba(255,255,255,.38), rgba(255,255,255,0) 72%); filter:blur(2px)}
+      .emblem svg, .emblem img{position:relative; width:104px; height:104px; object-fit:contain;
+        filter:drop-shadow(0 10px 22px rgba(30,20,90,.35))}
+      h1{font-size:26px; font-weight:800; letter-spacing:-.02em; text-wrap:balance}
+      .sub{font-size:13.5px; color:var(--w70); margin-top:9px}
+      .socials{display:inline-flex; gap:6px; margin-top:20px; padding:7px 9px;
+        background:var(--glass); border:1px solid var(--stroke); border-radius:100px;
+        backdrop-filter:blur(14px) saturate(140%); -webkit-backdrop-filter:blur(14px) saturate(140%)}
+      .socials a{width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        color:var(--w); text-decoration:none; transition:background .16s ease, transform .16s ease}
+      .socials a:hover{background:rgba(255,255,255,.16); transform:translateY(-2px)}
+      .socials svg{width:19px; height:19px}
 
-        /* 본문 */
-        .content { max-width: 440px; margin: 0 auto; padding: 22px 22px 28px; }
-        .list { display: flex; flex-direction: column; gap: 12px; }
+      /* 링크 카드 */
+      .list{display:flex; flex-direction:column; gap:12px; margin-top:30px}
+      .card{display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--w);
+        background:rgba(255,255,255,var(--op,.10)); border:1px solid var(--stroke); border-radius:18px; padding:13px 14px;
+        backdrop-filter:blur(16px) saturate(140%); -webkit-backdrop-filter:blur(16px) saturate(140%);
+        box-shadow:0 8px 22px rgba(35,25,95,.16);
+        opacity:0; transform:translateY(16px); animation:rise .6s cubic-bezier(.22,.61,.36,1) forwards;
+        transition:background .18s ease, transform .18s ease, box-shadow .18s ease, border-color .18s ease}
+      .card:hover{transform:translateY(-3px); border-color:rgba(255,255,255,.34); box-shadow:0 14px 30px rgba(35,25,95,.24);
+        background:rgba(255,255,255,calc(var(--op,.10) + .06))}
+      .card:nth-child(1){animation-delay:.10s}.card:nth-child(2){animation-delay:.17s}
+      .card:nth-child(3){animation-delay:.24s}.card:nth-child(4){animation-delay:.31s}
+      .card:nth-child(5){animation-delay:.38s}.card:nth-child(6){animation-delay:.45s}
+      .card:nth-child(7){animation-delay:.52s}
 
-        /* 카드 : 왼쪽 대표사진 + 오른쪽 텍스트 */
-        .card {
-            display: flex; align-items: center; gap: 14px;
-            background: #fff; border: 1px solid #ecedf0; border-radius: 16px;
-            padding: 12px; text-decoration: none; color: inherit;
-            box-shadow: 0 2px 10px rgba(30,60,120,0.05);
-            opacity: 0; transform: translateY(18px);
-            animation: riseUp .6s cubic-bezier(.22,.61,.36,1) forwards;
-            transition: transform .2s ease, box-shadow .2s ease;
-        }
-        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(30,60,120,0.10); }
-        .card:nth-child(1){animation-delay:.10s}
-        .card:nth-child(2){animation-delay:.18s}
-        .card:nth-child(3){animation-delay:.26s}
-        .card:nth-child(4){animation-delay:.34s}
-        .card:nth-child(5){animation-delay:.42s}
+      .tile{flex-shrink:0; width:52px; height:52px; border-radius:14px; overflow:hidden;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 4px 12px rgba(20,15,60,.28), inset 0 1px 0 rgba(255,255,255,.35)}
+      .tile svg{width:25px; height:25px; color:#fff}
+      .tile img{width:100%; height:100%; object-fit:cover}
+      .tx{flex:1; min-width:0}
+      .tx .desc{display:block; font-size:11.5px; color:var(--w55); margin-bottom:3px}
+      .tx b{display:block; font-size:16px; font-weight:700; letter-spacing:-.01em}
+      .go{flex-shrink:0; color:var(--w40); display:flex; transition:color .18s ease, transform .18s ease}
+      .go svg{width:17px; height:17px}
+      .card:hover .go{color:var(--w); transform:translateX(3px)}
 
-        .card .thumb {
-            flex-shrink: 0; width: 64px; height: 64px; border-radius: 13px; overflow: hidden;
-            position: relative; display: flex; align-items: center; justify-content: center;
-        }
-        .card .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
-        .card .thumb i { font-size: 24px; color: #fff; z-index: 0; }
-        .th-a { background: linear-gradient(135deg,#f87171,#ef4444); }
-        .th-b { background: linear-gradient(135deg,#60a5fa,#2563eb); }
-        .th-c { background: linear-gradient(135deg,#fbbf24,#f59e0b); }
-        .th-d { background: linear-gradient(135deg,#34d399,#10b981); }
-        .th-e { background: linear-gradient(135deg,#4b5563,#1f2937); }
+      .foot{text-align:center; padding:34px 8px 6px; opacity:0; animation:rise .6s ease .5s forwards}
+      .foot p{font-size:10.5px; line-height:1.85; color:var(--w40); max-width:400px; margin:0 auto}
 
-        .card .tx { flex: 1; min-width: 0; }
-        .card .tx .desc { display: block; font-size: 11.5px; color: #9aa0ab; margin-bottom: 3px; }
-        .card .tx b { display: block; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: #1b1b1b; }
-        .card .go { flex-shrink: 0; color: #cfd2d8; font-size: 14px; padding-right: 4px; transition: transform .2s ease, color .2s ease; }
-        .card:hover .go { color: #1b1b1b; transform: translateX(3px); }
-
-        /* 푸터 */
-        .footer { text-align: center; padding: 30px 22px 26px; opacity: 0; animation: riseUp .6s ease .5s forwards; }
-        .footer .copy { font-size: 11px; letter-spacing: 0.1em; color: #9c998f; }
-        .footer .notice { font-size: 10.5px; line-height: 1.8; color: #b7b4ab; margin: 10px auto 0; max-width: 400px; word-break: keep-all; }
-
-        @keyframes riseUp { to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        @media (prefers-reduced-motion: reduce) { .hero, .card, .footer { animation: none; opacity: 1; transform: none; } }
+      @keyframes rise{to{opacity:1; transform:translateY(0)}}
+      @keyframes fadeDown{from{opacity:0; transform:translateY(-10px)}to{opacity:1; transform:translateY(0)}}
+      @media (prefers-reduced-motion:reduce){.hero,.card,.foot{animation:none; opacity:1; transform:none}}
     </style>
 </head>
 <body>
+    <div class="page">
+      <header class="hero">
+        <div class="emblem" id="emblem"></div>
+        <h1 id="hTitle">유진투자선물</h1>
+        <p class="sub" id="hSub">유진투자선물 공식 링크 허브</p>
+        <nav class="socials" aria-label="소셜">
+          <a href="https://www.instagram.com/eugeneoptions/" target="_blank" rel="noopener" aria-label="인스타그램"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor" stroke="none"/></svg></a>
+          <a href="https://www.youtube.com/@유진투자선물_official" target="_blank" rel="noopener" aria-label="유튜브"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.7-1.7C19.3 5.2 12 5.2 12 5.2s-7.3 0-8.9.4A2.5 2.5 0 0 0 1.4 7.3C1 8.8 1 12 1 12s0 3.2.4 4.7a2.5 2.5 0 0 0 1.7 1.7c1.6.4 8.9.4 8.9.4s7.3 0 8.9-.4a2.5 2.5 0 0 0 1.7-1.7C23 15.2 23 12 23 12ZM9.8 15.3V8.7l6 3.3-6 3.3Z"/></svg></a>
+          <a href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener" aria-label="블로그"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h11a4 4 0 0 1 4 4v10H8a4 4 0 0 1-4-4V5Z"/><path d="M8.5 14V9.5L12 14V9.5"/></svg></a>
+        </nav>
+      </header>
 
-    <!-- 히어로 (전체 폭 그라데이션) -->
-    <header class="hero">
-        <div class="hero-inner">
-            <img class="avatar" src="https://yt3.ggpht.com/I30OhWLQzcIwxuu7-e8ToOMfr4RtRmOWjZ1uekGWiiyA5g2_jCc5Zx2wDgbFjJh5pcSqPHwnXs8=s240-c-k-c0x00ffffff-no-rj" alt="유진투자선물" onerror="this.style.display='none'">
-            <h1>유진투자선물</h1>
-            <p class="sub">유진투자선물 공식 링크 허브</p>
-            <div class="socials">
-                <a href="https://www.instagram.com/eugeneoptions/" target="_blank" rel="noopener" aria-label="인스타그램"><i class="fab fa-instagram"></i></a>
-                <a href="https://www.youtube.com/@유진투자선물_official" target="_blank" rel="noopener" aria-label="유튜브"><i class="fab fa-youtube"></i></a>
-                <a href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener" aria-label="블로그"><i class="fas fa-blog"></i></a>
-            </div>
-        </div>
-    </header>
+      <main class="list" id="list"></main>
 
-    <!-- 본문 카드 -->
-    <main class="content">
-        <div class="list">
+      <footer class="foot">
+        <p>투자 권유가 아닌 정보 제공용이며, 일부는 외부 사이트로 연결돼요.<br>정보는 지연·변경될 수 있어 투자 결과의 법적 증빙이 될 수 없어요.</p>
+      </footer>
+    </div>
 
-            <a class="card" href="https://eugeneoptions.pages.dev/?s=1" target="_blank" rel="noopener">
-                <span class="thumb th-c"><i class="fas fa-chart-line"></i></span>
-                <span class="tx"><span class="desc">데일리 옵션 마켓 시황</span><b>시황</b></span>
-                <span class="go"><i class="fas fa-chevron-right"></i></span>
-            </a>
+<script>
+/* ===== 링크허브 : 설정 기반 렌더 (설정 API 실패 시 기본값 사용) ===== */
+(function(){
+  var FONTS = {
+    noto:"'Noto Sans KR',sans-serif",
+    pretendard:"'Pretendard Variable',Pretendard,sans-serif",
+    nanum:"'Nanum Gothic',sans-serif",
+    plex:"'IBM Plex Sans KR',sans-serif",
+    gowun:"'Gowun Dodum',sans-serif",
+    blackhan:"'Black Han Sans',sans-serif",
+    dohyeon:"'Do Hyeon',sans-serif"
+  };
+  var ICONS = {
+    chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-5 3 3 5-7"/></svg>',
+    youtube:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.7-1.7C19.3 5.2 12 5.2 12 5.2s-7.3 0-8.9.4A2.5 2.5 0 0 0 1.4 7.3C1 8.8 1 12 1 12s0 3.2.4 4.7a2.5 2.5 0 0 0 1.7 1.7c1.6.4 8.9.4 8.9.4s7.3 0 8.9-.4a2.5 2.5 0 0 0 1.7-1.7C23 15.2 23 12 23 12ZM9.8 15.3V8.7l6 3.3-6 3.3Z"/></svg>',
+    book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5V5.5Z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 20.5Z"/></svg>',
+    feather:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4c-6 1-11 5-13 11l-1 5 5-1c6-2 10-7 11-13"/><path d="M6 20c1-3 3-5 6-6"/></svg>',
+    grad:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2 9l10 5 10-5-10-5Z"/><path d="M5 11v5c0 1.5 3.2 3 7 3s7-1.5 7-3v-5"/></svg>',
+    link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>'
+  };
+  var CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+  var KNOWN_DST=['sihwang','youtube','guide','blog','edu'];
 
-            <a class="card" href="https://www.youtube.com/@유진투자선물_official" target="_blank" rel="noopener">
-                <span class="thumb th-a"><i class="fab fa-youtube"></i></span>
-                <span class="tx"><span class="desc">옵션 개념·전략 영상</span><b>유튜브</b></span>
-                <span class="go"><i class="fas fa-chevron-right"></i></span>
-            </a>
+  var DEFAULT = {
+    bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
+    title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
+    cards:[
+      {id:"sihwang",title:"시황",desc:"데일리 옵션 마켓 시황",url:"https://eugeneoptions.pages.dev/?s=1",icon:"chart",tint:"#f59e0b",opacity:12,img:""},
+      {id:"youtube",title:"유튜브",desc:"옵션 개념·전략 영상",url:"https://www.youtube.com/@유진투자선물_official",icon:"youtube",tint:"#ef4444",opacity:12,img:""},
+      {id:"guide",title:"가이드북",desc:"미국주식옵션 입문",url:"https://options.eugenefutures.com/usoguide/index.html",icon:"book",tint:"#0ea5e9",opacity:12,img:""},
+      {id:"blog",title:"블로그",desc:"옵션 기초 개념·용어",url:"https://blog.naver.com/eugenefutures",icon:"feather",tint:"#10b981",opacity:12,img:""},
+      {id:"edu",title:"사전교육 · 모의거래",desc:"거래 전 필수 · 무료",url:"https://options.eugenefutures.com/wts/works/MK_0001",icon:"grad",tint:"#475569",opacity:12,img:""}
+    ]
+  };
 
-            <a class="card" href="https://options.eugenefutures.com/usoguide/index.html" target="_blank" rel="noopener">
-                <span class="thumb th-b"><i class="fas fa-book"></i></span>
-                <span class="tx"><span class="desc">미국주식옵션 입문</span><b>가이드북</b></span>
-                <span class="go"><i class="fas fa-chevron-right"></i></span>
-            </a>
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function shade(hex,f){ // 색을 f만큼 어둡게
+    var m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex||"#6366f1"); if(!m) return hex;
+    var r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16);
+    r=Math.round(r*(1-f)); g=Math.round(g*(1-f)); b=Math.round(b*(1-f));
+    return 'rgb('+r+','+g+','+b+')';
+  }
 
-            <a class="card" href="https://blog.naver.com/eugenefutures" target="_blank" rel="noopener">
-                <span class="thumb th-d"><i class="fas fa-feather"></i></span>
-                <span class="tx"><span class="desc">옵션 기초 개념·용어</span><b>블로그</b></span>
-                <span class="go"><i class="fas fa-chevron-right"></i></span>
-            </a>
+  function apply(cfg){
+    var bg=cfg.bg||DEFAULT.bg, r=document.documentElement.style;
+    r.setProperty('--g1',bg.c1||'#4b45d1'); r.setProperty('--g2',bg.c2||'#6d6ef0');
+    r.setProperty('--g3',bg.c3||'#9294f7'); r.setProperty('--angle',(bg.angle==null?146:bg.angle)+'deg');
+    r.setProperty('--font',FONTS[cfg.font]||FONTS.noto);
 
-            <a class="card" href="https://options.eugenefutures.com/wts/works/MK_0001" target="_blank" rel="noopener">
-                <span class="thumb th-e"><i class="fas fa-graduation-cap"></i></span>
-                <span class="tx"><span class="desc">거래 전 필수 · 무료</span><b>사전교육 · 모의거래</b></span>
-                <span class="go"><i class="fas fa-chevron-right"></i></span>
-            </a>
+    document.getElementById('hTitle').textContent=cfg.title||'';
+    document.getElementById('hSub').textContent=cfg.subtitle||'';
 
-        </div>
+    var em=document.getElementById('emblem');
+    if(cfg.emblem){ em.innerHTML='<img src="'+esc(cfg.emblem)+'" alt="엠블럼" onerror="this.remove()">'; }
+    else { em.innerHTML='<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="38" stroke="#fff" stroke-width="4"/><ellipse cx="50" cy="50" rx="16" ry="38" stroke="#fff" stroke-width="3.4"/><line x1="12" y1="50" x2="88" y2="50" stroke="#fff" stroke-width="3.4"/><path d="M19 31h62M19 69h62" stroke="#fff" stroke-width="3" opacity=".85"/></svg>'; }
 
-        <footer class="footer">
-            <p class="notice">
-                투자 권유가 아닌 정보 제공용이며, 일부는 외부 사이트로 연결돼요.<br>
-                정보는 지연·변경될 수 있어 투자 결과의 법적 증빙이 될 수 없어요.
-            </p>
-        </footer>
-    </main>
+    var list=document.getElementById('list');
+    list.innerHTML=(cfg.cards||[]).map(function(c){
+      var op=(Number(c.opacity)||0)/100;
+      var tile = c.img
+        ? '<span class="tile"><img src="'+esc(c.img)+'" alt=""></span>'
+        : '<span class="tile" style="background:linear-gradient(140deg,'+esc(c.tint||'#6366f1')+','+shade(c.tint||'#6366f1',.28)+')">'+(ICONS[c.icon]||ICONS.link)+'</span>';
+      var dst=KNOWN_DST.indexOf(c.id)>=0?c.id:'etc';
+      return '<a class="card" style="--op:'+op+'" href="'+esc(c.url)+'" target="_blank" rel="noopener" data-dst="'+dst+'">'
+        +tile+'<span class="tx"><span class="desc">'+esc(c.desc)+'</span><b>'+esc(c.title)+'</b></span>'
+        +'<span class="go">'+CHEV+'</span></a>';
+    }).join('');
+    bindTracking();
+  }
 
-    <!-- 유입경로 추적(?src 우선, 없으면 referrer 자동분류) + 방문자ID + 아웃바운드 클릭 -->
-    <script>
-      (function(){
-        try{
-          var known=['youtube','instagram','plus','blog','chatmenu','chatbtn','etc'];
-          var src=(new URLSearchParams(location.search).get('src')||'').toLowerCase();
-          if(known.indexOf(src)<0){
-            var ref=(document.referrer||'').toLowerCase();
-            if(/youtube\.com|youtu\.be/.test(ref)) src='youtube';
-            else if(/instagram\.com/.test(ref)) src='instagram';
-            else if(/naver\.com/.test(ref)) src='blog';
-            else if(/kakao/.test(ref)) src='plus';
-            else src='etc';
-          }
-          var vid="";
-          try{ vid=localStorage.getItem('ef_vid'); if(!vid){ vid=Date.now().toString(36)+Math.random().toString(36).slice(2,10); localStorage.setItem('ef_vid',vid); } }catch(e){}
-          var base='/api/track?src='+encodeURIComponent(src)+'&vid='+encodeURIComponent(vid);
-          fetch(base,{keepalive:true}).catch(function(){});   // 페이지 방문
+  /* ===== 유입/클릭 추적 ===== */
+  var trackBase='';
+  (function initTrack(){
+    try{
+      var known=['youtube','instagram','plus','blog','chatmenu','chatbtn','etc'];
+      var src=(new URLSearchParams(location.search).get('src')||'').toLowerCase();
+      if(known.indexOf(src)<0){
+        var ref=(document.referrer||'').toLowerCase();
+        if(/youtube\.com|youtu\.be/.test(ref)) src='youtube';
+        else if(/instagram\.com/.test(ref)) src='instagram';
+        else if(/naver\.com/.test(ref)) src='blog';
+        else if(/kakao/.test(ref)) src='plus';
+        else src='etc';
+      }
+      var vid="";
+      try{ vid=localStorage.getItem('ef_vid'); if(!vid){ vid=Date.now().toString(36)+Math.random().toString(36).slice(2,10); localStorage.setItem('ef_vid',vid); } }catch(e){}
+      trackBase='/api/track?src='+encodeURIComponent(src)+'&vid='+encodeURIComponent(vid);
+      fetch(trackBase,{keepalive:true}).catch(function(){});
+    }catch(e){}
+  })();
+  function bindTracking(){
+    if(!trackBase) return;
+    document.querySelectorAll('.card').forEach(function(a){
+      a.addEventListener('click',function(){
+        try{ fetch(trackBase+'&dst='+encodeURIComponent(a.getAttribute('data-dst')||'etc'),{keepalive:true}).catch(function(){}); }catch(e){}
+      });
+    });
+  }
 
-          function dstOf(h){ h=(h||'').toLowerCase();
-            if(h.indexOf('eugeneoptions.pages.dev')>=0) return 'sihwang';
-            if(h.indexOf('youtube.com')>=0) return 'youtube';
-            if(h.indexOf('usoguide')>=0) return 'guide';
-            if(h.indexOf('blog.naver')>=0) return 'blog';
-            if(h.indexOf('wts/works')>=0) return 'edu';
-            return 'etc'; }
-          document.querySelectorAll('.card').forEach(function(a){
-            a.addEventListener('click', function(){
-              try{ fetch(base+'&dst='+encodeURIComponent(dstOf(a.getAttribute('href'))),{keepalive:true}).catch(function(){}); }catch(e){}
-            });
-          });
-        }catch(e){}
-      })();
-    </script>
+  // 미리보기 모드(?preview=1): 서버 설정 대신 부모창(관리자 수정탭)이 postMessage로 넘긴 설정을 실시간 적용
+  if(new URLSearchParams(location.search).get('preview')){
+    apply(DEFAULT);
+    window.addEventListener('message',function(e){
+      if(e.data&&e.data.type==='hubcfg'&&e.data.config) apply(e.data.config);
+    });
+  } else {
+    // 1) 즉시 기본값으로 렌더 → 2) 서버 설정 도착하면 덮어쓰기
+    apply(DEFAULT);
+    fetch('/api/hub-config').then(function(r){return r.json();}).then(function(j){
+      if(j&&j.ok&&j.config) apply(j.config);
+    }).catch(function(){});
+  }
+})();
+</script>
 </body>
 </html>
