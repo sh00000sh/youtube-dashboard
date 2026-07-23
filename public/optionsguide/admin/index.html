@@ -47,6 +47,16 @@
         tbody tr:hover { background:#fafbfc; }
         tfoot td { font-weight:700; border-top:2px solid #e5e7eb; }
         .empty { text-align:center; color:#9aa0ab; padding:24px; font-size:13px; }
+
+        .linkrow { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f0f1f3; }
+        .linkrow:last-child { border-bottom:none; }
+        .linkrow .lname { width:96px; font-size:13px; font-weight:600; flex-shrink:0; }
+        .linkrow .lname .dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+        .linkrow input.lurl { flex:1; min-width:0; padding:7px 9px; border:1px solid #e5e7eb; border-radius:8px; font-size:12px; color:#4b5563; background:#fafbfc; font-family:inherit; }
+        .linkrow .copy { padding:7px 13px; border:1px solid #d7dae0; background:#fff; border-radius:8px; font-size:12px; cursor:pointer; flex-shrink:0; font-family:inherit; }
+        .linkrow .copy:hover { background:#f1f3f5; }
+        .linkrow .copy.ok { background:#22a06b; color:#fff; border-color:#22a06b; }
+        @media (max-width:560px){ .linkrow{ flex-wrap:wrap; } .linkrow .lname{ width:auto; } .linkrow input.lurl{ order:3; flex-basis:100%; } }
     </style>
 </head>
 <body>
@@ -66,6 +76,11 @@
             <button class="go" id="go">조회</button>
         </div>
         <div class="err" id="err"></div>
+
+        <div class="panel" style="margin-top:16px">
+            <h2>🔗 유입경로 링크 <span style="font-size:11px;color:#9aa0ab;font-weight:400">— 채널마다 아래 링크를 복사해 사용하세요</span></h2>
+            <div id="linkList"></div>
+        </div>
 
         <div id="result" style="display:none">
             <div class="total"><span class="n" id="tTotal">0</span><span class="lbl">총 방문</span><span class="n" id="tUnique" style="margin-left:20px">0</span><span class="lbl">순방문(중복제거)</span><span class="rng" id="tRange"></span></div>
@@ -100,6 +115,25 @@
         }
         // 기본: 최근 7일
         setRange("7");
+
+        // 유입경로 링크 생성 + 복사 (도메인 자동 감지)
+        (function buildLinks(){
+            var base = location.origin + "/optionsguide/?src=";
+            document.getElementById("linkList").innerHTML = SRC.map(function(s){
+                var url = base + s.k;
+                return '<div class="linkrow"><span class="lname"><span class="dot" style="background:'+s.c+'"></span>'+s.name+'</span>'+
+                    '<input class="lurl" readonly value="'+url+'" onclick="this.select()">'+
+                    '<button class="copy" type="button" data-url="'+url+'">복사</button></div>';
+            }).join("");
+            document.querySelectorAll("#linkList .copy").forEach(function(btn){
+                btn.onclick = function(){
+                    var ok = function(){ btn.textContent="복사됨"; btn.classList.add("ok"); setTimeout(function(){ btn.textContent="복사"; btn.classList.remove("ok"); }, 1200); };
+                    var fb = function(){ var inp=btn.previousElementSibling; inp.focus(); inp.select(); try{document.execCommand("copy");}catch(e){} ok(); };
+                    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(btn.dataset.url).then(ok).catch(fb); }
+                    else fb();
+                };
+            });
+        })();
 
         document.querySelectorAll(".quick button").forEach(function(b){
             b.onclick = function(){ setRange(b.dataset.r); load(); };
