@@ -22,6 +22,8 @@
         .quick button:hover { background:#f1f3f5; }
         .go { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:600; margin-left:auto; }
         .err { color:#e5484d; font-size:12.5px; margin:8px 2px 0; }
+        .mtoggle { padding:5px 12px; border:1px solid #d7dae0; background:#fff; border-radius:8px; font-size:12px; cursor:pointer; font-family:inherit; margin-left:6px; }
+        .mtoggle.on { background:#2563eb; color:#fff; border-color:#2563eb; }
 
         .total { background:#111827; color:#fff; border-radius:14px; padding:18px 20px; margin-bottom:14px; display:flex; align-items:baseline; gap:12px; }
         .total .n { font-size:32px; font-weight:700; }
@@ -85,10 +87,23 @@
         <div id="result" style="display:none">
             <div class="total"><span class="n" id="tTotal">0</span><span class="lbl">총 방문</span><span class="n" id="tUnique" style="margin-left:20px">0</span><span class="lbl">순방문(중복제거)</span><span class="rng" id="tRange"></span></div>
             <div class="cards" id="cards"></div>
+            <div class="panel">
+                <h2>🖱 카드 클릭 <span style="font-size:11px;color:#9aa0ab;font-weight:400">— 허브에서 각 링크를 누른 횟수</span></h2>
+                <div style="overflow-x:auto"><table id="clkTbl"></table></div>
+            </div>
             <div class="panel"><h2>일별 방문 추이 (경로별 누적)</h2><div class="chart-box"><canvas id="chart"></canvas></div></div>
             <div class="panel">
-                <h2>일별 상세</h2>
+                <h2 style="display:flex;align-items:center">일별 상세
+                    <span style="margin-left:auto">
+                        <button class="mtoggle on" id="mVisit" type="button">방문</button>
+                        <button class="mtoggle" id="mUniq" type="button">순방문</button>
+                    </span>
+                </h2>
                 <div style="overflow-x:auto"><table id="tbl"></table></div>
+            </div>
+            <div class="panel">
+                <h2>월별 집계 <span style="font-size:11px;color:#9aa0ab;font-weight:400">— 조회 기간 내</span></h2>
+                <div style="overflow-x:auto"><table id="moTbl"></table></div>
             </div>
         </div>
     </div>
@@ -102,6 +117,14 @@
             {k:"chatmenu",  name:"채팅방 메뉴", c:"#14b8a6"},
             {k:"chatbtn",   name:"채팅 버튼",   c:"#f97316"},
             {k:"etc",       name:"기타",       c:"#9aa0ab"},
+        ];
+        var DST = [
+            {k:"sihwang", name:"시황"},
+            {k:"youtube", name:"유튜브 채널"},
+            {k:"guide",   name:"가이드북"},
+            {k:"blog",    name:"블로그"},
+            {k:"edu",     name:"사전교육"},
+            {k:"etc",     name:"기타"},
         ];
         var pad = function(n){ return String(n).padStart(2,"0"); };
         var ymd = function(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
@@ -161,7 +184,37 @@
                 .catch(function(e){ err.textContent="❌ "+e.message; });
         }
 
+        // 일별 상세 방문/순방문 토글
+        var lastData = null, dailyMode = "visit";
+        document.getElementById("mVisit").onclick = function(){ setDailyMode("visit"); };
+        document.getElementById("mUniq").onclick = function(){ setDailyMode("uniq"); };
+        function setDailyMode(m){
+            dailyMode = m;
+            document.getElementById("mVisit").classList.toggle("on", m==="visit");
+            document.getElementById("mUniq").classList.toggle("on", m==="uniq");
+            renderDaily();
+        }
+
+        // 일별 표 (최신순) — 방문 또는 순방문
+        function renderDaily(){
+            var d = lastData; if(!d) return;
+            var uniq = dailyMode==="uniq";
+            var map = uniq ? (d.byDateU||{}) : d.byDate;
+            var dates = Object.keys(d.byDate).sort().reverse();
+            var head = "<thead><tr><th>날짜</th>"+SRC.map(function(s){return "<th>"+s.name+"</th>";}).join("")+"<th>합계</th></tr></thead>";
+            var body = dates.map(function(dt){
+                var row = map[dt]||{}; var sum=0;
+                var tds = SRC.map(function(s){ var c=row[s.k]||0; sum+=c; return "<td>"+fmt(c)+"</td>"; }).join("");
+                return "<tr><td>"+dt+"</td>"+tds+"<td><b>"+fmt(sum)+"</b></td></tr>";
+            }).join("");
+            var fTot = uniq ? (d.uniques||{}) : d.totals;
+            var fAll = uniq ? d.uTotal : d.total;
+            var foot = "<tfoot><tr><td>"+(uniq?"합계(중복제거)":"합계")+"</td>"+SRC.map(function(s){return "<td>"+fmt(fTot[s.k]||0)+"</td>";}).join("")+"<td>"+fmt(fAll)+"</td></tr></tfoot>";
+            document.getElementById("tbl").innerHTML = head + "<tbody>" + (body || '<tr><td colspan="'+(SRC.length+2)+'" class="empty">이 기간 방문 데이터가 없어요.</td></tr>') + "</tbody>" + foot;
+        }
+
         function render(d){
+            lastData = d;
             document.getElementById("result").style.display="";
             document.getElementById("tTotal").textContent = fmt(d.total);
             document.getElementById("tUnique").textContent = fmt(d.uTotal);
@@ -197,15 +250,29 @@
                 });
             }
 
-            // 일별 표 (최신순)
-            var head = "<thead><tr><th>날짜</th>"+SRC.map(function(s){return "<th>"+s.name+"</th>";}).join("")+"<th>합계</th></tr></thead>";
-            var body = dates.slice().reverse().map(function(dt){
-                var row = d.byDate[dt]||{}; var sum=0;
-                var tds = SRC.map(function(s){ var c=row[s.k]||0; sum+=c; return "<td>"+fmt(c)+"</td>"; }).join("");
-                return "<tr><td>"+dt+"</td>"+tds+"<td><b>"+fmt(sum)+"</b></td></tr>";
+            // 카드 클릭(아웃바운드) 표
+            var clk = d.clicks||{}, clkU = d.clicksU||{}, clickTotal = d.clickTotal||0;
+            var crows = DST.filter(function(t){ return t.k!=="etc" || clk.etc; }).map(function(t){
+                var c=clk[t.k]||0, u=clkU[t.k]||0;
+                var pct = clickTotal ? Math.round(c/clickTotal*100) : 0;
+                return "<tr><td>"+t.name+"</td><td>"+fmt(c)+"</td><td>"+fmt(u)+"</td><td>"+pct+"%</td></tr>";
             }).join("");
-            var foot = "<tfoot><tr><td>합계</td>"+SRC.map(function(s){return "<td>"+fmt(d.totals[s.k]||0)+"</td>";}).join("")+"<td>"+fmt(d.total)+"</td></tr></tfoot>";
-            document.getElementById("tbl").innerHTML = head + "<tbody>" + (body || '<tr><td colspan="'+(SRC.length+2)+'" class="empty">이 기간 방문 데이터가 없어요.</td></tr>') + "</tbody>" + foot;
+            document.getElementById("clkTbl").innerHTML =
+                "<thead><tr><th>링크</th><th>클릭</th><th>순클릭</th><th>비중</th></tr></thead>"+
+                "<tbody>"+(clickTotal ? crows : '<tr><td colspan="4" class="empty">이 기간 클릭 데이터가 없어요.</td></tr>')+"</tbody>"+
+                (clickTotal ? "<tfoot><tr><td>합계</td><td>"+fmt(clickTotal)+"</td><td></td><td>100%</td></tr></tfoot>" : "");
+
+            // 일별 표 (방문/순방문 토글)
+            renderDaily();
+
+            // 월별 집계 표 (최신순)
+            var mo = d.monthly||[];
+            var mbody = mo.slice().reverse().map(function(m){
+                return "<tr><td>"+m.month+"</td><td>"+fmt(m.visits)+"</td><td>"+fmt(m.unique)+"</td></tr>";
+            }).join("");
+            document.getElementById("moTbl").innerHTML =
+                "<thead><tr><th>월</th><th>방문</th><th>순방문</th></tr></thead>"+
+                "<tbody>"+(mbody||'<tr><td colspan="3" class="empty">이 기간 데이터가 없어요.</td></tr>')+"</tbody>";
         }
     </script>
 </body>

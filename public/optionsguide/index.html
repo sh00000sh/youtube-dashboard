@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>유진투자선물</title>
+    <title>유진투자선물 옵션 링크 허브</title>
+    <meta name="description" content="미국주식옵션에 필요한 링크를 한 곳에 — 시황·유튜브·가이드북·블로그·사전교육">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="유진투자선물 옵션 링크 허브">
+    <meta property="og:description" content="미국주식옵션에 필요한 링크를 한 곳에 — 시황·유튜브·가이드북·블로그·사전교육">
+    <meta property="og:image" content="https://yt3.ggpht.com/I30OhWLQzcIwxuu7-e8ToOMfr4RtRmOWjZ1uekGWiiyA5g2_jCc5Zx2wDgbFjJh5pcSqPHwnXs8=s400-c-k-c0x00ffffff-no-rj">
+    <meta property="og:url" content="https://eugenefn.up.railway.app/optionsguide/">
+    <meta name="twitter:card" content="summary">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M7 21l5-6 4 3 6-8' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <style>
@@ -147,18 +155,37 @@
         </footer>
     </main>
 
-    <!-- 유입경로 추적: ?src=youtube|instagram|plus|blog|etc + 방문자ID(중복제거) -->
+    <!-- 유입경로 추적(?src 우선, 없으면 referrer 자동분류) + 방문자ID + 아웃바운드 클릭 -->
     <script>
       (function(){
         try{
-          var src=(new URLSearchParams(location.search).get('src')||'etc').toLowerCase();
-          if(['youtube','instagram','plus','blog','chatmenu','chatbtn','etc'].indexOf(src)<0) src='etc';
+          var known=['youtube','instagram','plus','blog','chatmenu','chatbtn','etc'];
+          var src=(new URLSearchParams(location.search).get('src')||'').toLowerCase();
+          if(known.indexOf(src)<0){
+            var ref=(document.referrer||'').toLowerCase();
+            if(/youtube\.com|youtu\.be/.test(ref)) src='youtube';
+            else if(/instagram\.com/.test(ref)) src='instagram';
+            else if(/naver\.com/.test(ref)) src='blog';
+            else if(/kakao/.test(ref)) src='plus';
+            else src='etc';
+          }
           var vid="";
-          try{
-            vid=localStorage.getItem('ef_vid');
-            if(!vid){ vid=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)); localStorage.setItem('ef_vid',vid); }
-          }catch(e){}
-          fetch('/api/track?src='+encodeURIComponent(src)+'&vid='+encodeURIComponent(vid),{keepalive:true}).catch(function(){});
+          try{ vid=localStorage.getItem('ef_vid'); if(!vid){ vid=Date.now().toString(36)+Math.random().toString(36).slice(2,10); localStorage.setItem('ef_vid',vid); } }catch(e){}
+          var base='/api/track?src='+encodeURIComponent(src)+'&vid='+encodeURIComponent(vid);
+          fetch(base,{keepalive:true}).catch(function(){});   // 페이지 방문
+
+          function dstOf(h){ h=(h||'').toLowerCase();
+            if(h.indexOf('eugeneoptions.pages.dev')>=0) return 'sihwang';
+            if(h.indexOf('youtube.com')>=0) return 'youtube';
+            if(h.indexOf('usoguide')>=0) return 'guide';
+            if(h.indexOf('blog.naver')>=0) return 'blog';
+            if(h.indexOf('wts/works')>=0) return 'edu';
+            return 'etc'; }
+          document.querySelectorAll('.card').forEach(function(a){
+            a.addEventListener('click', function(){
+              try{ fetch(base+'&dst='+encodeURIComponent(dstOf(a.getAttribute('href'))),{keepalive:true}).catch(function(){}); }catch(e){}
+            });
+          });
         }catch(e){}
       })();
     </script>
