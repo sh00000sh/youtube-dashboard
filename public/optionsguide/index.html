@@ -147,13 +147,18 @@
         </footer>
     </main>
 
-    <!-- 유입경로 추적: ?src=youtube|instagram|plus|blog|etc -->
+    <!-- 유입경로 추적: ?src=youtube|instagram|plus|blog|etc + 방문자ID(중복제거) -->
     <script>
       (function(){
         try{
           var src=(new URLSearchParams(location.search).get('src')||'etc').toLowerCase();
           if(['youtube','instagram','plus','blog','etc'].indexOf(src)<0) src='etc';
-          fetch('/api/track?src='+encodeURIComponent(src),{keepalive:true}).catch(function(){});
+          var vid="";
+          try{
+            vid=localStorage.getItem('ef_vid');
+            if(!vid){ vid=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)); localStorage.setItem('ef_vid',vid); }
+          }catch(e){}
+          fetch('/api/track?src='+encodeURIComponent(src)+'&vid='+encodeURIComponent(vid),{keepalive:true}).catch(function(){});
         }catch(e){}
       })();
     </script>

@@ -1698,9 +1698,9 @@ const VISIT_SRCS = ["youtube", "instagram", "plus", "blog", "etc"];
 let visitBuffer = [];  // {ts, src}
 function normSrc(s) { s = String(s || "").toLowerCase().trim(); return VISIT_SRCS.includes(s) ? s : "etc"; }
 
-// 방문 기록(비콘) — 초경량, 즉시 응답
+// 방문 기록(비콘) — 초경량, 즉시 응답. vid=방문자ID(브라우저 localStorage, 중복제거용)
 app.get("/api/track", (req, res) => {
-  try { visitBuffer.push({ ts: new Date().toISOString(), src: normSrc(req.query.src) }); } catch (_) {}
+  try { visitBuffer.push({ ts: new Date().toISOString(), src: normSrc(req.query.src), vid: String(req.query.vid || "").slice(0, 40) }); } catch (_) {}
   res.set("Cache-Control", "no-store");
   res.status(204).end();
 });
@@ -1711,11 +1711,11 @@ async function flushVisits() {
   const batch = visitBuffer; visitBuffer = [];
   try {
     const sheets = getSheetsClient();
-    await ensureTab(sheets, VISIT_TAB, ["타임스탬프", "유입경로"]);
+    await ensureTab(sheets, VISIT_TAB, ["타임스탬프", "유입경로", "방문자ID"]);
     await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID, range: `${VISIT_TAB}!A:B`,
+      spreadsheetId: SHEET_ID, range: `${VISIT_TAB}!A:C`,
       valueInputOption: "USER_ENTERED",
-      requestBody: { values: batch.map((v) => [v.ts, v.src]) },
+      requestBody: { values: batch.map((v) => [v.ts, v.src, v.vid || ""]) },
     });
   } catch (e) { visitBuffer = batch.concat(visitBuffer); console.log("flushVisits err:", e.message); }
 }
@@ -1730,13 +1730,15 @@ app.get("/api/visits", async (req, res) => {
     let rows = [];
     try {
       const sheets = getSheetsClient();
-      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VISIT_TAB}!A2:B` });
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VISIT_TAB}!A2:C` });
       rows = r.data.values || [];
     } catch (_) { /* 탭 없음 */ }
     // 아직 시트에 안 내려간 버퍼도 합산 (실시간 정확도)
-    const all = rows.map((x) => ({ ts: x[0], src: x[1] })).concat(visitBuffer);
-    const byDate = {}, totals = {}; let total = 0;
-    VISIT_SRCS.forEach((s) => (totals[s] = 0));
+    const all = rows.map((x) => ({ ts: x[0], src: x[1], vid: x[2] })).concat(visitBuffer);
+    const byDate = {}, totals = {}, uniques = {};   // totals=방문수, uniques=순방문(중복제거)
+    const vidSet = {}; let anon = {};               // 경로별 방문자ID 집합 / ID없는(익명) 카운트
+    const allVid = new Set(); let allAnon = 0; let total = 0;
+    VISIT_SRCS.forEach((s) => { totals[s] = 0; uniques[s] = 0; vidSet[s] = new Set(); anon[s] = 0; });
     for (const v of all) {
       if (!v.ts) continue;
       const d = kstDate(new Date(v.ts).getTime());   // KST 날짜 기준
@@ -1744,8 +1746,13 @@ app.get("/api/visits", async (req, res) => {
       const src = normSrc(v.src);
       (byDate[d] = byDate[d] || {})[src] = ((byDate[d] || {})[src] || 0) + 1;
       totals[src] = (totals[src] || 0) + 1; total++;
+      const vid = String(v.vid || "").trim();
+      if (vid) { vidSet[src].add(vid); allVid.add(vid); }
+      else { anon[src]++; allAnon++; }               // ID 없는 방문은 중복제거 불가 → 각각 1로 계산
     }
-    res.json({ ok: true, from, to, srcs: VISIT_SRCS, totals, total, byDate });
+    VISIT_SRCS.forEach((s) => (uniques[s] = vidSet[s].size + anon[s]));
+    const uTotal = allVid.size + allAnon;
+    res.json({ ok: true, from, to, srcs: VISIT_SRCS, totals, uniques, total, uTotal, byDate });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

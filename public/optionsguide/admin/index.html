@@ -68,7 +68,7 @@
         <div class="err" id="err"></div>
 
         <div id="result" style="display:none">
-            <div class="total"><span class="n" id="tTotal">0</span><span class="lbl">총 방문</span><span class="rng" id="tRange"></span></div>
+            <div class="total"><span class="n" id="tTotal">0</span><span class="lbl">총 방문</span><span class="n" id="tUnique" style="margin-left:20px">0</span><span class="lbl">순방문(중복제거)</span><span class="rng" id="tRange"></span></div>
             <div class="cards" id="cards"></div>
             <div class="panel"><h2>일별 방문 추이 (경로별 누적)</h2><div class="chart-box"><canvas id="chart"></canvas></div></div>
             <div class="panel">
@@ -125,14 +125,16 @@
         function render(d){
             document.getElementById("result").style.display="";
             document.getElementById("tTotal").textContent = fmt(d.total);
+            document.getElementById("tUnique").textContent = fmt(d.uTotal);
             document.getElementById("tRange").textContent = d.from+" ~ "+d.to;
 
-            // 경로별 카드
+            // 경로별 카드 (방문수 + 순방문)
+            var uniq = d.uniques || {};
             var cards = SRC.map(function(s){
-                var c = (d.totals[s.k]||0);
+                var c = (d.totals[s.k]||0), u = (uniq[s.k]||0);
                 var pct = d.total ? Math.round(c/d.total*100) : 0;
                 return '<div class="card"><div class="name"><span class="dot" style="background:'+s.c+'"></span>'+s.name+'</div>'+
-                       '<div class="cnt">'+fmt(c)+'</div><div class="pct">'+pct+'%</div></div>';
+                       '<div class="cnt">'+fmt(c)+'</div><div class="pct">순 '+fmt(u)+' · '+pct+'%</div></div>';
             }).join("");
             document.getElementById("cards").innerHTML = cards;
 
