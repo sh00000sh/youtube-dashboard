@@ -1752,9 +1752,12 @@ app.get("/api/visits", async (req, res) => {
     const allVid = new Set(); let allAnon = 0, total = 0;
     VISIT_SRCS.forEach((s) => { totals[s] = 0; uniques[s] = 0; vidSet[s] = new Set(); anon[s] = 0; });
     const byDate = {}, byDateVid = {}, byDateAnon = {};   // 일별 방문수 / 일별 순방문용 Set / 일별 익명
-    const byMonth = {};                                  // 월별 {visits, vids, anon}
+    const byMonth = {};                                  // 월별 인바운드 총 {visits, vids, anon}
+    const byMonthSrc = {};                               // 월별 경로별 {src:{v,vids,anon}}
     const clicks = {}, clkVid = {}, clkAnon = {};        // 클릭대상별 클릭수/순클릭
     VISIT_DSTS.forEach((k) => { clicks[k] = 0; clkVid[k] = new Set(); clkAnon[k] = 0; });
+    const byDateClick = {}, byDateClickVid = {}, byDateClickAnon = {};   // 일별 클릭/순클릭
+    const byMonthDst = {};                               // 월별 링크별 {dst:{c,vids,anon}}
 
     for (const v of all) {
       if (!v.ts) continue;
@@ -1762,10 +1765,21 @@ app.get("/api/visits", async (req, res) => {
       if (d < from || d > to) continue;
       const vid = String(v.vid || "").trim();
       const dst = String(v.dst || "").trim();
+      const m = d.slice(0, 7);
 
       if (dst) {   // 아웃바운드 클릭(방문 카운트에서 제외)
         if (!(dst in clicks)) { clicks[dst] = 0; clkVid[dst] = new Set(); clkAnon[dst] = 0; }
         clicks[dst]++; if (vid) clkVid[dst].add(vid); else clkAnon[dst]++;
+        // 일별 클릭
+        (byDateClick[d] = byDateClick[d] || {})[dst] = ((byDateClick[d] || {})[dst] || 0) + 1;
+        byDateClickVid[d] = byDateClickVid[d] || {};
+        if (!byDateClickVid[d][dst]) byDateClickVid[d][dst] = new Set();
+        if (vid) byDateClickVid[d][dst].add(vid);
+        else { byDateClickAnon[d] = byDateClickAnon[d] || {}; byDateClickAnon[d][dst] = (byDateClickAnon[d][dst] || 0) + 1; }
+        // 월별 클릭
+        const mdd = byMonthDst[m] || (byMonthDst[m] = {});
+        const da = mdd[dst] || (mdd[dst] = { c: 0, vids: new Set(), anon: 0 });
+        da.c++; if (vid) da.vids.add(vid); else da.anon++;
         continue;
       }
 
@@ -1779,9 +1793,11 @@ app.get("/api/visits", async (req, res) => {
       if (vid) byDateVid[d][src].add(vid);
       else { byDateAnon[d] = byDateAnon[d] || {}; byDateAnon[d][src] = (byDateAnon[d][src] || 0) + 1; }
 
-      const m = d.slice(0, 7);
       const mo = byMonth[m] || (byMonth[m] = { visits: 0, vids: new Set(), anon: 0 });
       mo.visits++; if (vid) mo.vids.add(vid); else mo.anon++;
+      const ms = byMonthSrc[m] || (byMonthSrc[m] = {});
+      const sa = ms[src] || (ms[src] = { v: 0, vids: new Set(), anon: 0 });
+      sa.v++; if (vid) sa.vids.add(vid); else sa.anon++;
     }
 
     VISIT_SRCS.forEach((s) => (uniques[s] = vidSet[s].size + anon[s]));
@@ -1792,11 +1808,31 @@ app.get("/api/visits", async (req, res) => {
       byDateU[d] = {};
       Object.keys(byDateVid[d]).forEach((s) => { byDateU[d][s] = byDateVid[d][s].size + ((byDateAnon[d] && byDateAnon[d][s]) || 0); });
     });
+    const byDateClickU = {};   // 일별 순클릭(숫자)
+    Object.keys(byDateClickVid).forEach((d) => {
+      byDateClickU[d] = {};
+      Object.keys(byDateClickVid[d]).forEach((k) => { byDateClickU[d][k] = byDateClickVid[d][k].size + ((byDateClickAnon[d] && byDateClickAnon[d][k]) || 0); });
+    });
+
     const monthly = Object.keys(byMonth).sort().map((m) => ({ month: m, visits: byMonth[m].visits, unique: byMonth[m].vids.size + byMonth[m].anon }));
+    // 월별 경로 비율(인바운드): 경로별 방문/순방문 + 월 총계(비율은 프론트에서 계산)
+    const monthlyBySrc = Object.keys(byMonthSrc).sort().map((m) => {
+      const rec = { month: m, visits: {}, uniques: {}, total: byMonth[m] ? byMonth[m].visits : 0, uTotal: byMonth[m] ? (byMonth[m].vids.size + byMonth[m].anon) : 0 };
+      VISIT_SRCS.forEach((s) => { rec.visits[s] = 0; rec.uniques[s] = 0; });
+      Object.keys(byMonthSrc[m]).forEach((s) => { const a = byMonthSrc[m][s]; rec.visits[s] = a.v; rec.uniques[s] = a.vids.size + a.anon; });
+      return rec;
+    });
+    // 월별 링크 비율(아웃바운드)
+    const monthlyByDst = Object.keys(byMonthDst).sort().map((m) => {
+      const rec = { month: m, clicks: {}, uniques: {}, total: 0 };
+      Object.keys(byMonthDst[m]).forEach((k) => { const a = byMonthDst[m][k]; rec.clicks[k] = a.c; rec.uniques[k] = a.vids.size + a.anon; rec.total += a.c; });
+      return rec;
+    });
+
     const clicksU = {}; Object.keys(clicks).forEach((k) => (clicksU[k] = clkVid[k].size + clkAnon[k]));
     const clickTotal = Object.keys(clicks).reduce((a, k) => a + clicks[k], 0);
 
-    res.json({ ok: true, from, to, srcs: VISIT_SRCS, dsts: VISIT_DSTS, totals, uniques, total, uTotal, byDate, byDateU, monthly, clicks, clicksU, clickTotal });
+    res.json({ ok: true, from, to, srcs: VISIT_SRCS, dsts: VISIT_DSTS, totals, uniques, total, uTotal, byDate, byDateU, byDateClick, byDateClickU, monthly, monthlyBySrc, monthlyByDst, clicks, clicksU, clickTotal });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
