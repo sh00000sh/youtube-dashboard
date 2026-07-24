@@ -1759,6 +1759,8 @@ app.get("/api/visits", async (req, res) => {
     const byDateClick = {}, byDateClickVid = {}, byDateClickAnon = {};   // 일별 클릭/순클릭
     const byMonthDst = {};                               // 월별 링크별 {dst:{c,vids,anon}}
     const clkSD = {}, clkSDvid = {}, clkSDanon = {};     // 유입경로×메뉴 클릭 {src:{dst:...}}
+    const allClkVid = new Set(); let allClkAnon = 0;     // 클릭한 순방문자(사람 수, 메뉴 무관 중복제거)
+    const clkrVid = {}, clkrAnon = {};                   // 경로별 클릭한 순방문자
 
     for (const v of all) {
       if (!v.ts) continue;
@@ -1788,6 +1790,9 @@ app.get("/api/visits", async (req, res) => {
         if (!clkSDvid[src][dst]) clkSDvid[src][dst] = new Set();
         if (vid) clkSDvid[src][dst].add(vid);
         else { clkSDanon[src] = clkSDanon[src] || {}; clkSDanon[src][dst] = (clkSDanon[src][dst] || 0) + 1; }
+        // 클릭한 순방문자(사람) — 메뉴 무관 중복제거 + 경로별
+        if (vid) { allClkVid.add(vid); (clkrVid[src] = clkrVid[src] || new Set()).add(vid); }
+        else { allClkAnon++; clkrAnon[src] = (clkrAnon[src] || 0) + 1; }
         continue;
       }
 
@@ -1849,7 +1854,14 @@ app.get("/api/visits", async (req, res) => {
       });
     });
 
-    res.json({ ok: true, from, to, srcs: VISIT_SRCS, dsts: VISIT_DSTS, totals, uniques, total, uTotal, byDate, byDateU, byDateClick, byDateClickU, monthly, monthlyBySrc, monthlyByDst, clicks, clicksU, clickTotal, clicksBySrc, clicksBySrcU });
+    // 클릭한 순방문자(사람 수) 총계 + 경로별
+    const clickerU = allClkVid.size + allClkAnon;
+    const clickerBySrc = {};
+    new Set([...Object.keys(clkrVid), ...Object.keys(clkrAnon)]).forEach((s) => {
+      clickerBySrc[s] = ((clkrVid[s] && clkrVid[s].size) || 0) + (clkrAnon[s] || 0);
+    });
+
+    res.json({ ok: true, from, to, srcs: VISIT_SRCS, dsts: VISIT_DSTS, totals, uniques, total, uTotal, byDate, byDateU, byDateClick, byDateClickU, monthly, monthlyBySrc, monthlyByDst, clicks, clicksU, clickTotal, clicksBySrc, clicksBySrcU, clickerU, clickerBySrc });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

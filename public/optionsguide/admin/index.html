@@ -172,11 +172,17 @@
 
             <!-- 아웃바운드 -->
             <div id="pane-out" style="display:none">
-                <div class="total"><span class="n" id="cTotal">0</span><span class="lbl">총 클릭</span><span class="n" id="cUnique" style="margin-left:20px">0</span><span class="lbl">순클릭(중복제거)</span><span class="rng" id="cRange"></span></div>
+                <div class="total">
+                    <span class="n" id="cTotal">0</span><span class="lbl">총 클릭(건)</span>
+                    <span class="n" id="cClickers" style="margin-left:20px">0</span><span class="lbl">클릭한 순방문자</span>
+                    <span class="n" id="cCtr" style="margin-left:20px">0%</span><span class="lbl" id="cCtrLbl">전환율</span>
+                    <span class="rng" id="cRange"></span>
+                </div>
                 <div class="cards" id="clkCards"></div>
                 <div class="panel">
                     <h2>유입경로별 아웃바운드 <span class="muted">— 경로를 선택하면 그 경로로 들어온 사람이 어떤 메뉴를 눌렀는지</span></h2>
-                    <div id="srcTabs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+                    <div id="srcTabs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+                    <div id="srcConv" style="font-size:13px;color:#374151;margin:2px 0 12px"></div>
                     <div style="overflow-x:auto"><table id="srcDstTbl"></table></div>
                 </div>
                 <div class="panel"><h2>일별 클릭 추이 (링크별 누적)</h2><div class="chart-box"><canvas id="clkChart"></canvas></div></div>
@@ -464,6 +470,13 @@
             var clk = (d.clicksBySrc && d.clicksBySrc[outSrc]) || {};
             var clkU = (d.clicksBySrcU && d.clicksBySrcU[outSrc]) || {};
             var tot = sumVals(clk);
+            // 이 경로 전환율: 순방문 → 클릭한 사람
+            var uni = (d.uniques && d.uniques[outSrc]) || 0;
+            var clkr = (d.clickerBySrc && d.clickerBySrc[outSrc]) || 0;
+            var ctr = uni ? Math.round(clkr/uni*100) : 0;
+            document.getElementById("srcConv").innerHTML =
+                '이 경로 <b>순방문 '+fmt(uni)+'명</b> 중 <b style="color:#4f46e5">'+fmt(clkr)+'명</b>이 클릭 · 전환율 <b style="color:#4f46e5">'+ctr+'%</b> '+
+                '<span class="muted">(클릭 '+fmt(tot)+'건)</span>';
             var body = DST.filter(function(t){ return t.k!=="etc" || clk.etc; }).map(function(t){
                 var c=clk[t.k]||0, u=clkU[t.k]||0, pct=tot?Math.round(c/tot*100):0;
                 return '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+t.c+';margin-right:7px"></span>'+t.name+'</td><td>'+fmt(c)+'</td><td>'+fmt(u)+'</td><td>'+pct+'%</td></tr>';
@@ -501,9 +514,11 @@
             monthlyRatioTable("moSrcTbl", d.monthlyBySrc, SRC, "visits");
 
             // ── 아웃바운드 ──
-            var cuTotal = sumVals(d.clicksU);
             document.getElementById("cTotal").textContent  = fmt(d.clickTotal||0);
-            document.getElementById("cUnique").textContent = fmt(cuTotal);
+            document.getElementById("cClickers").textContent = fmt(d.clickerU||0);
+            var ctr = d.uTotal ? Math.round((d.clickerU||0)/d.uTotal*100) : 0;
+            document.getElementById("cCtr").textContent = ctr+"%";
+            document.getElementById("cCtrLbl").textContent = "전환율 (순방문 "+fmt(d.uTotal||0)+"명 중)";
             document.getElementById("cRange").textContent  = d.from+" ~ "+d.to;
             renderCards("clkCards", DST, d.clicks||{}, d.clicksU||{}, d.clickTotal);
             buildSrcTabs();
