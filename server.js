@@ -1886,7 +1886,7 @@ setTimeout(() => rollupMonthly().catch(() => {}), 60 * 1000);
 // ===================================================================
 const HUB_TAB = process.env.HUB_TAB || "허브설정";
 const HUB_DEFAULT = {
-  bg: { type: "gradient", c1: "#4b45d1", c2: "#6d6ef0", c3: "#9294f7", angle: 146 },
+  bg: { type: "gradient", c1: "#4b45d1", c2: "#6d6ef0", c3: "#9294f7", angle: 313 },
   font: "noto",
   title: "유진투자선물",
   subtitle: "유진투자선물 공식 링크 허브",

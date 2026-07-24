@@ -19,7 +19,7 @@
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
     <style>
       :root{
-        --g1:#4b45d1; --g2:#6d6ef0; --g3:#9294f7; --angle:146deg;
+        --g1:#4b45d1; --g2:#6d6ef0; --g3:#9294f7; --angle:313deg;
         --font:'Noto Sans KR',sans-serif;
         --glass:rgba(255,255,255,.10);
         --glass-hi:rgba(255,255,255,.17);
@@ -149,7 +149,7 @@
   var KNOWN_DST=['sihwang','youtube','guide','blog','edu'];
 
   var DEFAULT = {
-    bg:{type:"gradient",c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
+    bg:{type:"gradient",c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:313}, font:"noto",
     title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
     sepDivider:false, sepSoft:false,
     cards:[
@@ -178,7 +178,7 @@
     } else {
       r.setProperty('--g1',bg.c1||'#4b45d1'); r.setProperty('--g2',bg.c2||'#6d6ef0'); r.setProperty('--g3',bg.c3||'#9294f7');
     }
-    r.setProperty('--angle',(bg.angle==null?146:bg.angle)+'deg');
+    r.setProperty('--angle',(bg.angle==null?313:bg.angle)+'deg');
     r.setProperty('--font',FONTS[cfg.font]||FONTS.noto);
 
     document.getElementById('hTitle').textContent=cfg.title||'';
