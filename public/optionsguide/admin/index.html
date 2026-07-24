@@ -217,12 +217,16 @@
             </div>
 
             <div class="esec">
-              <h3>🎨 배경 그라데이션 · 폰트</h3>
-              <div class="frow"><label>색상</label>
-                <input type="color" class="fin" id="bg_c1"><input type="color" class="fin" id="bg_c2"><input type="color" class="fin" id="bg_c3">
-                <button class="btn-s" type="button" id="bg_swap" title="추천 조합으로">🎲 추천</button>
+              <h3>🎨 배경 · 폰트</h3>
+              <div class="frow"><label>배경</label>
+                <select class="fin" id="bg_type" style="max-width:130px"><option value="gradient">그라데이션</option><option value="solid">단색</option></select>
+                <button class="btn-s" type="button" id="bg_reset" title="기본 그라데이션으로">↺ 기본값</button>
+                <button class="btn-s" type="button" id="bg_swap" title="추천 색조합">🎲 추천</button>
               </div>
-              <div class="frow"><label>각도</label><input type="range" id="bg_angle" min="0" max="360" step="1"><span class="rngval" id="bg_angle_v">146°</span></div>
+              <div class="frow" data-grad-any><label id="lab_c1">색상 1</label><input type="color" class="fin" id="bg_c1"><input type="text" class="fin" id="bg_c1_hex" placeholder="#4b45d1" maxlength="7" style="max-width:110px"></div>
+              <div class="frow" data-grad-only><label>색상 2</label><input type="color" class="fin" id="bg_c2"><input type="text" class="fin" id="bg_c2_hex" placeholder="#6d6ef0" maxlength="7" style="max-width:110px"></div>
+              <div class="frow" data-grad-only><label>색상 3</label><input type="color" class="fin" id="bg_c3"><input type="text" class="fin" id="bg_c3_hex" placeholder="#9294f7" maxlength="7" style="max-width:110px"></div>
+              <div class="frow" data-grad-only><label>각도</label><input type="range" id="bg_angle" min="0" max="360" step="1"><span class="rngval" id="bg_angle_v">146°</span></div>
               <div class="frow"><label>폰트</label>
                 <select class="fin" id="f_font">
                   <option value="noto">노토 산스 (기본)</option>
@@ -517,7 +521,7 @@
         {v:"feather",n:"🖋 깃펜"},{v:"grad",n:"🎓 학사모"},{v:"link",n:"🔗 링크"}
       ];
       var DEFAULT = {
-        bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
+        bg:{type:"gradient",c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
         title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
         sepDivider:false, sepSoft:false,
         cards:[
@@ -571,15 +575,25 @@
 
       function setThumb(el, src){ el.style.backgroundImage = src ? "url('"+src.replace(/'/g,"%27")+"')" : ""; }
 
+      // 배경 방식(그라데이션/단색)에 따라 색상2·3·각도 행 표시/숨김
+      function applyBgType(){
+        var solid = hub && hub.bg && hub.bg.type==="solid";
+        document.querySelectorAll("[data-grad-only]").forEach(function(el){ el.style.display = solid?"none":""; });
+        $("lab_c1").textContent = solid?"배경색":"색상 1";
+        $("bg_type").value = (hub&&hub.bg&&hub.bg.type)||"gradient";
+      }
+
       // ── 폼 채우기 ──
       function fillForm(){
         $("f_title").value = hub.title||"";
         $("f_subtitle").value = hub.subtitle||"";
-        $("bg_c1").value = hub.bg.c1||"#4b45d1";
-        $("bg_c2").value = hub.bg.c2||"#6d6ef0";
-        $("bg_c3").value = hub.bg.c3||"#9294f7";
+        if(!hub.bg.type) hub.bg.type="gradient";
+        $("bg_c1").value = hub.bg.c1||"#4b45d1"; $("bg_c1_hex").value = hub.bg.c1||"#4b45d1";
+        $("bg_c2").value = hub.bg.c2||"#6d6ef0"; $("bg_c2_hex").value = hub.bg.c2||"#6d6ef0";
+        $("bg_c3").value = hub.bg.c3||"#9294f7"; $("bg_c3_hex").value = hub.bg.c3||"#9294f7";
         $("bg_angle").value = hub.bg.angle==null?146:hub.bg.angle;
         $("bg_angle_v").textContent = ($("bg_angle").value)+"°";
+        applyBgType();
         $("f_font").value = hub.font||"noto";
         $("sep_divider").checked = !!hub.sepDivider;
         $("sep_soft").checked = !!hub.sepSoft;
@@ -689,8 +703,24 @@
       function bindGlobal(){
         $("f_title").addEventListener("input", function(e){ hub.title=e.target.value; pushPreview(); });
         $("f_subtitle").addEventListener("input", function(e){ hub.subtitle=e.target.value; pushPreview(); });
+        // 색상 피커 ↔ hex 입력 양방향 동기화
         ["c1","c2","c3"].forEach(function(k){
-          $("bg_"+k).addEventListener("input", function(e){ hub.bg[k]=e.target.value; pushPreview(); });
+          var pick=$("bg_"+k), hex=$("bg_"+k+"_hex");
+          pick.addEventListener("input", function(e){ hub.bg[k]=e.target.value; hex.value=e.target.value; pushPreview(); });
+          hex.addEventListener("input", function(e){
+            var v=e.target.value.trim(); if(v && v.charAt(0)!=="#") v="#"+v;
+            if(/^#[0-9a-fA-F]{6}$/.test(v)){ hub.bg[k]=v; pick.value=v; pushPreview(); }
+          });
+        });
+        $("bg_type").addEventListener("change", function(e){ hub.bg.type=e.target.value; applyBgType(); pushPreview(); });
+        $("bg_reset").addEventListener("click", function(){
+          hub.bg={type:"gradient",c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146};
+          $("bg_type").value="gradient";
+          $("bg_c1").value="#4b45d1"; $("bg_c1_hex").value="#4b45d1";
+          $("bg_c2").value="#6d6ef0"; $("bg_c2_hex").value="#6d6ef0";
+          $("bg_c3").value="#9294f7"; $("bg_c3_hex").value="#9294f7";
+          $("bg_angle").value=146; $("bg_angle_v").textContent="146°";
+          applyBgType(); pushPreview();
         });
         $("bg_angle").addEventListener("input", function(e){ hub.bg.angle=Number(e.target.value); $("bg_angle_v").textContent=e.target.value+"°"; pushPreview(); });
         $("f_font").addEventListener("change", function(e){ hub.font=e.target.value; pushPreview(); });
@@ -699,7 +729,10 @@
         $("bg_swap").addEventListener("click", function(){
           palIdx=(palIdx+1)%PALETTES.length; var p=PALETTES[palIdx];
           hub.bg.c1=p[0]; hub.bg.c2=p[1]; hub.bg.c3=p[2];
-          $("bg_c1").value=p[0]; $("bg_c2").value=p[1]; $("bg_c3").value=p[2]; pushPreview();
+          $("bg_c1").value=p[0]; $("bg_c2").value=p[1]; $("bg_c3").value=p[2];
+          $("bg_c1_hex").value=p[0]; $("bg_c2_hex").value=p[1]; $("bg_c3_hex").value=p[2];
+          if(hub.bg.type==="solid"){ hub.bg.type="gradient"; $("bg_type").value="gradient"; applyBgType(); }
+          pushPreview();
         });
         // 앰블럼
         $("url_emblem").addEventListener("input", function(e){ hub.emblem=e.target.value.trim(); setThumb($("th_emblem"),hub.emblem); pushPreview(); });

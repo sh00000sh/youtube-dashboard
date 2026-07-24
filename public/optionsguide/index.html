@@ -149,7 +149,7 @@
   var KNOWN_DST=['sihwang','youtube','guide','blog','edu'];
 
   var DEFAULT = {
-    bg:{c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
+    bg:{type:"gradient",c1:"#4b45d1",c2:"#6d6ef0",c3:"#9294f7",angle:146}, font:"noto",
     title:"유진투자선물", subtitle:"유진투자선물 공식 링크 허브", emblem:"",
     sepDivider:false, sepSoft:false,
     cards:[
@@ -172,8 +172,13 @@
 
   function apply(cfg){
     var bg=cfg.bg||DEFAULT.bg, r=document.documentElement.style;
-    r.setProperty('--g1',bg.c1||'#4b45d1'); r.setProperty('--g2',bg.c2||'#6d6ef0');
-    r.setProperty('--g3',bg.c3||'#9294f7'); r.setProperty('--angle',(bg.angle==null?146:bg.angle)+'deg');
+    if((bg.type||'gradient')==='solid'){   // 단색: 세 색을 동일하게 → 균일 배경
+      var sc=bg.c1||'#4b45d1';
+      r.setProperty('--g1',sc); r.setProperty('--g2',sc); r.setProperty('--g3',sc);
+    } else {
+      r.setProperty('--g1',bg.c1||'#4b45d1'); r.setProperty('--g2',bg.c2||'#6d6ef0'); r.setProperty('--g3',bg.c3||'#9294f7');
+    }
+    r.setProperty('--angle',(bg.angle==null?146:bg.angle)+'deg');
     r.setProperty('--font',FONTS[cfg.font]||FONTS.noto);
 
     document.getElementById('hTitle').textContent=cfg.title||'';
