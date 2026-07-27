@@ -1267,16 +1267,81 @@ app.get("/api/daily-by-video", async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-// 게시물 성과 (게시물 탭용) — 게시물별 조회수·좋아요·댓글 + 일자별 추이
+// ── 게시물 일별 조회수 영구 적재 ────────────────────────────────
+//  YouTube Analytics는 최근 30일만 조회되므로, 매일 시트에 쌓아 "최초 업로드일 이후 전체 누적"을 만든다.
+const POSTDAY_TAB = process.env.POSTDAY_TAB || "게시물일별";
+
+async function readPostDailySheet() {
+  if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return {};
+  try {
+    const sheets = getSheetsClient();
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${POSTDAY_TAB}!A2:E` });
+    const out = {};
+    (r.data.values || []).forEach((x) => {
+      const date = String(x[0] || "").trim(), id = String(x[1] || "").trim();
+      if (!date || !id) return;
+      (out[date] = out[date] || {})[id] = { views: Number(x[2] || 0), likes: Number(x[3] || 0), comments: Number(x[4] || 0) };
+    });
+    return out;
+  } catch (_) { return {}; }   // 탭 없으면 빈 이력
+}
+
+// 최근 30일치를 시트에 upsert(같은 날짜+게시물이면 갱신, 없으면 추가)
+async function savePostDaily() {
+  if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return 0;
+  try {
+    const d = await buildDailyByVideo();
+    const sheets = getSheetsClient();
+    await ensureTab(sheets, POSTDAY_TAB, ["날짜", "게시물ID", "조회수", "좋아요", "댓글"]);
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${POSTDAY_TAB}!A2:E` });
+    const rows = r.data.values || [];
+    const rowOf = {};
+    rows.forEach((x, i) => { rowOf[`${String(x[0] || "").trim()}|${String(x[1] || "").trim()}`] = i + 2; });
+
+    const updates = [], appends = [];
+    Object.keys(d.byDay).forEach((day) => {
+      d.byDay[day].filter((v) => v.isPost).forEach((v) => {
+        const key = `${day}|${v.id}`;
+        const vals = [day, v.id, v.views, v.likes || 0, v.comments || 0];
+        const at = rowOf[key];
+        if (at) {
+          const cur = rows[at - 2] || [];
+          if (Number(cur[2] || 0) !== v.views || Number(cur[3] || 0) !== (v.likes || 0) || Number(cur[4] || 0) !== (v.comments || 0)) {
+            updates.push({ range: `${POSTDAY_TAB}!A${at}:E${at}`, values: [vals] });
+          }
+        } else appends.push(vals);
+      });
+    });
+    if (updates.length) await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { valueInputOption: "USER_ENTERED", data: updates } });
+    if (appends.length) await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${POSTDAY_TAB}!A:E`, valueInputOption: "USER_ENTERED", requestBody: { values: appends } });
+    console.log(`📝 게시물 일별 적재: 갱신 ${updates.length} / 추가 ${appends.length}`);
+    return updates.length + appends.length;
+  } catch (e) { console.log("savePostDaily err:", e.message); return 0; }
+}
+setInterval(() => savePostDaily().catch(() => {}), 6 * 60 * 60 * 1000);   // 6시간마다
+setTimeout(() => savePostDaily().catch(() => {}), 90 * 1000);            // 시작 후 1회
+
+// 게시물 성과 (게시물 탭용) — 게시물별 조회수·좋아요·댓글 + 일자별 추이 (업로드 이후 전체 누적)
 app.get("/api/posts", async (req, res) => {
   try {
     const d = await buildDailyByVideo();
-    const map = {};
-    Object.keys(d.byDay).sort().forEach((day) => {
+    const hist = await readPostDailySheet();
+    // 시트 이력(과거 전체) + API(최근 30일) 병합 — 같은 날짜는 API 최신값 우선
+    const merged = {};
+    Object.keys(hist).forEach((day) => { merged[day] = { ...hist[day] }; });
+    Object.keys(d.byDay).forEach((day) => {
       d.byDay[day].filter((v) => v.isPost).forEach((v) => {
-        if (!map[v.id]) map[v.id] = { id: v.id, views: 0, likes: 0, comments: 0, days: [] };
-        map[v.id].views += v.views; map[v.id].likes += v.likes || 0; map[v.id].comments += v.comments || 0;
-        map[v.id].days.push({ date: day, views: v.views, likes: v.likes || 0, comments: v.comments || 0 });
+        (merged[day] = merged[day] || {})[v.id] = { views: v.views, likes: v.likes || 0, comments: v.comments || 0 };
+      });
+    });
+
+    const map = {};
+    Object.keys(merged).sort().forEach((day) => {
+      Object.keys(merged[day]).forEach((id) => {
+        const m = merged[day][id];
+        if (!map[id]) map[id] = { id, views: 0, likes: 0, comments: 0, days: [] };
+        map[id].views += m.views; map[id].likes += m.likes; map[id].comments += m.comments;
+        map[id].days.push({ date: day, views: m.views, likes: m.likes, comments: m.comments });
       });
     });
     const posts = Object.values(map)
@@ -1287,7 +1352,8 @@ app.get("/api/posts", async (req, res) => {
         return { ...p, firstSeen, lastSeen, title };
       })
       .sort((a, b) => b.views - a.views);
-    res.json({ ok: true, range: 30, posts });
+    const allDates = Object.keys(merged).sort();
+    res.json({ ok: true, range: allDates.length, since: allDates[0] || null, posts });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

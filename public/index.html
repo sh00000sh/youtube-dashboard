@@ -418,6 +418,13 @@
       </span>
     </h2>
     <div class="desc" id="postViewDesc">날짜별 일일 조회수예요. 같은 게시물끼리 묶어서 보려면 위 버튼을 눌러주세요.</div>
+    <div id="postSortBar" style="display:none;gap:6px;margin:-6px 0 12px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--sub);align-self:center;margin-right:2px">정렬</span>
+      <button class="pv-btn on" data-ps="new" type="button">최신순</button>
+      <button class="pv-btn" data-ps="old" type="button">오래된순</button>
+      <button class="pv-btn" data-ps="hi" type="button">조회수 높은순</button>
+      <button class="pv-btn" data-ps="lo" type="button">조회수 낮은순</button>
+    </div>
 
     <!-- 날짜별 -->
     <div class="panel" id="pvDate" style="overflow-x:auto">
@@ -1840,6 +1847,7 @@
 
     // ===== 게시물별 누적 (같은 게시물끼리 묶기) =====
     let postView="date";   // date | week | total
+    let postSort="new";    // new(최신순) | old(오래된순) | hi(조회 높은순) | lo(낮은순)
     function renderPostGroup(){
       const posts=(postsCache&&postsCache.posts)||[];
       const el=document.getElementById("postGroupRows"); if(!el) return;
@@ -1857,7 +1865,15 @@
         const avg=use.length?Math.round(sum/use.length):0;
         return {title:p.title||"게시물", id:p.id, first:p.firstSeen, last:p.lastSeen,
                 sum, avg, best, n:use.length};
-      }).filter(r=>r.n>0).sort((a,b)=>b.sum-a.sum);
+      }).filter(r=>r.n>0);
+      // 정렬: 업로드(첫 조회일) 기준 최신/오래된, 또는 누적 조회수 높은/낮은순
+      const cmp={
+        new:(a,b)=>String(b.first||"").localeCompare(String(a.first||""))||b.sum-a.sum,
+        old:(a,b)=>String(a.first||"").localeCompare(String(b.first||""))||b.sum-a.sum,
+        hi:(a,b)=>b.sum-a.sum,
+        lo:(a,b)=>a.sum-b.sum,
+      };
+      rows.sort(cmp[postSort]||cmp.new);
 
       document.getElementById("pvColMain").textContent = week?"최근 7일 조회수":"누적 조회수";
       el.innerHTML = rows.length ? rows.map(r=>`
@@ -1879,12 +1895,20 @@
         const isDate=(postView==="date");
         document.getElementById("pvDate").style.display=isDate?"":"none";
         document.getElementById("pvGroup").style.display=isDate?"none":"";
+        document.getElementById("postSortBar").style.display=isDate?"none":"flex";
         document.getElementById("postViewDesc").textContent = isDate
           ? "날짜별 일일 조회수예요. 같은 게시물끼리 묶어서 보려면 위 버튼을 눌러주세요."
           : (postView==="week"
              ? "같은 게시물끼리 묶어서 최근 7일(오늘 포함) 동안 쌓인 조회수예요."
-             : "같은 게시물끼리 묶은 업로드 이후 누적 조회수예요. ※ 수집이 최근 30일 범위라, 30일 이전에 올라온 게시물은 그 기간만 합산돼요.");
+             : "같은 게시물끼리 묶은 업로드 이후 누적 조회수예요. 매일 시트에 적재해 최초 업로드일부터 계속 쌓여요.");
         if(!isDate) renderPostGroup();
+      };
+    });
+    document.querySelectorAll("[data-ps]").forEach(b=>{
+      b.onclick=()=>{
+        postSort=b.dataset.ps;
+        document.querySelectorAll("[data-ps]").forEach(x=>x.classList.toggle("on",x===b));
+        renderPostGroup();
       };
     });
 
