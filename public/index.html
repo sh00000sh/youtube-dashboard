@@ -95,6 +95,8 @@
     .metric-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
     .mt{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:7px 14px;border-radius:9px;font-size:13px;cursor:pointer;font-weight:600;}
     .mt.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .pv-btn{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:6px 13px;border-radius:9px;font-size:12.5px;cursor:pointer;font-weight:600;font-family:inherit;}
+    .pv-btn.on{background:var(--blue);color:#fff;border-color:var(--blue);}
     .chart-box{height:300px;}
 
     .tbl-wrap{background:var(--card);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);}
@@ -408,11 +410,31 @@
     <div class="cards" id="postCards" style="grid-template-columns:repeat(4,1fr)"></div>
     <h2 style="font-size:15px;margin-top:20px">📈 게시물 일별 조회수</h2>
     <div class="panel"><div class="chart-box"><canvas id="postChart"></canvas></div></div>
-    <h2 style="font-size:15px;margin-top:20px">📋 게시물 일별 상세 <span class="kpi-badge">날짜별 · 최신순</span></h2>
-    <div class="panel" style="overflow-x:auto">
+    <h2 style="font-size:15px;margin-top:20px;display:flex;align-items:center;flex-wrap:wrap;gap:8px">📋 게시물 상세
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="pv-btn on" data-pv="date" type="button">날짜별</button>
+        <button class="pv-btn" data-pv="week" type="button">최근 7일</button>
+        <button class="pv-btn" data-pv="total" type="button">업로드 이후 누적</button>
+      </span>
+    </h2>
+    <div class="desc" id="postViewDesc">날짜별 일일 조회수예요. 같은 게시물끼리 묶어서 보려면 위 버튼을 눌러주세요.</div>
+
+    <!-- 날짜별 -->
+    <div class="panel" id="pvDate" style="overflow-x:auto">
       <table>
         <thead><tr><th>날짜</th><th>게시물</th><th>일일 조회수</th></tr></thead>
         <tbody id="postRows"><tr><td colspan="3" class="empty">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- 게시물별 누적 (최근 7일 / 업로드 이후) -->
+    <div class="panel" id="pvGroup" style="overflow-x:auto;display:none">
+      <table>
+        <thead><tr>
+          <th>게시물</th><th>첫 조회일</th><th id="pvColMain">누적 조회수</th>
+          <th>일평균</th><th>최고일</th><th>마지막 조회</th><th>집계일수</th>
+        </tr></thead>
+        <tbody id="postGroupRows"><tr><td colspan="7" class="empty">불러오는 중…</td></tr></tbody>
       </table>
     </div>
     </div>
@@ -1812,8 +1834,59 @@
             <td style="color:var(--sub)">0</td></tr>`);
         });
         rowsEl.innerHTML=rows.length?rows.join(""):`<tr><td colspan="3" class="empty">최근 30일 게시물 조회 기록이 없어요.</td></tr>`;
+        renderPostGroup();   // 게시물별 누적(최근 7일 / 업로드 이후) 표도 함께 갱신
       }catch(e){ rowsEl.innerHTML=`<tr><td colspan="5" class="empty">❌ ${e.message}</td></tr>`; }
     }
+
+    // ===== 게시물별 누적 (같은 게시물끼리 묶기) =====
+    let postView="date";   // date | week | total
+    function renderPostGroup(){
+      const posts=(postsCache&&postsCache.posts)||[];
+      const el=document.getElementById("postGroupRows"); if(!el) return;
+      const kst=(ms)=>new Date(ms+9*3600000).toISOString().slice(0,10);
+      const today=kst(Date.now());
+      const from7=kst(Date.now()-6*86400000);   // 오늘 포함 7일
+      const md=(s)=>s?`${+s.slice(5,7)}/${+s.slice(8)}`:"-";
+      const week=(postView==="week");
+
+      const rows=posts.map(p=>{
+        const days=(p.days||[]);
+        const use=week?days.filter(d=>d.date>=from7&&d.date<=today):days;
+        const sum=use.reduce((a,d)=>a+d.views,0);
+        const best=use.reduce((a,d)=>(!a||d.views>a.views)?d:a,null);
+        const avg=use.length?Math.round(sum/use.length):0;
+        return {title:p.title||"게시물", id:p.id, first:p.firstSeen, last:p.lastSeen,
+                sum, avg, best, n:use.length};
+      }).filter(r=>r.n>0).sort((a,b)=>b.sum-a.sum);
+
+      document.getElementById("pvColMain").textContent = week?"최근 7일 조회수":"누적 조회수";
+      el.innerHTML = rows.length ? rows.map(r=>`
+        <tr>
+          <td style="text-align:left">${r.title} <span style="color:var(--sub);font-size:11px">(${r.id})</span></td>
+          <td>${md(r.first)}</td>
+          <td style="font-weight:700">${fmt(r.sum)}</td>
+          <td>${fmt(r.avg)}</td>
+          <td>${r.best?`${fmt(r.best.views)} <span style="color:var(--sub);font-size:11px">(${md(r.best.date)})</span>`:"-"}</td>
+          <td>${md(r.last)}</td>
+          <td>${r.n}일</td>
+        </tr>`).join("")
+        : `<tr><td colspan="7" class="empty">${week?"최근 7일 게시물 조회 기록이 없어요.":"게시물 조회 기록이 없어요."}</td></tr>`;
+    }
+    document.querySelectorAll(".pv-btn").forEach(b=>{
+      b.onclick=()=>{
+        postView=b.dataset.pv;
+        document.querySelectorAll(".pv-btn").forEach(x=>x.classList.toggle("on",x===b));
+        const isDate=(postView==="date");
+        document.getElementById("pvDate").style.display=isDate?"":"none";
+        document.getElementById("pvGroup").style.display=isDate?"none":"";
+        document.getElementById("postViewDesc").textContent = isDate
+          ? "날짜별 일일 조회수예요. 같은 게시물끼리 묶어서 보려면 위 버튼을 눌러주세요."
+          : (postView==="week"
+             ? "같은 게시물끼리 묶어서 최근 7일(오늘 포함) 동안 쌓인 조회수예요."
+             : "같은 게시물끼리 묶은 업로드 이후 누적 조회수예요. ※ 수집이 최근 30일 범위라, 30일 이전에 올라온 게시물은 그 기간만 합산돼요.");
+        if(!isDate) renderPostGroup();
+      };
+    });
 
     // ===== 관리자 모드 =====
     const KPI_FIELDS=[["views","조회수"],["impr","노출수"],["ctr","CTR(%)"],["avp","평균조회율(%)"],["subs","구독"],["eng","참여율(%)"]];
