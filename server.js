@@ -47,6 +47,7 @@ const HOURFIX_TAB = process.env.HOURFIX_TAB || "영상초기반응";  // 영상�
 // ----- 관리자 모드 -----
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";   // Railway 환경변수로 설정
 const CONFIG_TAB = process.env.CONFIG_TAB || "_설정";      // KPI·제목 등 설정 JSON 저장 탭
+const ACTION_TAB = process.env.ACTION_TAB || "조치이력";    // 제목·썸네일·챕터 수정 등 조치 로그
 function checkPw(pw) { return !!ADMIN_PASSWORD && pw === ADMIN_PASSWORD; }
 
 // 시트 탭 이름 / 데이터 시작 행
@@ -735,6 +736,55 @@ app.get("/api/config", async (req, res) => {
       if (raw) config = JSON.parse(raw);
     } catch (_) { /* 탭 없거나 JSON 아님 → null */ }
     res.json({ ok: true, config });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ----- 조치이력 (제목·썸네일·챕터 수정 등 우리가 한 일) -----
+// 성과 변화를 '언제 무엇을 했는지'와 붙여 읽기 위한 이벤트 로그.
+// 시트 탭: A날짜(26-08-10) B영상ID(비우면 채널 전체) C구분 D내용
+app.get("/api/actions", async (req, res) => {
+  try {
+    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, actions: [] });
+    const sheets = getSheetsClient();
+    let rows = [];
+    try {
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${ACTION_TAB}!A2:D` });
+      rows = r.data.values || [];
+    } catch (_) { /* 탭이 아직 없으면 빈 배열 */ }
+    const actions = rows
+      .filter(r => (r[0] || "").trim())
+      .map(r => ({ date: String(r[0]).trim(), videoId: (r[1] || "").trim(), kind: (r[2] || "").trim(), note: (r[3] || "").trim() }))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+    res.json({ ok: true, actions });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 조치이력 추가 (관리자) — 맨 아래에 한 줄 append
+app.post("/api/actions", async (req, res) => {
+  try {
+    const { pw, date, videoId, kind, note } = req.body || {};
+    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    if (!date || !kind) return res.status(400).json({ ok: false, error: "날짜와 구분은 필수입니다." });
+    const sheets = getSheetsClient();
+    await ensureTabExists(sheets, ACTION_TAB);
+    // 헤더가 없으면 먼저 넣어준다
+    const head = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${ACTION_TAB}!A1:D1` });
+    if (!head.data.values || !head.data.values.length) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: `${ACTION_TAB}!A1:D1`, valueInputOption: "RAW",
+        requestBody: { values: [["날짜", "영상ID", "구분", "내용"]] },
+      });
+    }
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${ACTION_TAB}!A:D`,
+      valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
+      requestBody: { values: [[date, videoId || "", kind, note || ""]] },
+    });
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

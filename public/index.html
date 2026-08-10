@@ -169,6 +169,17 @@
              align-items:center;justify-content:center;color:#fff;}
     .act .ab{font-size:14px;font-weight:700;margin-bottom:3px;}
     .act .aw{font-size:12.5px;color:var(--sub);line-height:1.6;}
+    /* 🔧 조치이력 */
+    .act-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:7px;font-size:11px;
+              font-weight:600;background:rgba(225,29,72,.1);color:#e11d48;white-space:nowrap;cursor:help;}
+    .act-chip i{font-style:normal;font-weight:500;opacity:.75;}
+    body.dark .act-chip{background:rgba(255,128,147,.16);color:#ff8093;}
+    .act-row{display:flex;gap:9px;align-items:baseline;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line);}
+    .act-row:last-child{border-bottom:0;}
+    .act-row b{flex:0 0 auto;font-variant-numeric:tabular-nums;}
+    .act-row .ak{flex:0 0 auto;padding:1px 6px;border-radius:6px;background:var(--chip);font-size:11px;font-weight:600;}
+    .act-row .an{flex:0 0 auto;color:var(--sub);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .act-row .ad{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     /* KPI 자동 제안 */
     .sug{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--sub);}
     .sug b{color:var(--text);}
@@ -315,6 +326,20 @@
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI <span style="font-weight:400;color:var(--muted)">(형태 무관·전체 기준)</span></div><div id="cfgVideo" class="cfg-grid"></div></div>
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎬 숏폼 KPI</div><div id="cfgVideoShort" class="cfg-grid"></div></div>
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎞️ 롱폼 KPI</div><div id="cfgVideoLong" class="cfg-grid"></div></div>
+      </div>
+      <div style="border-top:1px solid var(--line);margin:16px 0 0;padding-top:14px">
+        <div style="font-weight:700;margin-bottom:4px">🔧 조치이력 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 제목·썸네일·챕터를 고친 날을 남기면 성과 그래프에 세로선으로 표시돼요</span></div>
+        <div class="cfg-grid" style="margin-top:8px">
+          <label class="cfg-f">날짜(26-08-10)<input id="actDate" placeholder="26-08-10"></label>
+          <label class="cfg-f">영상ID <span style="font-weight:400;color:var(--muted)">(비우면 채널 전체)</span><input id="actVideo" placeholder="DM3uNz1PS-8"></label>
+          <label class="cfg-f">구분<input id="actKind" placeholder="제목 / 썸네일 / 챕터 / 설명 / 재생목록"></label>
+          <label class="cfg-f">내용<input id="actNote" placeholder="검색어를 앞으로 이동"></label>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <button onclick="addAction()">조치 추가</button>
+          <span id="actStatus" style="font-size:12.5px;color:var(--muted)"></span>
+        </div>
+        <div id="actList" style="margin-top:12px"></div>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
         <button onclick="saveConfig()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">💾 설정 저장</button>
@@ -670,9 +695,9 @@
       <table>
         <thead><tr>
           <th>썸네일</th><th>업로드일</th><th>형태</th><th>타이틀</th><th>길이</th><th>노출수</th><th>CTR</th>
-          <th>평균조회율</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>공유</th><th>참여율</th><th>구독전환</th><th>특이사항</th>
+          <th>평균조회율</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>공유</th><th>참여율</th><th>구독전환</th><th>🔧 조치</th><th>특이사항</th>
         </tr></thead>
-        <tbody id="videoRows"><tr><td colspan="15" class="empty">동기화를 눌러주세요.</td></tr></tbody>
+        <tbody id="videoRows"><tr><td colspan="16" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
 
@@ -940,7 +965,7 @@
       const ds=[{type:"bar",label:m.label,data,backgroundColor:m.color,borderRadius:6,maxBarThickness:30}];
       if(m.kpi)ds.push({type:"line",label:"KPI",data:labels.map(()=>m.kpi),borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
       if(chart)chart.destroy();
-      chart=new Chart(document.getElementById("chart"),{data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
+      chart=new Chart(document.getElementById("chart"),{plugins:[actionLinePlugin],data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:!!m.kpi,labels:{color:"#8b95a1",boxWidth:12}}},
         scales:{x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
     }
@@ -1119,6 +1144,69 @@
     // ===================================================================
     // "26-08-06" → Date
     const ymd=(s)=>{ const m=String(s||"").match(/(\d{2})-(\d{2})-(\d{2})/); return m?new Date(2000+ +m[1], +m[2]-1, +m[3]):null; };
+
+    // ===== 🔧 조치이력 — 우리가 언제 무엇을 했는지 =====
+    // 성과 그래프에 세로선으로 찍고, 영상별로 '조치 이후 며칠'을 표시한다.
+    // 누적 지표는 과거 실적에 눌려 잘 안 움직이므로, 조치 시점을 같이 봐야 효과가 읽힌다.
+    let ACTIONS=[];
+    async function loadActions(){
+      try{ const r=await fetch("/api/actions").then(r=>r.json()); ACTIONS=(r.ok&&r.actions)||[]; }
+      catch(_){ ACTIONS=[]; }
+      renderActionList();
+    }
+    // 영상ID가 비어 있으면 채널 전체 조치로 간주
+    const actionsFor=(vid)=>ACTIONS.filter(a=>!a.videoId||a.videoId===vid);
+    // 최신 조치 1건. 날짜가 같으면 '그 영상에 직접 한 조치'가 채널 전체 조치보다 우선한다.
+    const lastActionOf=(vid)=>{
+      const a=actionsFor(vid); if(!a.length) return null;
+      return [...a].sort((x,y)=> x.date===y.date
+        ? (x.videoId===vid?1:0)-(y.videoId===vid?1:0)
+        : (x.date<y.date?-1:1)).pop();
+    };
+
+    // 일일 그래프 세로선 (Chart.js 플러그인)
+    const actionLinePlugin={
+      id:"actionLines",
+      afterDraw(c){
+        if(!ACTIONS.length||!c.scales||!c.scales.x||!c.scales.y) return;
+        const labels=c.data.labels||[], ctx=c.ctx, ya=c.scales.y, xa=c.scales.x;
+        ACTIONS.forEach(a=>{
+          const i=labels.indexOf(a.date); if(i<0) return;
+          const x=xa.getPixelForValue(i);
+          ctx.save();
+          ctx.strokeStyle=isDark()?"rgba(255,128,147,.6)":"rgba(225,29,72,.45)";
+          ctx.setLineDash([4,4]); ctx.lineWidth=1.5;
+          ctx.beginPath(); ctx.moveTo(x,ya.top); ctx.lineTo(x,ya.bottom); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.font="10px system-ui"; ctx.textAlign="center";
+          ctx.fillText("🔧",x,ya.top-2);
+          ctx.restore();
+        });
+      }
+    };
+    function renderActionList(){
+      const el=document.getElementById("actList"); if(!el) return;
+      if(!ACTIONS.length){ el.innerHTML=`<div style="color:var(--muted);padding:8px 0">아직 기록된 조치가 없어요.</div>`; return; }
+      const title=(id)=>{ const v=VIDEOS.find(x=>x[0]===id); return v?(v[3]||"").slice(0,30):id; };
+      el.innerHTML=[...ACTIONS].reverse().slice(0,12).map(a=>
+        `<div class="act-row"><b>${a.date}</b><span class="ak">${a.kind}</span>
+         <span class="an">${a.videoId?title(a.videoId):"채널 전체"}</span>
+         <span class="ad">${a.note||""}</span></div>`).join("");
+    }
+    async function addAction(){
+      const g=(id)=>document.getElementById(id).value.trim();
+      const st=document.getElementById("actStatus");
+      const date=g("actDate"), kind=g("actKind");
+      if(!date||!kind){ st.textContent="❌ 날짜와 구분은 필수예요."; return; }
+      st.textContent="저장 중...";
+      try{
+        const r=await fetch("/api/actions",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({pw:ADMIN_PW,date,videoId:g("actVideo"),kind,note:g("actNote")})}).then(r=>r.json());
+        if(r.ok){ st.textContent="✅ 저장됨"; document.getElementById("actNote").value="";
+                  await loadActions(); renderVideos(); drawChart(); }
+        else st.textContent="❌ "+(r.error||"저장 실패");
+      }catch(e){ st.textContent="❌ "+e.message; }
+    }
     const daysAgo=(d)=>{ if(!d) return null; const t=new Date(); t.setHours(0,0,0,0); return Math.round((t-d)/86400000); };
     // 마지막 업로드로부터 지난 일수 (형태별)
     function lastUp(form){
@@ -1867,6 +1955,9 @@
         <td>${fmt(x[11])}</td>
         <td class="${kCls(engR,K.eng)}">${engR.toFixed(1)}%</td>
         <td class="${kCls(N(x[12]),K.subs)}">${fmt(x[12])}</td>
+        <td class="muted">${(()=>{ const a=lastActionOf(x[0]); if(!a) return "-";
+            const d=daysAgo(ymd(a.date));
+            return `<span class="act-chip" title="${a.date} · ${a.kind}${a.note?" — "+a.note.replace(/"/g,"")+"":""}">🔧 ${a.kind}<i>D+${d==null?"?":d}</i></span>`; })()}</td>
         <td class="muted"><span class="memo">${x[21]??""}</span></td></tr>`;
       }).join("");
     }
@@ -2488,7 +2579,7 @@
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
     document.getElementById("dailyPeriod").onchange=drawChart;
-    (async()=>{ await loadConfig(); await load(); initAdmin(); })();
+    (async()=>{ await loadConfig(); await loadActions(); await load(); initAdmin(); })();
   </script>
 </body>
 </html>
