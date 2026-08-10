@@ -685,6 +685,7 @@
         <option value="10">댓글</option>
         <option value="11">공유</option>
         <option value="12">구독전환</option>
+        <option value="search">🔍 검색 유입</option>
       </select>
       <select id="videoSortDir">
         <option value="desc">최신/높은순</option>
@@ -695,9 +696,9 @@
       <table>
         <thead><tr>
           <th>썸네일</th><th>업로드일</th><th>형태</th><th>타이틀</th><th>길이</th><th>노출수</th><th>CTR</th>
-          <th>평균조회율</th><th>조회수</th><th>좋아요</th><th>댓글</th><th>공유</th><th>참여율</th><th>구독전환</th><th>🔧 조치</th><th>특이사항</th>
+          <th>평균조회율</th><th>조회수</th><th>🔍 검색</th><th>좋아요</th><th>댓글</th><th>공유</th><th>참여율</th><th>구독전환</th><th>🔧 조치</th><th>특이사항</th>
         </tr></thead>
-        <tbody id="videoRows"><tr><td colspan="16" class="empty">동기화를 눌러주세요.</td></tr></tbody>
+        <tbody id="videoRows"><tr><td colspan="17" class="empty">동기화를 눌러주세요.</td></tr></tbody>
       </table>
     </div></div>
 
@@ -1145,6 +1146,27 @@
     // "26-08-06" → Date
     const ymd=(s)=>{ const m=String(s||"").match(/(\d{2})-(\d{2})-(\d{2})/); return m?new Date(2000+ +m[1], +m[2]-1, +m[3]):null; };
 
+    // ===== 🔍 검색 유입 — 롱폼 검색 자산화의 1순위 지표 =====
+    // 노출수·CTR과 달리 트래픽 소스는 Analytics API가 주므로 자동 수집된다.
+    // 추천 유입은 알고리즘이 주는 것이고, 검색 유입은 우리가 만든 것이다.
+    let TRAFFIC=null;
+    const SEARCH_KPI=25;     // 검색 유입 비중 목표(%) — 베이스라인 10.8%
+    async function loadTraffic(){
+      try{ const r=await fetch("/api/traffic").then(r=>r.json()); TRAFFIC=r.ok?r:null; }
+      catch(_){ TRAFFIC=null; }
+      renderVideos(); renderBrief();
+    }
+    // 영상별 검색 유입 비중(%) — 데이터 없으면 null
+    const searchShare=(vid)=>{
+      const v=TRAFFIC&&TRAFFIC.videos&&TRAFFIC.videos[vid];
+      return v&&v.total? v.share*100 : null;
+    };
+    // 채널 검색 유입 비중(%) — 기간(7/28/90)
+    const chSearchShare=(days)=>{
+      const c=TRAFFIC&&TRAFFIC.channel&&TRAFFIC.channel[days];
+      return c&&c.total? c.searchShare*100 : null;
+    };
+
     // ===== 🔧 조치이력 — 우리가 언제 무엇을 했는지 =====
     // 성과 그래프에 세로선으로 찍고, 영상별로 '조치 이후 며칠'을 표시한다.
     // 누적 지표는 과거 실적에 눌려 잘 안 움직이므로, 조치 시점을 같이 봐야 효과가 읽힌다.
@@ -1305,6 +1327,22 @@
           return c2(`유지 · 평균 조회율`, `숏폼 ${p(sV,sA)} · 롱폼 ${p(lV,lA)}`, cls,
             `KPI는 숏폼 <b>${kS.avp}%</b> · 롱폼 <b>${kL.avp}%</b>. 롱폼이 기준을 크게 밑돌면 오프닝(훅) 문제예요.
              <a onclick="goSub('explore','sec-vd')">게시 후 성과 →</a>`);
+        })()+
+        // ⑤ 검색 유입 — 제목·챕터·재생목록 작업의 성패를 재는 지표
+        (()=>{
+          const ch=chSearchShare(P);
+          // 롱폼만 따로: 검색은 롱폼 자산화의 지표라 롱폼 평균이 본질
+          const lg=lV.map(v=>searchShare(v[0])).filter(x=>x!=null);
+          const lAvg=lg.length? lg.reduce((a,b)=>a+b,0)/lg.length : null;
+          if(ch==null&&lAvg==null)
+            return c2(`검색 유입 비중`,"불러오는 중…","",
+              `트래픽 소스를 가져오는 중이에요. 잠시 후 자동으로 채워져요.`);
+          const val=(x)=>x==null?"-":x.toFixed(1)+"%";
+          const cls = lAvg==null?"" : lAvg>=SEARCH_KPI?GRN : lAvg>=SEARCH_KPI*0.6?YEL:RED;
+          return c2(`검색 유입 비중 · 목표 ${SEARCH_KPI}%`, `채널 ${val(ch)} · 롱폼 ${val(lAvg)}`, cls,
+            `추천은 알고리즘이 주는 것이고 <b>검색은 우리가 만든 것</b>이에요.
+             제목·챕터·재생목록 작업이 먹혔는지는 이 값으로 판단해요.
+             <a onclick="goSub('explore','sec-vtable')">영상별 검색 유입 →</a>`);
         })();
 
       // ---------- 행동층 ----------
@@ -1893,6 +1931,15 @@
           ? (a[dateIdx]<b[dateIdx]?-1:a[dateIdx]>b[dateIdx]?1:0)
           : (a[dateIdx]<b[dateIdx]?1:a[dateIdx]>b[dateIdx]?-1:0));
       }
+      if(key==="search"){   // 검색 유입 비중 — 데이터 없는 영상은 방향과 무관하게 항상 뒤로
+        return [...rows].sort((a,b)=>{
+          const x=searchShare(a[0]), y=searchShare(b[0]);
+          if(x==null&&y==null) return 0;
+          if(x==null) return 1;
+          if(y==null) return -1;
+          return dir==="asc" ? x-y : y-x;
+        });
+      }
       const i=Number(key);
       return [...rows].sort((a,b)=> dir==="asc" ? N(a[i])-N(b[i]) : N(b[i])-N(a[i]));
     }
@@ -1950,6 +1997,11 @@
         <td class="${x[6]?kCls(N(x[6]),K.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?ctrStr(x[6]):"-"}</td>
         <td class="${kCls(avpCap(x[7]),K.avp)}">${avpStr(x[7])}</td>
         <td class="${kCls(N(x[8]),K.views)}">${fmt(x[8])}</td>
+        <td class="${(()=>{const s=searchShare(x[0]);return s==null?"":kCls(s,SEARCH_KPI);})()}">${(()=>{
+          const s=searchShare(x[0]); if(s==null) return '<span class="muted">-</span>';
+          const t=TRAFFIC.videos[x[0]];
+          return `<span title="검색 ${fmt(t.search)}회 / 전체 ${fmt(t.total)}회 · 추천 ${fmt(t.suggested)} · 탐색 ${fmt(t.browse)}">${s.toFixed(1)}%</span>`;
+        })()}</td>
         <td>${fmt(x[9])}</td>
         <td>${fmt(x[10])}</td>
         <td>${fmt(x[11])}</td>
@@ -2579,7 +2631,7 @@
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
     document.getElementById("dailyPeriod").onchange=drawChart;
-    (async()=>{ await loadConfig(); await loadActions(); await load(); initAdmin(); })();
+    (async()=>{ await loadConfig(); await loadActions(); await load(); initAdmin(); loadTraffic(); })();
   </script>
 </body>
 </html>

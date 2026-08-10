@@ -48,6 +48,7 @@ const HOURFIX_TAB = process.env.HOURFIX_TAB || "영상초기반응";  // 영상�
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";   // Railway 환경변수로 설정
 const CONFIG_TAB = process.env.CONFIG_TAB || "_설정";      // KPI·제목 등 설정 JSON 저장 탭
 const ACTION_TAB = process.env.ACTION_TAB || "조치이력";    // 제목·썸네일·챕터 수정 등 조치 로그
+const TRAFFIC_SINCE = process.env.TRAFFIC_SINCE || "2024-01-01";  // 영상별 트래픽소스 조회 시작일(=사실상 게시 이후)
 function checkPw(pw) { return !!ADMIN_PASSWORD && pw === ADMIN_PASSWORD; }
 
 // 시트 탭 이름 / 데이터 시작 행
@@ -736,6 +737,68 @@ app.get("/api/config", async (req, res) => {
       if (raw) config = JSON.parse(raw);
     } catch (_) { /* 탭 없거나 JSON 아님 → null */ }
     res.json({ ok: true, config });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ----- 트래픽 소스 (검색 유입 비중) -----
+// 노출수·CTR과 달리 트래픽 소스는 Analytics API가 제공해서 자동 수집이 된다.
+// 롱폼 검색 자산화(제목 검색어화·챕터·재생목록)의 성패를 재는 1순위 지표.
+const TRAFFIC_TTL = 30 * 60 * 1000;   // 30분 캐시 (쿼터 절약)
+let trafficCache = { at: 0, data: null };
+
+app.get("/api/traffic", async (req, res) => {
+  try {
+    if (!req.query.force && trafficCache.data && Date.now() - trafficCache.at < TRAFFIC_TTL) {
+      return res.json({ ok: true, cached: true, ...trafficCache.data });
+    }
+    const auth = getOAuth();
+    const ya = google.youtubeAnalytics({ version: "v2", auth });
+    const end = ymd(new Date());
+    const back = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
+
+    // 1) 채널 전체 — 기간별 트래픽 소스 구성
+    const channel = {};
+    await Promise.all([7, 28, 90].map(async (n) => {
+      try {
+        const r = await ya.reports.query({
+          ids: "channel==MINE", startDate: back(n), endDate: end,
+          dimensions: "insightTrafficSourceType", metrics: "views",
+        });
+        const by = {}; let total = 0;
+        (r.data.rows || []).forEach((row) => { by[row[0]] = +row[1] || 0; total += +row[1] || 0; });
+        channel[n] = { by, total, searchShare: total ? (by.YT_SEARCH || 0) / total : 0 };
+      } catch (_) { channel[n] = null; }
+    }));
+
+    // 2) 영상별 — 게시 이후(=채널 시작일부터) 검색 유입 비중
+    const listRes = await ya.reports.query({
+      ids: "channel==MINE", startDate: TRAFFIC_SINCE, endDate: end,
+      dimensions: "video", metrics: "views", sort: "-views", maxResults: 200,
+    });
+    const ids = (listRes.data.rows || []).filter((r) => (+r[1] || 0) > 0).map((r) => r[0]);
+    const videos = {};
+    const CHUNK = 10;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      await Promise.all(ids.slice(i, i + CHUNK).map(async (id) => {
+        try {
+          const tr = await ya.reports.query({
+            ids: "channel==MINE", startDate: TRAFFIC_SINCE, endDate: end,
+            dimensions: "insightTrafficSourceType", metrics: "views",
+            filters: "video==" + id,
+          });
+          const by = {}; let total = 0;
+          (tr.data.rows || []).forEach((row) => { by[row[0]] = +row[1] || 0; total += +row[1] || 0; });
+          const search = by.YT_SEARCH || 0;
+          videos[id] = { search, total, share: total ? search / total : 0,
+                         suggested: by.RELATED_VIDEO || 0, browse: by.BROWSE || 0, shorts: by.SHORTS || 0 };
+        } catch (_) { /* 개별 실패는 건너뜀 */ }
+      }));
+    }
+    const data = { channel, videos, at: new Date().toISOString() };
+    trafficCache = { at: Date.now(), data };
+    res.json({ ok: true, cached: false, ...data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
