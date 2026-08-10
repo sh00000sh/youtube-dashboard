@@ -140,6 +140,41 @@
     .cmp .crow b.g{color:#15803d;} .cmp .crow b.y{color:#b88600;} .cmp .crow b.r{color:#e11d48;}
     .cmp .crow b .k-t{font-style:normal;font-weight:500;color:var(--muted);font-size:11px;margin-left:5px;}
     /* 반복재생 배지: 평균조회율 100% 초과분(쇼츠 되감기) */
+    /* 한 줄 판정 배너 */
+    .verdict{border-radius:18px;padding:18px 20px;margin:0 0 18px;display:flex;gap:14px;align-items:flex-start;
+             border:1px solid transparent;box-shadow:var(--shadow);}
+    .verdict .vi{font-size:26px;line-height:1.1;flex:0 0 auto;}
+    .verdict .vt{font-size:17px;font-weight:800;margin-bottom:5px;letter-spacing:-.2px;}
+    .verdict .vs{font-size:13.5px;line-height:1.65;color:var(--sub);}
+    .verdict .vs b{color:var(--text);}
+    .verdict.v-ok{background:rgba(25,169,116,.09);border-color:rgba(25,169,116,.3);}
+    .verdict.v-ok .vt{color:#15803d;}
+    .verdict.v-warn{background:rgba(240,160,32,.11);border-color:rgba(240,160,32,.35);}
+    .verdict.v-warn .vt{color:#b88600;}
+    .verdict.v-bad{background:rgba(225,29,72,.09);border-color:rgba(225,29,72,.3);}
+    .verdict.v-bad .vt{color:#e11d48;}
+    body.dark .verdict.v-ok .vt{color:#4ade80;} body.dark .verdict.v-warn .vt{color:#f0a020;} body.dark .verdict.v-bad .vt{color:#ff8093;}
+    /* 카드 해석 한 줄 */
+    .cards .why{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);font-size:12.5px;line-height:1.6;color:var(--sub);}
+    .cards .why b{color:var(--text);}
+    .cards .why a{color:var(--blue,#3182f6);text-decoration:none;font-weight:600;cursor:pointer;}
+    .cards .why a:hover{text-decoration:underline;}
+    .dlt{font-size:12.5px;font-weight:700;margin-left:6px;}
+    .dlt.up{color:#15803d;} .dlt.dn{color:#e11d48;} .dlt.flat{color:var(--muted);}
+    body.dark .dlt.up{color:#4ade80;} body.dark .dlt.dn{color:#ff8093;}
+    /* 이번 주 할 일 */
+    .act-list{display:flex;flex-direction:column;gap:9px;}
+    .act{display:flex;gap:12px;align-items:flex-start;background:var(--card);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow);}
+    .act .rk{flex:0 0 auto;width:22px;height:22px;border-radius:7px;font-size:12px;font-weight:800;display:flex;
+             align-items:center;justify-content:center;color:#fff;}
+    .act .ab{font-size:14px;font-weight:700;margin-bottom:3px;}
+    .act .aw{font-size:12.5px;color:var(--sub);line-height:1.6;}
+    /* KPI 자동 제안 */
+    .sug{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--sub);}
+    .sug b{color:var(--text);}
+    .sug button{padding:5px 11px;font-size:12px;border-radius:8px;border:1px solid var(--line);
+                background:var(--chip);color:var(--text);font-weight:600;cursor:pointer;}
+    .sug button:hover{background:var(--blue,#3182f6);color:#fff;border-color:transparent;}
     .loop-b{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:6px;font-size:10px;font-weight:700;
             background:rgba(240,160,32,.16);color:#b88600;vertical-align:middle;cursor:help;}
     body.dark .loop-b{background:rgba(240,160,32,.2);color:#f0a020;}
@@ -308,8 +343,32 @@
       <span><i class="dot dr"></i>50%미만 / 참여 10미만</span>
     </div>
 
-    <!-- KPI 달성률: 헤더 밑 고정 단독 메뉴 (항상 표시) -->
-    <div class="sec" id="sec-kpi">
+    <!-- ===== 한 줄 판정 배너 (항상 최상단) ===== -->
+    <div id="verdict" class="verdict"></div>
+
+    <!-- ===== 결과 → 원인 → 행동 3층 요약 ===== -->
+    <div class="sec" id="sec-brief" style="display:none">
+      <h2>🧭 결과
+        <select id="briefPeriod" style="margin-left:auto">
+          <option value="28">최근 28일</option>
+          <option value="7">최근 7일</option>
+          <option value="90">최근 90일</option>
+        </select>
+      </h2>
+      <div class="desc">채널 성장의 최종 성적표예요. 괄호 안은 <b>직전 같은 기간과 비교한 변화</b>예요.</div>
+      <div class="cards" id="briefResult" style="grid-template-columns:repeat(2,1fr)"></div>
+
+      <h2 style="margin-top:26px">🔍 원인 <span class="kpi-badge">결과가 왜 그런지 설명하는 4가지</span></h2>
+      <div class="desc">위 결과를 만든 원인이에요. 빨간 항목이 지금 손봐야 할 곳이에요.</div>
+      <div class="cards" id="briefCause" style="grid-template-columns:repeat(2,1fr)"></div>
+
+      <h2 style="margin-top:26px">✅ 이번 주 할 일</h2>
+      <div class="desc">위 숫자에서 자동으로 뽑은 우선순위예요.</div>
+      <div id="briefAction" class="act-list"></div>
+    </div>
+
+    <!-- KPI 달성률: 성과 탭 하위 (NAV에서 토글) -->
+    <div class="sec" id="sec-kpi" style="display:none">
     <h2>🎯 KPI 달성률
       <select id="gaugeType" style="margin-left:auto">
         <option value="daily">일별</option>
@@ -1052,6 +1111,162 @@
         +bwCard("👀 평균조회율 1위",bestA,avpCap(bestA[7]).toFixed(1)+"%")
         +(bestL&&loopPct(bestL[7])>0 ? bwCard("↻ 반복재생 1위 (숏폼)",bestL,"+"+loopPct(bestL[7]).toFixed(0)+"%p") : "");
     }
+    // ===================================================================
+    // 🧭 브리핑: 판정 배너 + 결과/원인/행동 3층
+    //  - 결과: 채널 성장의 최종 성적표 2개 (조회수·구독자)
+    //  - 원인: 결과를 만든 4개 (발행량·도달·유입의 질·유지)
+    //  - 행동: 위 숫자에서 규칙으로 뽑은 우선순위
+    // ===================================================================
+    // "26-08-06" → Date
+    const ymd=(s)=>{ const m=String(s||"").match(/(\d{2})-(\d{2})-(\d{2})/); return m?new Date(2000+ +m[1], +m[2]-1, +m[3]):null; };
+    const daysAgo=(d)=>{ if(!d) return null; const t=new Date(); t.setHours(0,0,0,0); return Math.round((t-d)/86400000); };
+    // 마지막 업로드로부터 지난 일수 (형태별)
+    function lastUp(form){
+      const arr=VIDEOS.filter(v=>form==="short"?isShort(v):!isShort(v))
+                      .map(v=>ymd(v[1])).filter(Boolean).sort((a,b)=>b-a);
+      return arr.length?daysAgo(arr[0]):null;
+    }
+    // 기간 합계 + 직전 동일기간 대비 변화율
+    function periodDelta(colIdx, days){
+      const rows=[...DAILY].sort((a,b)=>(a[0]<b[0]?-1:1));
+      const cur=rows.slice(-days), prev=rows.slice(-days*2,-days);
+      const s=(a)=>a.reduce((t,r)=>t+N(r[colIdx]),0);
+      const c=s(cur), p=s(prev);
+      return { cur:c, prev:p, pct: p? (c-p)/p*100 : null, hasPrev: prev.length>=Math.min(days,3) };
+    }
+    // 최근 N일 안에 올린 영상
+    const recentVids=(days,form)=>{
+      const cut=new Date(); cut.setDate(cut.getDate()-days);
+      return VIDEOS.filter(v=>{ const d=ymd(v[1]); if(!d||d<cut) return false;
+        return form==="all"?true:(form==="short"?isShort(v):!isShort(v)); });
+    };
+    // 1,000회당 구독전환 — 형태 간 '유입의 질'을 같은 잣대로 비교
+    const subPer1k=(arr)=>{ const v=arr.reduce((a,r)=>a+N(r[8]),0), s=arr.reduce((a,r)=>a+N(r[12]),0); return v? s/v*1000 : 0; };
+    const avgAvp=(arr)=>arr.length? arr.reduce((a,r)=>a+avpCap(r[7]),0)/arr.length : 0;
+    const avgN=(arr,i)=>arr.length? arr.reduce((a,r)=>a+N(r[i]),0)/arr.length : 0;
+
+    const dltHtml=(pct)=>{
+      if(pct==null||!isFinite(pct)) return `<span class="dlt flat">– 비교기간 없음</span>`;
+      const c=pct>2?"up":pct<-2?"dn":"flat", a=pct>2?"▲":pct<-2?"▼":"—";
+      return `<span class="dlt ${c}">${a} ${Math.abs(pct).toFixed(0)}%</span>`;
+    };
+    // 하위 탭으로 이동시키는 링크 (해석 줄에서 '확인 →' 용)
+    function goSub(cat,id){ showCat(cat); showSub(id); document.getElementById("navCat").scrollIntoView({behavior:"smooth",block:"start"}); }
+
+    function renderBrief(){
+      const box=document.getElementById("briefResult");
+      if(!box) return;
+      if(!DAILY.length){ box.innerHTML=""; return; }
+      const P=Number(document.getElementById("briefPeriod").value||28);
+
+      // ---------- 결과층 ----------
+      const dv=periodDelta(6,P), ds=periodDelta(1,P);
+      const card=(label,val,pct,why)=>`<div class="card">
+        <div class="label">${label}</div>
+        <div class="value" style="font-size:30px">${val}${dltHtml(pct)}</div>
+        <div class="why">${why}</div></div>`;
+      box.innerHTML=
+        card(`조회수 · 최근 ${P}일`, fmt(dv.cur), dv.hasPrev?dv.pct:null,
+             `직전 ${P}일 <b>${fmt(dv.prev)}회</b> → 지금 <b>${fmt(dv.cur)}회</b>. 채널이 도달한 총량이에요.`)+
+        card(`구독자 순증 · 최근 ${P}일`, "+"+fmt(ds.cur), ds.hasPrev?ds.pct:null,
+             `조회 1,000회당 <b>${dv.cur?(ds.cur/dv.cur*1000).toFixed(1):0}명</b>이 구독했어요. 도달이 실제 팬으로 남는 비율이에요.`);
+
+      // ---------- 원인층 ----------
+      const sD=lastUp("short"), lD=lastUp("long");
+      const sV=recentVids(P,"short"), lV=recentVids(P,"long");
+      const sQ=subPer1k(sV), lQ=subPer1k(lV);
+      const sA=avgAvp(sV), lA=avgAvp(lV);
+      const kS=KPI.video_short, kL=KPI.video_long;
+      const cbox=document.getElementById("briefCause");
+      const c2=(label,val,cls,why)=>`<div class="card">
+        <div class="label">${label}</div>
+        <div class="value" style="font-size:26px;color:${cls}">${val}</div>
+        <div class="why">${why}</div></div>`;
+      const RED="#e11d48", YEL="#b88600", GRN="#15803d";
+      // ① 발행량
+      const pubBad = (sD==null||sD>=7)||(lD==null||lD>=14);
+      const pubWarn= (sD!=null&&sD>=4)||(lD!=null&&lD>=10);
+      cbox.innerHTML=
+        c2(`발행량 · 최근 ${P}일`, `숏폼 ${sV.length} · 롱폼 ${lV.length}편`,
+           pubBad?RED:pubWarn?YEL:GRN,
+           `마지막 업로드 — 숏폼 <b>${sD==null?"기록 없음":sD+"일 전"}</b> · 롱폼 <b>${lD==null?"기록 없음":lD+"일 전"}</b>.
+            발행이 끊기면 신규 유입이 먼저 멈춰요. <a onclick="goSub('explore','sec-upload')">업로드 성과 →</a>`)+
+        // ② 도달 (형태별 평균 조회수 vs KPI)
+        (()=>{ // 발행이 없으면 0이 아니라 '발행 없음' — 0%는 성과가 나쁜 것처럼 읽힌다
+          const av=(arr)=>arr.length? fmt(Math.round(arr.reduce((a,r)=>a+N(r[8]),0)/arr.length)) : "발행 없음";
+          const bad = (sV.length&&avgN(sV,8)<kS.views*0.5)||(lV.length&&avgN(lV,8)<kL.views*0.5);
+          const warn= (sV.length&&avgN(sV,8)<kS.views)||(lV.length&&avgN(lV,8)<kL.views);
+          return c2(`도달 · 편당 평균 조회수`, `숏폼 ${av(sV)} · 롱폼 ${av(lV)}`,
+            bad?RED:warn?YEL:GRN,
+            `형태별 KPI는 숏폼 <b>${fmt(kS.views)}회</b> · 롱폼 <b>${fmt(kL.views)}회</b>예요.
+             <a onclick="goSub('perf','sec-hl')">형태 비교 →</a>`);
+        })()+
+        // ③ 유입의 질
+        (()=>{
+          const q=(arr,v)=>arr.length? v.toFixed(1) : "발행 없음";
+          const live=[sV.length?sQ:null,lV.length?lQ:null].filter(x=>x!=null);
+          const cls = !live.length?"" : live.every(x=>x<1)?RED : live.some(x=>x<1)?YEL:GRN;
+          return c2(`유입의 질 · 1,000회당 구독`, `숏폼 ${q(sV,sQ)} · 롱폼 ${q(lV,lQ)}`, cls,
+            `조회수가 많아도 이 값이 낮으면 <b>팬으로 남지 않는 유입</b>이에요.
+             숏폼과 롱폼 중 이 값이 높은 쪽이 채널을 실제로 키우고 있어요.`);
+        })()+
+        // ④ 유지
+        (()=>{
+          const p=(arr,v)=>arr.length? v.toFixed(0)+"%" : "발행 없음";
+          const cls = !lV.length?"" : lA<kL.avp*0.7?RED : lA<kL.avp?YEL:GRN;
+          return c2(`유지 · 평균 조회율`, `숏폼 ${p(sV,sA)} · 롱폼 ${p(lV,lA)}`, cls,
+            `KPI는 숏폼 <b>${kS.avp}%</b> · 롱폼 <b>${kL.avp}%</b>. 롱폼이 기준을 크게 밑돌면 오프닝(훅) 문제예요.
+             <a onclick="goSub('explore','sec-vd')">게시 후 성과 →</a>`);
+        })();
+
+      // ---------- 행동층 ----------
+      const acts=[];
+      if(sD==null||sD>=4) acts.push(["숏폼 발행 재개", `마지막 숏폼이 ${sD==null?"기록 없음":sD+"일 전"}이에요. 숏폼은 이 채널에서 신규 유입을 만드는 가장 빠른 경로예요.`, RED]);
+      if(lD==null||lD>=10) acts.push(["롱폼 발행", `마지막 롱폼이 ${lD==null?"기록 없음":lD+"일 전"}이에요. 롱폼은 구독 전환과 시청시간을 만드는 축이에요.`, RED]);
+      if(lA>0&&lA<kL.avp) acts.push(["롱폼 오프닝 재편집", `롱폼 평균 조회율 ${lA.toFixed(0)}%로 KPI ${kL.avp}%에 못 미쳐요. 0~15초 훅부터 점검하세요.`, YEL]);
+      if(sQ<1&&sV.length) acts.push(["숏폼 → 롱폼 연결 장치", `숏폼 1,000회당 구독이 ${sQ.toFixed(1)}명이에요. 고정 댓글·최종화면에 롱폼을 연결해 유입을 붙잡으세요.`, YEL]);
+      if(dv.hasPrev&&dv.pct<-15) acts.push(["조회수 하락 원인 점검", `직전 ${P}일 대비 ${Math.abs(dv.pct).toFixed(0)}% 줄었어요. 발행 리듬과 최근 영상 성과를 함께 보세요.`, RED]);
+      if(!acts.length) acts.push(["현 페이스 유지", "지표가 모두 기준 안에 있어요. 발행 리듬을 그대로 유지하세요.", GRN]);
+      document.getElementById("briefAction").innerHTML=acts.slice(0,3).map((a,i)=>
+        `<div class="act"><div class="rk" style="background:${a[2]}">${i+1}</div>
+         <div><div class="ab">${a[0]}</div><div class="aw">${a[1]}</div></div></div>`).join("");
+
+      renderVerdict({sD,lD,dv,sQ,lQ,sA,lA,P});
+    }
+
+    // 한 줄 판정 배너
+    function renderVerdict(m){
+      const el=document.getElementById("verdict");
+      if(!el) return;
+      if(!DAILY.length){ el.style.display="none"; return; }
+      el.style.display="flex";
+      const sTxt = m.sD==null?"기록 없음":`<b>${m.sD}일 전</b>`;
+      const lTxt = m.lD==null?"기록 없음":`<b>${m.lD}일 전</b>`;
+      const upLine=`숏폼 업로드가 ${sTxt}, 롱폼 업로드가 ${lTxt}이 마지막입니다.`;
+
+      const reasons=[];
+      let level="ok";
+      // 🔴 경고
+      if(m.sD==null||m.sD>=7){ level="bad"; reasons.push("숏폼 발행이 7일 이상 끊겼습니다"); }
+      if(m.lD==null||m.lD>=14){ level="bad"; reasons.push("롱폼 발행이 14일 이상 끊겼습니다"); }
+      if(m.dv.hasPrev&&m.dv.pct<=-25){ level="bad"; reasons.push(`조회수가 직전 ${m.P}일 대비 ${Math.abs(m.dv.pct).toFixed(0)}% 줄었습니다`); }
+      // 🟡 주의
+      if(level!=="bad"){
+        if(m.sD!=null&&m.sD>=4){ level="warn"; reasons.push("숏폼 발행 간격이 벌어지고 있습니다"); }
+        if(m.lD!=null&&m.lD>=10){ level="warn"; reasons.push("롱폼 발행 간격이 벌어지고 있습니다"); }
+        if(m.lA>0&&m.lA<KPI.video_long.avp*0.7){ level="warn"; reasons.push(`롱폼 조회율 ${m.lA.toFixed(0)}%가 KPI ${KPI.video_long.avp}%를 크게 밑돕니다`); }
+        if(m.sQ<1&&m.lQ<1){ level="warn"; reasons.push("숏폼·롱폼 모두 1,000회당 구독이 1명 미만입니다"); }
+      }
+      const MAP={ok:["🟢","정상","v-ok"],warn:["🟡","주의","v-warn"],bad:["🔴","경고","v-bad"]};
+      const [ico,word,cls]=MAP[level];
+      const why = reasons.length? reasons.slice(0,2).join(" · ") : "발행 리듬과 주요 지표가 모두 기준 안에 있습니다";
+      el.className=`verdict ${cls}`;
+      el.innerHTML=`<div class="vi">${ico}</div><div>
+        <div class="vt">${word} — ${why}</div>
+        <div class="vs">${upLine} 최근 ${m.P}일 조회수 <b>${fmt(m.dv.cur)}회</b>${m.dv.hasPrev?` (직전 ${m.P}일 대비 ${m.dv.pct>=0?"+":""}${m.dv.pct.toFixed(0)}%)`:""} · 구독 <b>+${fmt(periodDelta(1,m.P).cur)}</b></div>
+      </div>`;
+    }
+
     // 숏폼 vs 롱폼 비교
     function renderFormCompare(){
       const sh=VIDEOS.filter(x=>isShort(x)), lo=VIDEOS.filter(x=>!isShort(x));
@@ -1657,36 +1872,36 @@
     }
 
     // ===== 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 =====
-    // KPI 달성률(sec-kpi)은 헤더 밑 고정이라 여기 포함 안 함.
+    // KPI 달성률(sec-kpi)은 성과 탭 하위로 이동했음.
     // sub: id(탭 키) · label · secs(보여줄 섹션 id 배열) · draw
+    // 3화면 구성: 오늘(매일) → 성과(주간 분석) → 탐색(파고들기)
+    // 기존 화면은 하나도 버리지 않고 '탐색'으로 이동만 시켰음.
     const NAV=[
-      {cat:"daily", label:"📅 일일", subs:[
-        {id:"sec-live",     label:"실시간",        secs:["sec-live"],     draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
+      {cat:"today", label:"📌 오늘", subs:[
+        {id:"sec-brief",    label:"요약",           secs:["sec-brief"],    draw:()=>renderBrief()},
+        {id:"sec-live",     label:"실시간",          secs:["sec-live"],     draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
         {id:"sec-longform", label:"A/B·롱폼 실시간", secs:["sec-longform"], draw:()=>{ initAb(); loadLongformLive(); }},
-        {id:"sec-dchart",   label:"일일 그래프",   secs:["sec-dchart"],   draw:()=>drawChart()},
-        {id:"sec-dtable",   label:"일일 상세",     secs:["sec-dtable"],   draw:()=>renderDailyTable()},
+        {id:"sec-insight",  label:"AI 분석",        secs:["sec-insight"],  draw:()=>loadInsights()},
       ]},
-      {cat:"video", label:"🎬 영상", subs:[
-        {id:"sec-hl",      label:"영상 하이라이트", secs:["sec-hl"],      draw:()=>{renderBestWorst();renderFormCompare();}},
+      {cat:"perf", label:"📈 성과", subs:[
+        {id:"sec-kpi",     label:"KPI 달성률",      secs:["sec-kpi"],     draw:()=>renderGauge()},
+        {id:"sec-hl",      label:"형태 비교·하이라이트", secs:["sec-hl"],   draw:()=>{renderBestWorst();renderFormCompare();}},
+        {id:"sec-cum",     label:"누적 성과·성장",  secs:["sec-cum","sec-growth"], draw:()=>{renderCumulative();drawGrowth();}},
+        {id:"sec-compare", label:"과거 vs 현재",    secs:["sec-compare"],  draw:()=>{ if(cmpData)renderCompare(); }},
+        {id:"sec-posts",   label:"게시물 성과",     secs:["sec-posts"],    draw:()=>loadPosts()},
+      ]},
+      {cat:"explore", label:"🔎 탐색", subs:[
         {id:"sec-vtable",  label:"영상 상세",       secs:["sec-vtable"],  draw:()=>renderVideos()},
         {id:"sec-vd",      label:"게시 후 성과",    secs:["sec-vd"],      draw:()=>{ if(vd.id)drawVd(); }},
         {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
         {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
-      ]},
-      {cat:"posts", label:"📝 게시물", subs:[
-        {id:"sec-posts", label:"게시물 성과", secs:["sec-posts"], draw:()=>loadPosts()},
-      ]},
-      {cat:"kpi", label:"🎯 KPI", subs:[
-        {id:"sec-cum",     label:"누적 성과·성장", secs:["sec-cum","sec-growth"], draw:()=>{renderCumulative();drawGrowth();}},
-        {id:"sec-compare", label:"과거 vs 현재",   secs:["sec-compare"],          draw:()=>{ if(cmpData)renderCompare(); }},
-      ]},
-      {cat:"insight", label:"💡 인사이트", subs:[
-        {id:"sec-insight", label:"AI 분석", secs:["sec-insight"], draw:()=>loadInsights()},
+        {id:"sec-dchart",  label:"일일 그래프",     secs:["sec-dchart"],  draw:()=>drawChart()},
+        {id:"sec-dtable",  label:"일일 상세",       secs:["sec-dtable"],  draw:()=>renderDailyTable()},
       ]},
     ];
     const ALL_SUBS=NAV.flatMap(c=>c.subs);
     const ALL_SECS=[...new Set(ALL_SUBS.flatMap(s=>s.secs))];  // 토글 대상 섹션 전체
-    let activeCat="daily", activeSub={};   // activeSub[cat]=현재 선택된 하위 탭 id
+    let activeCat="today", activeSub={};   // activeSub[cat]=현재 선택된 하위 탭 id
     NAV.forEach(c=>activeSub[c.cat]=c.subs[0].id);
 
     function buildNav(){
@@ -1710,7 +1925,7 @@
     function showSub(id){
       activeSub[activeCat]=id;
       const sub=ALL_SUBS.find(x=>x.id===id); if(!sub) return;
-      // KPI 달성률(고정) 제외, 선택된 하위 탭의 섹션만 표시(여러 개 동시 가능)
+      // 선택된 하위 탭의 섹션만 표시(여러 개 동시 가능)
       ALL_SECS.forEach(secId=>{ const el=document.getElementById(secId); if(el) el.style.display=(sub.secs.includes(secId)?"":"none"); });
       document.getElementById("navSub").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
       if(sub.draw) sub.draw();
@@ -2125,8 +2340,71 @@
       const mk=(grp)=>KPI_FIELDS.map(([k,l])=>`<label class="cfg-f">${l}<input type="number" step="any" data-grp="${grp}" data-k="${k}"></label>`).join("");
       KPI_GROUPS.forEach(([grp,elId])=>{
         const el=document.getElementById(elId);
-        if(el) el.innerHTML=mk(grp);
+        if(el) el.innerHTML=mk(grp)+`<div class="sug" id="sug-${grp}"></div>`;
       });
+      renderKpiSuggest();
+    }
+
+    // ===== KPI 자동 제안 =====
+    // 감이 아니라 실적에서 역산한다.
+    //  · 실적이 KPI에 못 미치면  → 실적 +10% (다음 단계)
+    //  · 실적이 KPI를 넘었으면   → 실적 +10% (목표 상향)
+    // 즉 KPI가 채널 성장 속도를 따라오게 만든다.
+    const SUG_STEP=1.10;
+    function kpiSuggest(grp){
+      const P=28, r=(n,d=0)=>Number(n.toFixed(d));
+      if(grp==="daily"){
+        const rows=[...DAILY].sort((a,b)=>(a[0]<b[0]?-1:1)).slice(-P);
+        if(!rows.length) return null;
+        const avg=(i)=>rows.reduce((s,x)=>s+N(x[i]),0)/rows.length;
+        const avgP=(i)=>rows.reduce((s,x)=>s+toPctNum(x[i]),0)/rows.length;
+        return { base:`최근 ${P}일 일평균`,
+                 vals:{ views:r(avg(6)*SUG_STEP), subs:r(avg(1)*SUG_STEP,1), avp:r(avgP(9)*SUG_STEP,1) } };
+      }
+      const form = grp==="video_short"?"short" : grp==="video_long"?"long" : "all";
+      const arr=recentVids(90,form);          // 영상은 표본이 적어 90일 기준
+      if(!arr.length) return null;
+      const avg=(i)=>arr.reduce((s,x)=>s+N(x[i]),0)/arr.length;
+      const ctrArr=arr.filter(x=>x[6]!==""&&x[6]!=null);
+      const imprArr=arr.filter(x=>N(x[5])>0);
+      const v={ views:r(avg(8)*SUG_STEP), avp:r(avgAvp(arr)*SUG_STEP,1), subs:r(avg(12)*SUG_STEP,1) };
+      if(imprArr.length) v.impr=r(imprArr.reduce((s,x)=>s+N(x[5]),0)/imprArr.length*SUG_STEP);
+      if(ctrArr.length)  v.ctr =r(ctrArr.reduce((s,x)=>s+N(x[6]),0)/ctrArr.length*SUG_STEP,1);
+      return { base:`최근 90일 ${form==="short"?"숏폼":form==="long"?"롱폼":"영상"} ${arr.length}편 평균`, vals:v };
+    }
+    // 하향 방지 — 실적이 나쁘다고 목표를 낮추면 KPI가 의미를 잃는다.
+    // 제안값이 현 KPI보다 낮으면 현 KPI를 그대로 두고, 어떤 항목이 그랬는지 표시한다.
+    function kpiSuggestGuarded(grp){
+      const s=kpiSuggest(grp); if(!s) return null;
+      s.kept=[];
+      Object.keys(s.vals).forEach(k=>{
+        const cur=KPI[grp]&&KPI[grp][k];
+        if(cur!=null && s.vals[k]<cur){ s.vals[k]=cur; s.kept.push(k); }
+      });
+      return s;
+    }
+    function renderKpiSuggest(){
+      KPI_GROUPS.forEach(([grp])=>{
+        const el=document.getElementById("sug-"+grp); if(!el) return;
+        const s=kpiSuggestGuarded(grp);
+        if(!s){ el.innerHTML=`<span>데이터가 쌓이면 제안값이 표시돼요.</span>`; return; }
+        const lb=(k)=>(KPI_FIELDS.find(f=>f[0]===k)||[,k])[1];
+        const txt=Object.entries(s.vals).map(([k,v])=>
+          `${lb(k)} <b>${v}</b>${s.kept.includes(k)?'<span style="color:var(--muted)">(유지)</span>':''}`).join(" · ");
+        const note=s.kept.length
+          ? `<span style="color:var(--muted)">※ ${s.kept.map(lb).join("·")}는 실적이 현 목표에 못 미쳐 <b>목표를 낮추지 않고 유지</b>했어요.</span>` : "";
+        el.innerHTML=`<span>📐 ${s.base} 기준 제안(+10%): ${txt}</span>
+          <button onclick="applyKpiSuggest('${grp}')">제안값 적용</button>${note}`;
+      });
+    }
+    function applyKpiSuggest(grp){
+      const s=kpiSuggestGuarded(grp); if(!s) return;
+      Object.entries(s.vals).forEach(([k,v])=>{
+        const inp=document.querySelector(`#adminPanel input[data-grp="${grp}"][data-k="${k}"]`);
+        if(inp){ inp.value=v; inp.style.background="rgba(49,130,246,.12)"; setTimeout(()=>inp.style.background="",900); }
+      });
+      const st=document.getElementById("cfgStatus");
+      if(st) st.textContent="제안값을 넣었어요. '저장'을 눌러야 반영돼요.";
     }
     function fillConfigForm(){
       document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
@@ -2149,7 +2427,7 @@
           body:JSON.stringify({pw:ADMIN_PW,config})}).then(r=>r.json());
         if(r.ok){
           CONFIG=config;
-          renderDailyTable();renderVideos();renderGauge();renderCumulative();drawChart();drawGrowth();renderFormCompare();renderBestWorst();
+          renderDailyTable();renderVideos();renderGauge();renderCumulative();drawChart();drawGrowth();renderFormCompare();renderBestWorst();renderBrief();
           st.textContent="✅ 저장됨 (모든 사용자에 반영)";
         }else st.textContent="❌ "+(r.error||"저장 실패");
       }catch(e){ st.textContent="❌ "+e.message; }
@@ -2163,7 +2441,7 @@
       DAILY=(r.daily||[]).filter(x=>x[0]&&N(x[6])>0).sort((a,b)=>(a[0]<b[0]?-1:a[0]>b[0]?1:0));
       VIDEOS=(r.videos||[]).filter(x=>x[3]&&x[3]!==x[0]);
       buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
-      renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();drawWeekday();
+      renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();drawWeekday();renderBrief();renderKpiSuggest();
       renderSticky();populateVideoSelect();
       buildNav(); showSub(activeSub[activeCat]);   // 초기: 일일 → 실시간
     }
@@ -2206,6 +2484,7 @@
     document.getElementById("uploadMode").onchange=drawWeekday;
     document.getElementById("gaugePeriod").onchange=renderGauge;
     document.getElementById("gaugeForm").onchange=renderGauge;
+    document.getElementById("briefPeriod").onchange=renderBrief;
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
     document.getElementById("dailyPeriod").onchange=drawChart;
