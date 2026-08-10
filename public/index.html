@@ -137,6 +137,12 @@
     .cmp .crow{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--line);}
     .cmp .crow:last-child{border-bottom:0;}
     .cmp .crow b{font-variant-numeric:tabular-nums;}
+    .cmp .crow b.g{color:#15803d;} .cmp .crow b.y{color:#b88600;} .cmp .crow b.r{color:#e11d48;}
+    .cmp .crow b .k-t{font-style:normal;font-weight:500;color:var(--muted);font-size:11px;margin-left:5px;}
+    /* 반복재생 배지: 평균조회율 100% 초과분(쇼츠 되감기) */
+    .loop-b{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:6px;font-size:10px;font-weight:700;
+            background:rgba(240,160,32,.16);color:#b88600;vertical-align:middle;cursor:help;}
+    body.dark .loop-b{background:rgba(240,160,32,.2);color:#f0a020;}
     /* 베스트/워스트 */
     .bw{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
     .bw .bwc{flex:1;min-width:280px;background:var(--card);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);}
@@ -271,7 +277,9 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 <b>노출수·CTR</b>은 상세 표에서 셀을 클릭해 바로 수정, <b>대시보드 제목</b>은 상단 제목을 클릭해 바로 수정할 수 있어요. KPI 값만 아래에서 수정하고 저장하세요.</div>
       <div style="display:flex;gap:24px;flex-wrap:wrap">
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 KPI</div><div id="cfgDaily" class="cfg-grid"></div></div>
-        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI</div><div id="cfgVideo" class="cfg-grid"></div></div>
+        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI <span style="font-weight:400;color:var(--muted)">(형태 무관·전체 기준)</span></div><div id="cfgVideo" class="cfg-grid"></div></div>
+        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎬 숏폼 KPI</div><div id="cfgVideoShort" class="cfg-grid"></div></div>
+        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎞️ 롱폼 KPI</div><div id="cfgVideoLong" class="cfg-grid"></div></div>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
         <button onclick="saveConfig()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">💾 설정 저장</button>
@@ -313,6 +321,11 @@
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
+      </select>
+      <select id="gaugeForm" style="display:none">
+        <option value="all">전체 형태</option>
+        <option value="short">숏폼</option>
+        <option value="long">롱폼</option>
       </select>
     </h2>
     <div class="desc">목표(KPI) 대비 지금 어디쯤 왔는지 한눈에 봐요. 100%를 넘으면 목표 달성이에요.</div>
@@ -654,8 +667,15 @@
     // 과거 숏폼(유기적, 광고70%↑만 제외) 실측 기반 KPI: 조회수 989 · 조회율 70.7% · 구독전환 2.31
     const KPI = {
       daily:{ views:800, impr:400, ctr:5.5, avp:65, subs:2, eng:3 },   // eng=참여율(%)
-      video:{ views:1000, impr:300, ctr:5, avp:65, subs:2, eng:3 },
+      video:{ views:1000, impr:300, ctr:5, avp:65, subs:2, eng:3 },    // 전체(형태 무관) 기준
+      // 형태별 KPI — 숏폼·롱폼은 성과 스케일이 완전히 달라 같은 잣대로 재면 둘 다 의미가 없음
+      // 숏폼: 과거 유기적 숏폼 실측(조회 989·조회율 70.7%·구독전환 2.31) 기반
+      video_short:{ views:1000, impr:400, ctr:5, avp:70, subs:2, eng:3 },
+      // 롱폼: 현 실적(평균 104회·23.3%·CTR 0.9%)에서 한 단계 위 목표
+      video_long:{ views:150, impr:3000, ctr:2, avp:30, subs:2, eng:3 },
     };
+    // KPI 그룹 키: 영상 형태 필터(all/short/long)에 대응
+    const kpiFor=(form)=> form==="short"?KPI.video_short : form==="long"?KPI.video_long : KPI.video;
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
     const SINCE = "26-06-01";              // 본격 업로드 시작일 (전체 기간 기준)
 
@@ -677,6 +697,14 @@
     const durSec=(s)=>{const p=String(s||"").split(":").map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:(Number(s)||0);};
     const isShort=(x)=> durSec(x[4])<=180 ? 1 : 0;
     const formLabel=(x)=> isShort(x) ? "숏폼" : "롱폼";
+    // 평균조회율이 100%를 넘는 건 쇼츠 반복재생 때문. 지표를 둘로 쪼갠다.
+    //   avpCap  = 끝까지 본 비율 (0~100%로 캡)
+    //   loopPct = 반복재생분 (100% 초과분) — 쇼츠 성과의 핵심 신호
+    const avpCap=(n)=> Math.min(toPctNum(n),100);
+    const loopPct=(n)=> Math.max(toPctNum(n)-100,0);
+    const avpStr=(n)=>{ if(n==null||n==="")return "-";
+      const l=loopPct(n);
+      return avpCap(n).toFixed(1)+"%"+(l>0?`<span class="loop-b" title="반복재생 ${l.toFixed(0)}%p — 시청자가 되감아 다시 본 분량">↻${l.toFixed(0)}</span>`:""); };
 
     let DAILY=[], VIDEOS=[], CHANNEL=null, chart=null, growth=null, activeMetric=6, activeGrowth=6;
     let ADMIN=false, ADMIN_PW="", CONFIG=null;   // 관리자 모드 상태
@@ -929,6 +957,10 @@
     function renderGauge(){
       const type=document.getElementById("gaugeType").value;
       const sel=document.getElementById("gaugePeriod").value;
+      const formSel=document.getElementById("gaugeForm");
+      // 형태 선택은 '영상별'일 때만 의미가 있음
+      formSel.style.display = (type==="video") ? "" : "none";
+      const form=formSel.value;
       let items=[], basis="";
 
       if(type==="video"){
@@ -939,16 +971,21 @@
           const cs=cut.toISOString().slice(2,10);
           vids=VIDEOS.filter(v=>(v[1]||"")>=cs);
         }
+        if(form==="short") vids=vids.filter(v=>isShort(v));
+        else if(form==="long") vids=vids.filter(v=>!isShort(v));
+        const K=kpiFor(form);
         const total=vids.length;
-        const hitV=vids.filter(v=>N(v[8])>=KPI.video.views).length;
-        const hitA=vids.filter(v=>toPctNum(v[7])>=KPI.video.avp).length;
-        const hitS=vids.filter(v=>N(v[12])>=KPI.video.subs).length;
+        const hitV=vids.filter(v=>N(v[8])>=K.views).length;
+        // 조회율은 100% 캡 기준으로 판정 — 반복재생분이 달성률을 부풀리지 않게
+        const hitA=vids.filter(v=>avpCap(v[7])>=K.avp).length;
+        const hitS=vids.filter(v=>N(v[12])>=K.subs).length;
         items=[
-          {l:"조회수 달성률",rate:true,hit:hitV,total,kt:fmt(KPI.video.views)+"회 이상"},
-          {l:"평균조회율 달성률",rate:true,hit:hitA,total,kt:KPI.video.avp+"% 이상"},
-          {l:"구독전환 달성률",rate:true,hit:hitS,total,kt:KPI.video.subs+" 이상"},
+          {l:"조회수 달성률",rate:true,hit:hitV,total,kt:fmt(K.views)+"회 이상"},
+          {l:"평균조회율 달성률",rate:true,hit:hitA,total,kt:K.avp+"% 이상"},
+          {l:"구독전환 달성률",rate:true,hit:hitS,total,kt:K.subs+" 이상"},
         ];
-        basis=`전체 영상 ${total}개 기준`;
+        const fl = form==="short"?"숏폼":form==="long"?"롱폼":"전체 영상";
+        basis=`${fl} ${total}개 기준`;
       } else if(type==="cumulative"){
         const rows=periodRows(sel), d=rows.length;
         const sum=(i)=>rows.reduce((s,r)=>s+N(r[i]),0);
@@ -998,8 +1035,10 @@
       const box=document.getElementById("bestWorst");
       if(!VIDEOS.length){ box.innerHTML=""; return; }
       const byV=[...VIDEOS].sort((a,b)=>N(b[8])-N(a[8]));
-      const byA=[...VIDEOS].sort((a,b)=>toPctNum(b[7])-toPctNum(a[7]));
-      const best=byV[0], worst=byV[byV.length-1], bestA=byA[0];
+      // 조회율 1위는 캡(100%) 기준 — 반복재생 278% 같은 값이 1위로 뜨는 걸 막는다
+      const byA=[...VIDEOS].sort((a,b)=>avpCap(b[7])-avpCap(a[7])||loopPct(b[7])-loopPct(a[7]));
+      const byL=[...VIDEOS].filter(x=>isShort(x)).sort((a,b)=>loopPct(b[7])-loopPct(a[7]));
+      const best=byV[0], worst=byV[byV.length-1], bestA=byA[0], bestL=byL[0];
       const bwCard=(label,v,val)=>{
         const oc=`openVideo('${v[0]}',\`${(v[3]||'').replace(/\`/g,'')}\`,'${v[1]||''}')`;
         return `<div class="bwc">
@@ -1010,19 +1049,34 @@
       };
       box.innerHTML=bwCard("🏆 조회수 베스트",best,fmt(best[8])+"회")
         +bwCard("⚠️ 조회수 아쉬운",worst,fmt(worst[8])+"회")
-        +bwCard("👀 평균조회율 1위",bestA,pctStr(bestA[7]));
+        +bwCard("👀 평균조회율 1위",bestA,avpCap(bestA[7]).toFixed(1)+"%")
+        +(bestL&&loopPct(bestL[7])>0 ? bwCard("↻ 반복재생 1위 (숏폼)",bestL,"+"+loopPct(bestL[7]).toFixed(0)+"%p") : "");
     }
     // 숏폼 vs 롱폼 비교
     function renderFormCompare(){
       const sh=VIDEOS.filter(x=>isShort(x)), lo=VIDEOS.filter(x=>!isShort(x));
       const avg=(arr,i)=>arr.length?Math.round(arr.reduce((a,r)=>a+N(r[i]),0)/arr.length):0;
-      const avgP=(arr,i)=>arr.length?(arr.reduce((a,r)=>a+toPctNum(r[i]),0)/arr.length):0;
-      const blk=(t,arr)=>`<div class="cmp"><h3>${t} (${arr.length}개)</h3>
-        <div class="crow"><span>평균 조회수</span><b>${fmt(avg(arr,8))}</b></div>
-        <div class="crow"><span>평균 조회율</span><b>${avgP(arr,7).toFixed(1)}%</b></div>
+      const avgF=(arr,f)=>arr.length?(arr.reduce((a,r)=>a+f(r[7]),0)/arr.length):0;
+      // 조회수 1000회당 구독전환 — 형태별 '유입의 질'을 같은 잣대로 비교하는 지표
+      const subPer1k=(arr)=>{const v=arr.reduce((a,r)=>a+N(r[8]),0), s=arr.reduce((a,r)=>a+N(r[12]),0);
+        return v?(s/v*1000):0;};
+      const kRow=(label,val,k,fx)=>{
+        const cls=k?kCls(val,k):"";
+        return `<div class="crow"><span>${label}</span><b class="${cls}">${fx(val)}${k?`<i class="k-t">/ ${fx(k)}</i>`:""}</b></div>`;
+      };
+      const blk=(t,arr,K,isSh)=>{
+        const loop=avgF(arr,loopPct);
+        return `<div class="cmp"><h3>${t} (${arr.length}개)</h3>
+        ${kRow("평균 조회수",avg(arr,8),K.views,n=>fmt(Math.round(n)))}
+        ${kRow("평균 조회율",avgF(arr,avpCap),K.avp,n=>n.toFixed(1)+"%")}
+        ${isSh?`<div class="crow"><span>평균 반복재생</span><b>${loop>0?"+"+loop.toFixed(0)+"%p":"-"}</b></div>`:""}
         <div class="crow"><span>평균 좋아요</span><b>${fmt(avg(arr,9))}</b></div>
-        <div class="crow"><span>평균 구독전환</span><b>${fmt(avg(arr,12))}</b></div></div>`;
-      document.getElementById("formCompare").innerHTML=blk("🎬 숏폼",sh)+blk("🎞️ 롱폼",lo);
+        ${kRow("평균 구독전환",avg(arr,12),K.subs,n=>fmt(Math.round(n)))}
+        <div class="crow"><span>1,000회당 구독</span><b>${subPer1k(arr).toFixed(1)}</b></div>
+        </div>`;
+      };
+      document.getElementById("formCompare").innerHTML=
+        blk("🎬 숏폼",sh,KPI.video_short,true)+blk("🎞️ 롱폼",lo,KPI.video_long,false);
     }
     // 업로드 성과 (요일별 / 시간대별 평균 조회수)
     let weekday=null;
@@ -1565,11 +1619,16 @@
       </tr>`;}).join("");
     }
     function renderVideos(){
-      document.getElementById("videoKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.video.impr)}·CTR ${KPI.video.ctr}%·조회수 ${fmt(KPI.video.views)}·평균조회율 ${KPI.video.avp}%·참여율 ${KPI.video.eng}%·구독전환 ${KPI.video.subs}`;
       const el=document.getElementById("videoRows");
       // 영상 컬럼(A~V): 0ID 1업로드일 2형태 3타이틀 4길이 5노출수 6CTR 7평균조회율 8조회수 9좋아요 10댓글 11공유 12구독전환 ... 21특이사항
       // 1) 형태 필터 → 2) 정렬
       const ff=document.getElementById("videoForm").value;
+      // 형태를 고르면 그 형태의 KPI로 색칠 — '전체'일 때는 각 행의 형태에 맞는 KPI를 적용
+      const KV=kpiFor(ff);
+      const kOf=(x)=> ff==="all" ? kpiFor(isShort(x)?"short":"long") : KV;
+      document.getElementById("videoKpiBadge").textContent = ff==="all"
+        ? "KPI: 행마다 형태별 기준 적용 (숏폼/롱폼 각각)"
+        : `${ff==="short"?"숏폼":"롱폼"} KPI: 노출수 ${fmt(KV.impr)}·CTR ${KV.ctr}%·조회수 ${fmt(KV.views)}·평균조회율 ${KV.avp}%·참여율 ${KV.eng}%·구독전환 ${KV.subs}`;
       let list=VIDEOS;
       if(ff==="short") list=VIDEOS.filter(x=>isShort(x));
       else if(ff==="long") list=VIDEOS.filter(x=>!isShort(x));
@@ -1577,21 +1636,22 @@
       if(!rows.length){el.innerHTML='<tr><td colspan="15" class="empty">데이터 없음</td></tr>';return;}
       el.innerHTML=rows.map(x=>{
         const engR=N(x[8])?(N(x[9])+N(x[10])+N(x[11]))/N(x[8])*100:0;
+        const K=kOf(x);
         return `<tr>
         <td><img src="https://i.ytimg.com/vi/${x[0]}/mqdefault.jpg" class="thumb" loading="lazy" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')"></td>
         <td>${x[1]??""}</td>
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td class="muted">${x[4]??""}</td>
-        <td class="${x[5]?kCls(N(x[5]),KPI.video.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','impr','${x[5]??''}')"`:''}>${x[5]?fmt(x[5]):"-"}</td>
-        <td class="${x[6]?kCls(N(x[6]),KPI.video.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?ctrStr(x[6]):"-"}</td>
-        <td class="${kCls(toPctNum(x[7]),KPI.video.avp)}">${pctStr(x[7])}</td>
-        <td class="${kCls(N(x[8]),KPI.video.views)}">${fmt(x[8])}</td>
+        <td class="${x[5]?kCls(N(x[5]),K.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','impr','${x[5]??''}')"`:''}>${x[5]?fmt(x[5]):"-"}</td>
+        <td class="${x[6]?kCls(N(x[6]),K.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'video','${x[0]}','ctr','${x[6]??''}')"`:''}>${x[6]?ctrStr(x[6]):"-"}</td>
+        <td class="${kCls(avpCap(x[7]),K.avp)}">${avpStr(x[7])}</td>
+        <td class="${kCls(N(x[8]),K.views)}">${fmt(x[8])}</td>
         <td>${fmt(x[9])}</td>
         <td>${fmt(x[10])}</td>
         <td>${fmt(x[11])}</td>
-        <td class="${kCls(engR,KPI.video.eng)}">${engR.toFixed(1)}%</td>
-        <td class="${kCls(N(x[12]),KPI.video.subs)}">${fmt(x[12])}</td>
+        <td class="${kCls(engR,K.eng)}">${engR.toFixed(1)}%</td>
+        <td class="${kCls(N(x[12]),K.subs)}">${fmt(x[12])}</td>
         <td class="muted"><span class="memo">${x[21]??""}</span></td></tr>`;
       }).join("");
     }
@@ -2013,9 +2073,13 @@
     }
 
     // 현재 화면의 KPI·제목을 합친 설정 객체 (부분 저장 시 서로 안 덮어쓰게)
+    // KPI 그룹 목록 — 여기에 추가하면 폼·저장·로드에 자동 반영됨
+    const KPI_GROUPS=[["daily","cfgDaily"],["video","cfgVideo"],
+                      ["video_short","cfgVideoShort"],["video_long","cfgVideoLong"]];
     function getCurrentConfig(){
-      return { kpi:{ daily:{...KPI.daily}, video:{...KPI.video} },
-               title: document.getElementById("dashTitle").textContent.trim() };
+      const kpi={};
+      KPI_GROUPS.forEach(([g])=>kpi[g]={...KPI[g]});
+      return { kpi, title: document.getElementById("dashTitle").textContent.trim() };
     }
     // 제목 인라인 편집: 관리자일 때 상단 제목을 클릭해 바로 수정 → blur/Enter 시 저장
     function setupTitleEdit(){
@@ -2050,8 +2114,8 @@
         if(r.ok && r.config){
           CONFIG=r.config;
           if(r.config.kpi){
-            if(r.config.kpi.daily) Object.assign(KPI.daily, r.config.kpi.daily);
-            if(r.config.kpi.video) Object.assign(KPI.video, r.config.kpi.video);
+            // 저장된 그룹만 덮어씀 — 새로 추가된 그룹(video_short/long)은 코드 기본값 유지
+            KPI_GROUPS.forEach(([g])=>{ if(r.config.kpi[g]) Object.assign(KPI[g], r.config.kpi[g]); });
           }
           if(r.config.title){ const h=document.getElementById("dashTitle"); if(h) h.textContent=r.config.title; }
         }
@@ -2059,9 +2123,10 @@
     }
     function buildConfigForm(){
       const mk=(grp)=>KPI_FIELDS.map(([k,l])=>`<label class="cfg-f">${l}<input type="number" step="any" data-grp="${grp}" data-k="${k}"></label>`).join("");
-      const d=document.getElementById("cfgDaily"), v=document.getElementById("cfgVideo");
-      if(d) d.innerHTML=mk("daily");
-      if(v) v.innerHTML=mk("video");
+      KPI_GROUPS.forEach(([grp,elId])=>{
+        const el=document.getElementById(elId);
+        if(el) el.innerHTML=mk(grp);
+      });
     }
     function fillConfigForm(){
       document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
@@ -2071,11 +2136,12 @@
     // KPI만 저장 (제목은 상단에서 따로 인라인 저장)
     async function saveConfig(){
       const st=document.getElementById("cfgStatus");
-      const kpi={daily:{},video:{}};
+      const kpi={};
+      KPI_GROUPS.forEach(([g])=>kpi[g]={});
       document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
-        kpi[inp.dataset.grp][inp.dataset.k]=Number(inp.value);
+        if(kpi[inp.dataset.grp]) kpi[inp.dataset.grp][inp.dataset.k]=Number(inp.value);
       });
-      Object.assign(KPI.daily,kpi.daily); Object.assign(KPI.video,kpi.video);
+      KPI_GROUPS.forEach(([g])=>Object.assign(KPI[g],kpi[g]));
       const config=getCurrentConfig();   // 현재 제목 유지 + 새 KPI
       st.textContent="저장 중...";
       try{
@@ -2083,7 +2149,7 @@
           body:JSON.stringify({pw:ADMIN_PW,config})}).then(r=>r.json());
         if(r.ok){
           CONFIG=config;
-          renderDailyTable();renderVideos();renderGauge();renderCumulative();drawChart();drawGrowth();
+          renderDailyTable();renderVideos();renderGauge();renderCumulative();drawChart();drawGrowth();renderFormCompare();renderBestWorst();
           st.textContent="✅ 저장됨 (모든 사용자에 반영)";
         }else st.textContent="❌ "+(r.error||"저장 실패");
       }catch(e){ st.textContent="❌ "+e.message; }
@@ -2139,6 +2205,7 @@
     document.getElementById("gaugeType").onchange=renderGauge;
     document.getElementById("uploadMode").onchange=drawWeekday;
     document.getElementById("gaugePeriod").onchange=renderGauge;
+    document.getElementById("gaugeForm").onchange=renderGauge;
     document.getElementById("cumPeriod").onchange=renderCumulative;
     document.getElementById("growthPeriod").onchange=drawGrowth;
     document.getElementById("dailyPeriod").onchange=drawChart;
