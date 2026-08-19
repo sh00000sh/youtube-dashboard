@@ -2072,6 +2072,143 @@ setInterval(() => rollupMonthly().catch(() => {}), 24 * 60 * 60 * 1000);
 setTimeout(() => rollupMonthly().catch(() => {}), 60 * 1000);
 
 // ===================================================================
+//  채널 링크 추적 (외부 배치용 리다이렉트)
+//   - 카카오페이 마이페이지 / 사전교육 페이지에 붙이는 유튜브 채널 링크
+//   - 외부 사이트라 JS 비콘(/api/track)을 심을 수 없다 → 서버 리다이렉트로 집계
+//   - GET /y/:key → 클릭 1건 기록 후 유튜브 채널로 302
+//   - 시트·집계를 링크허브(VISIT_*)와 완전히 분리한다.
+//     같은 로그에 넣으면 normSrc()가 kakaopay/edu를 "etc"로 뭉개서 기존 통계가 오염됨
+// ===================================================================
+const CH_TAB = process.env.CH_LINK_TAB || "채널링크로그";
+const CH_YT_URL = process.env.CH_YT_URL || "https://www.youtube.com/@%EC%9C%A0%EC%A7%84%ED%88%AC%EC%9E%90%EC%84%A0%EB%AC%BC_official";
+const CH_LINKS = {
+  kakaopay: { name: "카카오페이 마이페이지", url: process.env.CH_URL_KAKAOPAY || CH_YT_URL },
+  edu:      { name: "사전교육 페이지",       url: process.env.CH_URL_EDU      || CH_YT_URL },
+};
+const CH_KEYS = Object.keys(CH_LINKS);
+
+let chBuffer = [];   // {ts, key, vid, ref}
+
+function readCookie(req, name) {
+  const raw = req.headers.cookie || "";
+  for (const part of raw.split(";")) {
+    const i = part.indexOf("=");
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+  }
+  return "";
+}
+
+// 클릭 → 기록 → 유튜브로 이동
+app.get("/y/:key", (req, res) => {
+  const key = String(req.params.key || "").toLowerCase();
+  const link = CH_LINKS[key];
+  // 오타/폐기된 키로 들어와도 사람은 채널로 보낸다(막다른 길 금지). 다만 집계엔 넣지 않는다.
+  if (!link) { res.set("Cache-Control", "no-store"); return res.redirect(302, CH_YT_URL); }
+
+  let vid = readCookie(req, "cvid");
+  if (!vid) {
+    vid = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    res.cookie("cvid", vid, { maxAge: 400 * 24 * 3600 * 1000, httpOnly: true, sameSite: "lax", path: "/" });
+  }
+  try {
+    chBuffer.push({
+      ts: new Date().toISOString(),
+      key,
+      vid,
+      ref: String(req.get("referer") || "").slice(0, 120),
+    });
+  } catch (_) {}
+  res.set("Cache-Control", "no-store");
+  res.redirect(302, link.url);
+});
+
+// 버퍼 → 시트 일괄 기록 (30초 간격). 실패 시 버퍼 복원
+async function flushChLinks() {
+  if (!chBuffer.length || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
+  const batch = chBuffer; chBuffer = [];
+  try {
+    const sheets = getSheetsClient();
+    await ensureTab(sheets, CH_TAB, ["타임스탬프", "링크키", "방문자ID", "리퍼러"]);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${CH_TAB}!A:D`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: batch.map((v) => [v.ts, v.key, v.vid || "", v.ref || ""]) },
+    });
+  } catch (e) { chBuffer = batch.concat(chBuffer); console.log("flushChLinks err:", e.message); }
+}
+setInterval(() => flushChLinks().catch(() => {}), 30 * 1000);
+
+// 관리자: 링크별·날짜별 클릭수 집계
+app.get("/api/channel-links", async (req, res) => {
+  try {
+    if (!checkVisitsPw(req.query.pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    const from = String(req.query.from || "2000-01-01");
+    const to = String(req.query.to || "2999-12-31");
+    let rows = [];
+    try {
+      const sheets = getSheetsClient();
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CH_TAB}!A2:D` });
+      rows = r.data.values || [];
+    } catch (_) { /* 탭 없음 = 아직 클릭 0 */ }
+    // 아직 시트에 안 내려간 버퍼도 합산 (실시간 정확도)
+    const all = rows.map((x) => ({ ts: x[0], key: x[1], vid: x[2] })).concat(chBuffer);
+
+    const totals = {}, vidSet = {}, anon = {};
+    CH_KEYS.forEach((k) => { totals[k] = 0; vidSet[k] = new Set(); anon[k] = 0; });
+    const byDate = {}, byDateVid = {}, byDateAnon = {}, byMonth = {};
+    const allVid = new Set(); let allAnon = 0, total = 0;
+
+    for (const v of all) {
+      if (!v.ts) continue;
+      const d = String(v.ts).slice(0, 10);
+      if (d < from || d > to) continue;
+      const k = v.key;
+      if (!CH_KEYS.includes(k)) continue;
+      const m = d.slice(0, 7);
+      total++; totals[k]++;
+      if (v.vid) { vidSet[k].add(v.vid); allVid.add(v.vid); } else { anon[k]++; allAnon++; }
+
+      byDate[d] = byDate[d] || {}; byDate[d][k] = (byDate[d][k] || 0) + 1;
+      byDateVid[d] = byDateVid[d] || {}; byDateVid[d][k] = byDateVid[d][k] || new Set();
+      byDateAnon[d] = byDateAnon[d] || {};
+      if (v.vid) byDateVid[d][k].add(v.vid); else byDateAnon[d][k] = (byDateAnon[d][k] || 0) + 1;
+
+      byMonth[m] = byMonth[m] || {};
+      byMonth[m][k] = byMonth[m][k] || { c: 0, vids: new Set(), anon: 0 };
+      byMonth[m][k].c++; if (v.vid) byMonth[m][k].vids.add(v.vid); else byMonth[m][k].anon++;
+    }
+
+    const uniques = {}; CH_KEYS.forEach((k) => (uniques[k] = vidSet[k].size + anon[k]));
+    const byDateU = {};
+    Object.keys(byDate).forEach((d) => {
+      byDateU[d] = {};
+      CH_KEYS.forEach((k) => {
+        const s = byDateVid[d] && byDateVid[d][k];
+        byDateU[d][k] = (s ? s.size : 0) + ((byDateAnon[d] && byDateAnon[d][k]) || 0);
+      });
+    });
+    const monthly = Object.keys(byMonth).sort().map((m) => {
+      const rec = { month: m, clicks: {}, uniques: {}, total: 0 };
+      CH_KEYS.forEach((k) => {
+        const a = byMonth[m][k];
+        rec.clicks[k] = a ? a.c : 0;
+        rec.uniques[k] = a ? a.vids.size + a.anon : 0;
+        rec.total += rec.clicks[k];
+      });
+      return rec;
+    });
+
+    res.json({
+      ok: true, from, to,
+      keys: CH_KEYS.map((k) => ({ k, name: CH_LINKS[k].name, url: CH_LINKS[k].url })),
+      totals, uniques, total, uTotal: allVid.size + allAnon,
+      byDate, byDateU, monthly,
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ===================================================================
 //  옵션 링크허브 설정 (배경/폰트/앰블럼/메뉴) — 공개 GET, 관리자 POST
 //  저장: "허브설정" 탭 key-value (이미지는 커서 셀 분리 저장, 셀당 5만자 한도)
 // ===================================================================

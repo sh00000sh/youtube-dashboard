@@ -148,6 +148,7 @@
             <div class="tabs">
                 <button class="tab on" data-tab="in" type="button">📥 유입경로 (인바운드)</button>
                 <button class="tab" data-tab="out" type="button">📤 카드 클릭 (아웃바운드)</button>
+                <button class="tab" data-tab="ch" type="button">🔗 채널 링크 (외부 배치)</button>
             </div>
 
             <!-- 인바운드 -->
@@ -198,6 +199,39 @@
                 <div class="panel">
                     <h2>월별 링크 비율 <span class="muted">— 한 달 동안 어떤 링크를 몇 % 눌렀는지</span></h2>
                     <div style="overflow-x:auto"><table id="moDstTbl"></table></div>
+                </div>
+            </div>
+
+            <!-- 채널 링크 (외부 배치용 리다이렉트) -->
+            <div id="pane-ch" style="display:none">
+                <div class="panel">
+                    <h2>🔗 배치용 링크 <span class="muted">— 카카오페이·사전교육 페이지에 이 주소를 붙이세요</span></h2>
+                    <div id="chLinkList"></div>
+                    <div style="font-size:12px;color:#6b7280;margin-top:10px;line-height:1.6">
+                        누르면 클릭 1건을 기록한 뒤 유튜브 채널로 넘어갑니다.<br>
+                        유튜브 애널리틱스에는 <b>외부 유입 → eugenefn.up.railway.app</b> 하나로만 잡히고,
+                        둘 중 어느 쪽에서 왔는지는 <b>이 화면에서만</b> 구분됩니다.
+                    </div>
+                </div>
+                <div class="total">
+                    <span class="n" id="chTotal">0</span><span class="lbl">총 클릭(건)</span>
+                    <span class="n" id="chUnique" style="margin-left:20px">0</span><span class="lbl">순클릭(중복제거)</span>
+                    <span class="rng" id="chRange"></span>
+                </div>
+                <div class="cards" id="chCards"></div>
+                <div class="panel"><h2>일별 클릭 추이 (링크별 누적)</h2><div class="chart-box"><canvas id="chChart"></canvas></div></div>
+                <div class="panel">
+                    <h2 style="display:flex;align-items:center">일별 상세
+                        <span style="margin-left:auto">
+                            <button class="mtoggle on" id="chClick" type="button">클릭</button>
+                            <button class="mtoggle" id="chUniq" type="button">순클릭</button>
+                        </span>
+                    </h2>
+                    <div style="overflow-x:auto"><table id="chTbl"></table></div>
+                </div>
+                <div class="panel">
+                    <h2>월별 링크 비율 <span class="muted">— 한 달 동안 어느 자리에서 몇 % 들어왔는지</span></h2>
+                    <div style="overflow-x:auto"><table id="chMoTbl"></table></div>
                 </div>
             </div>
         </div>
@@ -292,6 +326,11 @@
             {k:"edu",     name:"사전교육",    c:"#f59e0b"},
             {k:"etc",     name:"기타",        c:"#9aa0ab"},
         ];
+        // 외부 배치용 채널 링크 (서버 /y/:key 리다이렉트)
+        var CH = [
+            {k:"kakaopay", name:"카카오페이 마이페이지", c:"#f5c400"},
+            {k:"edu",      name:"사전교육 페이지",       c:"#7c3aed"},
+        ];
         var pad = function(n){ return String(n).padStart(2,"0"); };
         var ymd = function(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
         var fmt = function(n){ return (n||0).toLocaleString("ko-KR"); };
@@ -325,6 +364,25 @@
             });
         })();
 
+        // 외부 배치용 채널 링크 생성 + 복사
+        (function buildChLinks(){
+            var base = location.origin + "/y/";
+            document.getElementById("chLinkList").innerHTML = CH.map(function(s){
+                var url = base + s.k;
+                return '<div class="linkrow"><span class="lname"><span class="dot" style="background:'+s.c+'"></span>'+s.name+'</span>'+
+                    '<input class="lurl" readonly value="'+url+'" onclick="this.select()">'+
+                    '<button class="copy" type="button" data-url="'+url+'">복사</button></div>';
+            }).join("");
+            document.querySelectorAll("#chLinkList .copy").forEach(function(btn){
+                btn.onclick = function(){
+                    var ok = function(){ btn.textContent="복사됨"; btn.classList.add("ok"); setTimeout(function(){ btn.textContent="복사"; btn.classList.remove("ok"); }, 1200); };
+                    var fb = function(){ var inp=btn.previousElementSibling; inp.focus(); inp.select(); try{document.execCommand("copy");}catch(e){} ok(); };
+                    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(btn.dataset.url).then(ok).catch(fb); }
+                    else fb();
+                };
+            });
+        })();
+
         document.querySelectorAll(".quick button").forEach(function(b){
             b.onclick = function(){ setRange(b.dataset.r); load(); };
         });
@@ -342,8 +400,10 @@
                 var t = b.dataset.tab;
                 document.getElementById("pane-in").style.display  = t==="in"  ? "" : "none";
                 document.getElementById("pane-out").style.display = t==="out" ? "" : "none";
+                document.getElementById("pane-ch").style.display  = t==="ch"  ? "" : "none";
                 if(t==="in" && chartIn) chartIn.resize();
                 if(t==="out" && chartOut) chartOut.resize();
+                if(t==="ch" && chartCh) chartCh.resize();
             };
         });
 
@@ -360,6 +420,12 @@
                     try{sessionStorage.setItem("efv_pw", pw);}catch(e){} err.textContent=""; render(o.j);
                 })
                 .catch(function(e){ err.textContent="❌ "+e.message; });
+
+            // 채널 링크 집계는 별도 API. 실패해도 위 화면은 그대로 둔다.
+            fetch("/api/channel-links?pw="+encodeURIComponent(pw)+"&from="+from+"&to="+to)
+                .then(function(r){ return r.json(); })
+                .then(function(j){ if(j && j.ok) renderCh(j); })
+                .catch(function(){});
         }
 
         // ── 공용 렌더 헬퍼 ─────────────────────────────
@@ -418,6 +484,7 @@
         // ── 상태 & 렌더 ────────────────────────────────
         var lastData = null, inMode = "visit", outMode = "click";
         var chartIn = null, chartOut = null;
+        var lastCh = null, chMode = "click", chartCh = null;
 
         document.getElementById("mVisit").onclick = function(){ setInMode("visit"); };
         document.getElementById("mUniq").onclick  = function(){ setInMode("uniq"); };
@@ -432,6 +499,37 @@
             document.getElementById("cVisit").classList.toggle("on", m==="click");
             document.getElementById("cUniq").classList.toggle("on", m==="uniq");
             renderOutDaily();
+        }
+
+        document.getElementById("chClick").onclick = function(){ setChMode("click"); };
+        document.getElementById("chUniq").onclick  = function(){ setChMode("uniq"); };
+        function setChMode(m){ chMode=m;
+            document.getElementById("chClick").classList.toggle("on", m==="click");
+            document.getElementById("chUniq").classList.toggle("on", m==="uniq");
+            renderChDaily();
+        }
+
+        function renderChDaily(){
+            var d = lastCh; if(!d) return;
+            var uniq = chMode==="uniq";
+            var map = uniq ? (d.byDateU||{}) : (d.byDate||{});
+            dailyTable({
+                tblId:"chTbl", cats:CH, dates:Object.keys(map).sort().reverse(), map:map,
+                footLabel: uniq ? "순클릭 합계" : "클릭 합계",
+                footTot: uniq ? (d.uniques||{}) : (d.totals||{}),
+                footAll: uniq ? (d.uTotal||0) : (d.total||0)
+            });
+        }
+
+        function renderCh(d){
+            lastCh = d;
+            document.getElementById("chTotal").textContent  = fmt(d.total||0);
+            document.getElementById("chUnique").textContent = fmt(d.uTotal||0);
+            document.getElementById("chRange").textContent  = d.from+" ~ "+d.to;
+            renderCards("chCards", CH, d.totals||{}, d.uniques||{}, d.total);
+            chartCh = stackedChart("chChart", chartCh, CH, d.byDate||{}, Object.keys(d.byDate||{}).sort());
+            renderChDaily();
+            monthlyRatioTable("chMoTbl", d.monthly, CH, "clicks");
         }
 
         function renderInDaily(){
