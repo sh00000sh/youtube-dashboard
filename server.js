@@ -2073,7 +2073,8 @@ setTimeout(() => rollupMonthly().catch(() => {}), 60 * 1000);
 
 // ===================================================================
 //  채널 링크 추적 (외부 배치용 리다이렉트)
-//   - 카카오페이 마이페이지 / 사전교육 페이지에 붙이는 유튜브 채널 링크
+//   - 거래앱(카카오페이 · 옵션허브)의 마이페이지 / 사전교육 페이지에 붙이는 유튜브 채널 링크
+//     ※ 여기서 "옵션허브"는 통합 사이트(/optionsguide)가 아니라 거래 어플 이름이다
 //   - 외부 사이트라 JS 비콘(/api/track)을 심을 수 없다 → 서버 리다이렉트로 집계
 //   - GET /y/:key → 클릭 1건 기록 후 유튜브 채널로 302
 //   - 시트·집계를 링크허브(VISIT_*)와 완전히 분리한다.
@@ -2081,9 +2082,13 @@ setTimeout(() => rollupMonthly().catch(() => {}), 60 * 1000);
 // ===================================================================
 const CH_TAB = process.env.CH_LINK_TAB || "채널링크로그";
 const CH_YT_URL = process.env.CH_YT_URL || "https://www.youtube.com/@%EC%9C%A0%EC%A7%84%ED%88%AC%EC%9E%90%EC%84%A0%EB%AC%BC_official";
+// key는 링크 주소(/y/키)라 한 번 배포하면 바꾸지 말 것 — 이미 붙인 링크가 죽는다.
+// 표시 이름과 목적지는 환경변수로 바꿀 수 있다(재배포 불필요).
 const CH_LINKS = {
-  kakaopay: { name: "카카오페이 마이페이지", url: process.env.CH_URL_KAKAOPAY || CH_YT_URL },
-  edu:      { name: "사전교육 페이지",       url: process.env.CH_URL_EDU      || CH_YT_URL },
+  kakaopay: { name: process.env.CH_NAME_KAKAOPAY || "카카오페이 · 마이페이지",   url: process.env.CH_URL_KAKAOPAY || CH_YT_URL },
+  edu:      { name: process.env.CH_NAME_EDU      || "카카오페이 · 사전교육",     url: process.env.CH_URL_EDU      || CH_YT_URL },
+  hubmy:    { name: process.env.CH_NAME_HUBMY    || "옵션허브 · 마이페이지",     url: process.env.CH_URL_HUBMY    || CH_YT_URL },
+  hubedu:   { name: process.env.CH_NAME_HUBEDU   || "옵션허브 · 사전교육",       url: process.env.CH_URL_HUBEDU   || CH_YT_URL },
 };
 const CH_KEYS = Object.keys(CH_LINKS);
 

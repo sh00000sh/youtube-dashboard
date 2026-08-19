@@ -205,12 +205,13 @@
             <!-- 채널 링크 (외부 배치용 리다이렉트) -->
             <div id="pane-ch" style="display:none">
                 <div class="panel">
-                    <h2>🔗 배치용 링크 <span class="muted">— 카카오페이·사전교육 페이지에 이 주소를 붙이세요</span></h2>
+                    <h2>🔗 배치용 링크 <span class="muted">— 앱별 · 페이지별로 이 주소를 붙이세요</span></h2>
                     <div id="chLinkList"></div>
                     <div style="font-size:12px;color:#6b7280;margin-top:10px;line-height:1.6">
                         누르면 클릭 1건을 기록한 뒤 유튜브 채널로 넘어갑니다.<br>
                         유튜브 애널리틱스에는 <b>외부 유입 → eugenefn.up.railway.app</b> 하나로만 잡히고,
-                        둘 중 어느 쪽에서 왔는지는 <b>이 화면에서만</b> 구분됩니다.
+                        어느 앱·어느 자리에서 왔는지는 <b>이 화면에서만</b> 구분됩니다.<br>
+                        ※ 여기서 <b>옵션허브</b>는 거래 어플입니다. 통합 사이트(/optionsguide) 유입은 위의 <b>유입경로</b> 탭에서 봅니다.
                     </div>
                 </div>
                 <div class="total">
@@ -328,8 +329,10 @@
         ];
         // 외부 배치용 채널 링크 (서버 /y/:key 리다이렉트)
         var CH = [
-            {k:"kakaopay", name:"카카오페이 마이페이지", c:"#f5c400"},
-            {k:"edu",      name:"사전교육 페이지",       c:"#7c3aed"},
+            {k:"kakaopay", name:"카카오페이 · 마이페이지", c:"#f5c400"},
+            {k:"edu",      name:"카카오페이 · 사전교육",   c:"#7c3aed"},
+            {k:"hubmy",    name:"옵션허브 · 마이페이지",   c:"#0ea5e9"},
+            {k:"hubedu",   name:"옵션허브 · 사전교육",     c:"#22a06b"},
         ];
         var pad = function(n){ return String(n).padStart(2,"0"); };
         var ymd = function(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
