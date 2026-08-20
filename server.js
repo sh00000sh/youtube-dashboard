@@ -306,14 +306,20 @@ async function writeDaily(sheets, daily, uploadsPerDay) {
 // 컬럼: B업로드일 C형태(X) D타이틀 E영상길이 F노출수(X) G CTR(X)
 //       H평균조회율 I조회수 J좋아요 K댓글 L공유 M구독전환
 async function writeVideos(sheets, videos, meta) {
-  const { map, nextEmptyRow } = await readColumn(sheets, VIDEO_TAB, "D", VIDEO_FIRST_ROW); // 타이틀 기준
+  // ⚠️ 반드시 영상ID(A열)로 행을 찾는다.
+  // 예전에는 타이틀(D열)로 찾았는데, 제목을 바꾸면 기존 행을 못 찾아 새 행이 append 되고
+  // 옛 제목 행이 그대로 남아 같은 영상이 2~3행으로 중복됐다(롱폼 편수가 부풀려져 평균이 전부 왜곡).
+  // 이 채널은 제목 최적화가 핵심 작업이라 그 작업을 할 때마다 데이터가 깨지는 구조였다.
+  const { map: idMap, nextEmptyRow: idEnd } = await readColumn(sheets, VIDEO_TAB, "A", VIDEO_FIRST_ROW);
+  const { map: titleMap, nextEmptyRow: titleEnd } = await readColumn(sheets, VIDEO_TAB, "D", VIDEO_FIRST_ROW);
   const updates = [];
-  let appendRow = nextEmptyRow;
+  let appendRow = Math.max(idEnd, titleEnd);   // A열이 빈 예전 행이 있어도 덮어쓰지 않도록 큰 쪽
 
   for (const v of videos) {
     const m = meta[v.video_id] || {};
     const title = m.title || v.video_id;
-    let row = map[title];
+    // ID로 먼저 찾고, ID가 안 적힌 예전 행은 타이틀로 폴백(찾으면 아래에서 A열에 ID를 채워준다)
+    let row = idMap[v.video_id] || titleMap[title];
     if (!row) { row = appendRow++; }
 
     // A: 영상ID (재생용, 보통 숨겨두는 열), B: 업로드일
@@ -2070,6 +2076,103 @@ async function rollupMonthly() {
 }
 setInterval(() => rollupMonthly().catch(() => {}), 24 * 60 * 60 * 1000);
 setTimeout(() => rollupMonthly().catch(() => {}), 60 * 1000);
+
+// ===================================================================
+//  영상별 탭 중복 행 정리 (1회성 · 관리자 전용)
+//   제목 기준 매칭 버그로 같은 영상이 옛 제목/새 제목 각각 한 행씩 쌓였다.
+//   같은 영상ID 중 "가장 아래 행"이 현재 제목·최신 수치를 갖고 있으므로 그 행만 남긴다.
+//   ⚠️ 지우지 않고 "영상별_구제목보관" 탭으로 먼저 옮긴 뒤 삭제한다(원본 보존).
+//   ⚠️ 손으로 넣은 노출수·CTR은 옛 제목 시점의 값이라 새 행으로 합치지 않는다.
+//      기간이 섞이면 제목 변경 판정이 오염된다. 보관 탭에 남겨두고 필요하면 사람이 판단.
+//   기본은 dry-run. 실제 반영은 ?apply=true
+// ===================================================================
+const VIDEO_ARCHIVE_TAB = process.env.VIDEO_ARCHIVE_TAB || "영상별_구제목보관";
+
+app.post("/api/dedupe-videos", async (req, res) => {
+  try {
+    const pw = req.query.pw || (req.body && req.body.pw);
+    if (!ADMIN_PASSWORD || pw !== ADMIN_PASSWORD) {
+      return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    }
+    const apply = String(req.query.apply || "") === "true";
+    const sheets = getSheetsClient();
+
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+    const sheetMeta = (meta.data.sheets || []).find((s) => s.properties.title === VIDEO_TAB);
+    if (!sheetMeta) return res.status(404).json({ ok: false, error: `${VIDEO_TAB} 탭이 없습니다.` });
+
+    const r = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: `${VIDEO_TAB}!A${VIDEO_FIRST_ROW}:W`,
+    });
+    const rows = r.data.values || [];
+
+    // 영상ID별 등장 행 모으기
+    const byId = {};
+    rows.forEach((row, i) => {
+      const id = (row[0] || "").toString().trim();
+      if (!id) return;
+      (byId[id] = byId[id] || []).push({ row: VIDEO_FIRST_ROW + i, data: row });
+    });
+
+    const keep = [], archive = [];
+    Object.keys(byId).forEach((id) => {
+      const list = byId[id];
+      if (list.length < 2) return;
+      const last = list[list.length - 1];          // 가장 아래 = 현재 제목·최신 수치
+      keep.push({ id, row: last.row, title: last.data[3] || "" });
+      list.slice(0, -1).forEach((x) => {
+        archive.push({
+          id, row: x.row,
+          title: x.data[3] || "",
+          노출수: x.data[5] || "", CTR: x.data[6] || "", 조회수: x.data[8] || "",
+          수동입력있음: !!((x.data[5] || "").trim() || (x.data[6] || "").trim()),
+          data: x.data,
+        });
+      });
+    });
+
+    const summary = {
+      전체행: rows.length,
+      고유영상: Object.keys(byId).length,
+      중복영상: keep.length,
+      보관대상행: archive.length,
+      수동입력이있는보관행: archive.filter((a) => a.수동입력있음).length,
+    };
+
+    if (!apply) {
+      return res.json({
+        ok: true, dryRun: true, summary,
+        남길행: keep,
+        보관할행: archive.map(({ data, ...x }) => x),
+        안내: "실제 반영하려면 같은 요청에 ?apply=true 를 붙이세요.",
+      });
+    }
+    if (!archive.length) return res.json({ ok: true, applied: true, summary, message: "정리할 중복이 없습니다." });
+
+    // 1) 보관 탭에 먼저 복사 (삭제 전에 반드시 성공해야 함)
+    await ensureTab(sheets, VIDEO_ARCHIVE_TAB, ["보관일시", "원본행", "영상ID", "업로드일", "형태", "옛제목", "길이", "노출수", "CTR", "평균조회율", "조회수", "좋아요", "댓글", "공유", "구독전환"]);
+    const now = new Date().toISOString();
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${VIDEO_ARCHIVE_TAB}!A:O`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: archive.map((a) => [now, a.row, ...a.data.slice(0, 13)]) },
+    });
+
+    // 2) 아래에서 위로 삭제 (위부터 지우면 행번호가 밀린다)
+    const sheetId = sheetMeta.properties.sheetId;
+    const targets = archive.map((a) => a.row).sort((x, y) => y - x);
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: targets.map((row) => ({
+          deleteDimension: { range: { sheetId, dimension: "ROWS", startIndex: row - 1, endIndex: row } },
+        })),
+      },
+    });
+
+    res.json({ ok: true, applied: true, summary, 보관탭: VIDEO_ARCHIVE_TAB, 삭제한행: targets });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 // ===================================================================
 //  채널 링크 추적 (외부 배치용 리다이렉트)
