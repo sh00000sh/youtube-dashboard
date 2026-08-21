@@ -365,15 +365,30 @@ async function writeVideos(sheets, videos, meta) {
   return videos.length;
 }
 
+// 업로드일 표기를 4자리 연도로 통일한다.
+// 시트에 사람이 손으로 넣은 행은 "26-06-02"(2자리), 동기화가 쓴 행은 "2026-07-17"(4자리)로 섞여 있다.
+// 화면 정렬이 문자열 비교라 "26-…" > "2026-…" 이 되어(둘째 글자 6 > 0)
+// 손입력한 6월 숏폼이 8월 롱폼보다 위에 뜬다. 새로 올린 영상이 목록에 안 보이는 원인.
+// 시트 원본은 건드리지 않고 읽을 때만 맞춘다.
+function normUploadDate(s) {
+  const v = String(s == null ? "" : s).trim();
+  return /^\d{2}-\d{2}-\d{2}$/.test(v) ? "20" + v : v;
+}
+
 // 대시보드 화면이 읽을 데이터 (시트 그대로 읽어서 반환)
 async function readForDashboard(sheets) {
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: SHEET_ID,
     ranges: [`${DAILY_TAB}!B${DAILY_FIRST_ROW}:N`, `${VIDEO_TAB}!A${VIDEO_FIRST_ROW}:W`],
   });
+  const videos = (res.data.valueRanges?.[1]?.values || []).map((row) => {
+    const r = row.slice();
+    r[1] = normUploadDate(r[1]);   // B열 = 업로드일
+    return r;
+  });
   return {
     daily: res.data.valueRanges?.[0]?.values || [],
-    videos: res.data.valueRanges?.[1]?.values || [],
+    videos,
   };
 }
 

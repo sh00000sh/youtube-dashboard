@@ -1941,9 +1941,15 @@
     // key=정렬 항목("date" 또는 컬럼번호), dir="desc"(최신/높은) | "asc"(오래된/낮은)
     function sortRows(rows, key, dir, dateIdx){
       if(key==="date"){
-        return [...rows].sort((a,b)=> dir==="asc"
-          ? (a[dateIdx]<b[dateIdx]?-1:a[dateIdx]>b[dateIdx]?1:0)
-          : (a[dateIdx]<b[dateIdx]?1:a[dateIdx]>b[dateIdx]?-1:0));
+        // 업로드일이 빈 행(메타를 못 가져온 영상)은 방향과 무관하게 항상 뒤로.
+        // 안 그러면 오름차순에서 날짜 없는 행들이 목록 맨 위를 덮는다.
+        return [...rows].sort((a,b)=>{
+          const x=String(a[dateIdx]||""), y=String(b[dateIdx]||"");
+          if(!x&&!y) return 0;
+          if(!x) return 1;
+          if(!y) return -1;
+          return dir==="asc" ? (x<y?-1:x>y?1:0) : (x<y?1:x>y?-1:0);
+        });
       }
       if(key==="search"){   // 검색 유입 비중 — 데이터 없는 영상은 방향과 무관하게 항상 뒤로
         return [...rows].sort((a,b)=>{
@@ -2624,7 +2630,11 @@
     // 추이 영상 선택 드롭다운 채우기 (업로드 최신순)
     function populateVideoSelect(){
       const sel=document.getElementById("vd_select");
-      const list=[...VIDEOS].sort((a,b)=>(a[1]<b[1]?1:a[1]>b[1]?-1:0));
+      const list=[...VIDEOS].sort((a,b)=>{
+        const x=String(a[1]||""), y=String(b[1]||"");
+        if(!x&&!y) return 0; if(!x) return 1; if(!y) return -1;
+        return x<y?1:x>y?-1:0;
+      });
       sel.innerHTML='<option value="">영상을 선택하세요</option>'+
         list.map(v=>`<option value="${v[0]}|${v[1]||''}">${(v[3]||'').replace(/"/g,'')}</option>`).join("");
     }
