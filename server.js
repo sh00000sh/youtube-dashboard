@@ -196,6 +196,39 @@ async function fetchChannelInfo() {
 }
 
 // 영상 제목/길이/업로드일 보충 (Data API)
+// 최근 업로드 영상 ID (Data API · 업로드 재생목록)
+//  Analytics는 2~3일 지연이라 어제 올린 영상이 안 잡힌다.
+//  하지만 "올라갔다는 사실"은 Data API로 즉시 확인된다.
+//  → 지표는 지연되더라도 행과 업로드일은 바로 만들어 준다.
+//  오래된 영상까지 끌어오지 않도록 최근 RECENT_UPLOAD_DAYS일치만 본다.
+const RECENT_UPLOAD_DAYS = Number(process.env.RECENT_UPLOAD_DAYS || 21);
+async function fetchRecentUploadIds() {
+  if (!CHANNEL_ID || !YOUTUBE_API_KEY) return [];
+  const chRes = await fetch(
+    "https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=" +
+    CHANNEL_ID + "&key=" + YOUTUBE_API_KEY
+  );
+  const ch = await chRes.json();
+  if (ch.error) throw new Error(ch.error.message);
+  const uploads = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploads) return [];
+
+  const plRes = await fetch(
+    "https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50" +
+    "&playlistId=" + uploads + "&key=" + YOUTUBE_API_KEY
+  );
+  const pl = await plRes.json();
+  if (pl.error) throw new Error(pl.error.message);
+
+  const cutoff = Date.now() - RECENT_UPLOAD_DAYS * 24 * 3600 * 1000;
+  return (pl.items || [])
+    .filter((it) => {
+      const t = Date.parse(it.contentDetails?.videoPublishedAt || "");
+      return Number.isFinite(t) && t >= cutoff;
+    })
+    .map((it) => it.contentDetails.videoId);
+}
+
 async function fetchVideoMeta(ids) {
   const out = {};
   for (let i = 0; i < ids.length; i += 50) {
@@ -415,14 +448,31 @@ async function runSync() {
 
     step = "영상분석(Analytics)";
     const vids = await fetchVideoAnalytics(auth);
+
+    // Analytics 지연(2~3일) 때문에 갓 올린 영상이 목록에서 빠진다.
+    // 업로드 사실은 Data API로 바로 확인되므로 최근 업로드를 합집합으로 넣는다.
+    // 지표는 0으로 시작하지만 조회수·좋아요·댓글은 Data API 실제 누적값으로 채워진다.
+    step = "최근 업로드(Data API)";
+    let extra = [];
+    try {
+      const known = new Set(vids.map((v) => v.video_id));
+      const recent = await fetchRecentUploadIds();
+      extra = recent.filter((id) => !known.has(id)).map((id) => ({
+        video_id: id, views: 0, likes: 0, comments: 0,
+        shares: 0, subsGained: 0, avgViewPct: 0, avgViewDurSec: 0,
+      }));
+      if (extra.length) console.log("🆕 Analytics 미반영 신규 업로드:", extra.length, "편");
+    } catch (e) { console.log("recent-uploads err:", e.message); }
+    const allVids = vids.concat(extra);
+
     step = "영상정보(Data API)";
-    const meta = await fetchVideoMeta(vids.map((v) => v.video_id));
+    const meta = await fetchVideoMeta(allVids.map((v) => v.video_id));
     const uploadsPerDay = await fetchUploadsPerDay(Object.values(meta));
 
     step = "시트쓰기(일별)";
     const dCount = await writeDaily(sheets, daily, uploadsPerDay);
     step = "시트쓰기(영상별)";
-    const vCount = await writeVideos(sheets, vids, meta);
+    const vCount = await writeVideos(sheets, allVids, meta);
 
     return { dailyRows: dCount, videoRows: vCount };
   } catch (e) {
