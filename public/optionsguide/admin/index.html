@@ -231,6 +231,10 @@
                     <div style="overflow-x:auto"><table id="chTbl"></table></div>
                 </div>
                 <div class="panel">
+                    <h2>시간대별 클릭 <span class="muted">— 조회 기간 전체를 한국시간 0~23시로 합산 (0건인 시간대는 생략)</span></h2>
+                    <div style="overflow-x:auto"><table id="chHrTbl"></table></div>
+                </div>
+                <div class="panel">
                     <h2>월별 링크 비율 <span class="muted">— 한 달 동안 어느 자리에서 몇 % 들어왔는지</span></h2>
                     <div style="overflow-x:auto"><table id="chMoTbl"></table></div>
                 </div>
@@ -548,6 +552,12 @@
             renderCards("chCards", CH, d.totals||{}, d.uniques||{}, d.total);
             chartCh = stackedChart("chChart", chartCh, CH, d.byDate||{}, Object.keys(d.byDate||{}).sort());
             renderChDaily();
+            // 시간대별 — dailyTable을 재사용 (행 키 = "HH시")
+            var hrMap = {}; Object.keys(d.byHour||{}).forEach(function(h){ hrMap[h+"시"] = d.byHour[h]; });
+            dailyTable({
+                tblId:"chHrTbl", cats:CH, dates:Object.keys(hrMap).sort(), map:hrMap,
+                footLabel:"클릭 합계", footTot:d.totals||{}, footAll:d.total||0
+            });
             monthlyRatioTable("chMoTbl", d.monthly, CH, "clicks");
         }
 

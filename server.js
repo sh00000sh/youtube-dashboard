@@ -2343,7 +2343,7 @@ app.get("/api/channel-links", async (req, res) => {
 
     const totals = {}, vidSet = {}, anon = {};
     CH_KEYS.forEach((k) => { totals[k] = 0; vidSet[k] = new Set(); anon[k] = 0; });
-    const byDate = {}, byDateVid = {}, byDateAnon = {}, byMonth = {};
+    const byDate = {}, byDateVid = {}, byDateAnon = {}, byMonth = {}, byHour = {};
     const allVid = new Set(); let allAnon = 0, total = 0;
 
     for (const v of all) {
@@ -2354,6 +2354,12 @@ app.get("/api/channel-links", async (req, res) => {
       if (!CH_KEYS.includes(k)) continue;
       const m = d.slice(0, 7);
       total++; totals[k]++;
+      // 시간대(한국시간 0~23시). ts는 UTC ISO → +9h 후 시간만 취함
+      const tms = Date.parse(v.ts);
+      if (!isNaN(tms)) {
+        const hh = String(new Date(tms + 9 * 3600 * 1000).getUTCHours()).padStart(2, "0");
+        byHour[hh] = byHour[hh] || {}; byHour[hh][k] = (byHour[hh][k] || 0) + 1;
+      }
       if (v.vid) { vidSet[k].add(v.vid); allVid.add(v.vid); } else { anon[k]++; allAnon++; }
 
       byDate[d] = byDate[d] || {}; byDate[d][k] = (byDate[d][k] || 0) + 1;
@@ -2390,7 +2396,7 @@ app.get("/api/channel-links", async (req, res) => {
       ok: true, from, to,
       keys: CH_KEYS.map((k) => ({ k, name: CH_LINKS[k].name, url: CH_LINKS[k].url, video: CH_LINKS[k].video || "" })),
       totals, uniques, total, uTotal: allVid.size + allAnon,
-      byDate, byDateU, monthly,
+      byDate, byDateU, monthly, byHour,
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
