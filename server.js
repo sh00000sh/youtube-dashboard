@@ -2332,8 +2332,44 @@ app.get("/v/:key", (req, res) => {
     res.cookie("cvid", vid, { maxAge: 400 * 24 * 3600 * 1000, httpOnly: true, sameSite: "lax", path: "/" });
   }
   try { vlBuffer.push({ ts: new Date().toISOString(), key, video: link.video, vid, ref: String(req.get("referer") || "").slice(0, 120) }); } catch (_) {}
+
+  // 카톡 인앱 브라우저는 302를 따라가면 유튜브 앱이 아니라 인앱 웹뷰 안에서 열린다.
+  // → 카톡일 때만 앱으로 넘기는 페이지를 준다. 그 외(PC·일반 브라우저)는 그대로 302.
+  const ua = String(req.get("user-agent") || "");
+  if (/KAKAOTALK/i.test(ua)) return res.type("html").send(kakaoOpenPage(link));
   res.redirect(302, link.url);
 });
+
+// 카톡 인앱 → 유튜브 앱 열기
+//   Android: intent:// (카톡 웹뷰가 처리. 앱 없으면 browser_fallback_url로)
+//   iOS:     kakaotalk://web/openExternal 로 시스템에 넘기면 유니버설 링크가 유튜브 앱을 연다
+//   둘 다 안 되면 1.5초 뒤 유튜브 웹으로 이동 + 화면의 버튼
+function kakaoOpenPage(link) {
+  const web = link.url;                                    // https://youtu.be/ID
+  const watch = `https://www.youtube.com/watch?v=${link.video}`;
+  const intent = `intent://www.youtube.com/watch?v=${link.video}#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=${encodeURIComponent(watch)};end`;
+  const ext = `kakaotalk://web/openExternal?url=${encodeURIComponent(web)}`;
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${link.name}</title>
+<style>body{margin:0;font-family:-apple-system,"Noto Sans KR",sans-serif;background:#fff;color:#191f28;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:24px;box-sizing:border-box}
+.b{display:inline-block;margin-top:14px;padding:14px 22px;border-radius:12px;background:#ff0000;color:#fff;font-weight:700;text-decoration:none;font-size:16px}
+.s{margin-top:10px;font-size:13px;color:#8b95a1}</style></head><body><div>
+<div style="font-size:15px;font-weight:700">${link.name}</div>
+<div class="s">유튜브 앱으로 여는 중…</div>
+<a class="b" id="go" href="${web}">▶ 유튜브에서 열기</a>
+<div class="s">앱이 안 열리면 위 버튼을 눌러주세요</div></div>
+<script>
+(function(){
+  var ua=navigator.userAgent, and=/Android/i.test(ua), ios=/iPhone|iPad|iPod/i.test(ua);
+  var go=document.getElementById("go");
+  var target = and ? ${JSON.stringify(intent)} : ios ? ${JSON.stringify(ext)} : ${JSON.stringify(web)};
+  go.href = target;
+  var t=setTimeout(function(){ location.href=${JSON.stringify(web)}; }, 1500);
+  document.addEventListener("visibilitychange",function(){ if(document.hidden) clearTimeout(t); });
+  try{ location.href = target; }catch(e){}
+})();
+</script></body></html>`;
+}
 
 async function flushVideoLinks() {
   if (!vlBuffer.length || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
