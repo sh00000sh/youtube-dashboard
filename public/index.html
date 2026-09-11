@@ -744,7 +744,24 @@
       <button onclick="loadVideoLinks()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
     </h2>
     <div class="desc">알림톡·문자에 붙인 링크는 우리 서버를 한 번 거쳐 유튜브로 넘어가요. 그래서 <b>몇 명이 눌렀는지</b>가 여기 잡힙니다. 유튜브 스튜디오에는 '외부 → eugenefn.up.railway.app'로만 보여요. <span id="vlAt"></span></div>
-    <div id="vlList"><div class="empty">불러오는 중…</div></div>
+    <!-- 링크 만들기 (관리자만) -->
+    <div class="panel vl-admin" id="vlAdd" style="display:none;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">➕ 새 영상 링크 만들기 <span style="font-weight:400;color:var(--sub)">영상을 고르거나 URL을 붙여넣고 → 만들기. 만든 키는 바꿀 수 없어요(발송된 링크가 죽음)</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="vlAddSel" onchange="vlPickVideo()" style="min-width:240px;max-width:100%;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px"><option value="">영상 선택…</option></select>
+        <input id="vlAddId" placeholder="또는 영상 URL / ID" style="width:220px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <input id="vlAddName" placeholder="표시명 (예: Options Story 1편)" style="flex:1;min-width:200px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <input id="vlAddKey" placeholder="키(선택) 예: osl2" style="width:130px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <button onclick="vlCreate()" style="background:var(--blue);color:#fff;padding:9px 16px;border-radius:9px;font-size:13px">만들기</button>
+        <span id="vlAddSt" style="font-size:12.5px;color:var(--sub)"></span>
+      </div>
+    </div>
+    <!-- 영상별 요약 표 → 행 클릭 시 아래 상세 -->
+    <div class="panel" style="margin-bottom:16px">
+      <div style="overflow-x:auto"><table id="vlTbl"></table></div>
+      <div class="note">행을 누르면 아래에 그 영상의 상세가 나와요. 순클릭은 브라우저 쿠키 기준(같은 사람이 다른 기기로 누르면 따로 셉니다).</div>
+    </div>
+    <div id="vlDetail"></div>
     </div>
     </div><!-- /secWrap -->
 
@@ -2111,54 +2128,103 @@
     }
 
     // ===== 알림톡 링크 클릭 (/api/video-links) =====
-    const vlCharts={};   // key → Chart (재렌더 시 파괴)
+    // 영상별 요약 표 → 행 클릭 시 상세(카드·일별·시간대별). 관리자면 링크 만들기 폼 노출.
+    let vlData=null, vlSel=null, vlChart=null;
     async function loadVideoLinks(){
       const p=document.getElementById("vlPeriod").value;
       const q=new URLSearchParams();
       if(p!=="all"){ const d=new Date(); d.setDate(d.getDate()-(Number(p)-1)); q.set("from",d.toISOString().slice(0,10)); }
-      const box=document.getElementById("vlList");
+      document.getElementById("vlAdd").style.display = ADMIN ? "" : "none";
+      if(ADMIN) vlFillSelect();
       try{
         const j=await (await fetch("/api/video-links?"+q)).json();
         if(!j.ok) throw new Error(j.error||"실패");
+        vlData=j;
         document.getElementById("vlAt").textContent="· "+new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})+" 기준";
-        if(!j.links.length){ box.innerHTML='<div class="empty">등록된 영상 링크가 없어요. (Railway 환경변수 VIDEO_LINKS)</div>'; return; }
-        Object.values(vlCharts).forEach(c=>c.destroy());
-        box.innerHTML=j.links.map(L=>{
-          const full=location.origin+L.link;
-          const hrs=Object.keys(L.byHour).sort();
-          const hrRows=hrs.length?hrs.map(h=>`<tr><td>${h}시</td><td class="strong">${fmt(L.byHour[h])}</td></tr>`).join(""):`<tr><td colspan="2" class="empty">이 기간 클릭이 없어요.</td></tr>`;
-          return `<div class="panel" style="margin-bottom:16px">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-              <b style="font-size:15px">${L.name}</b>
-              <a href="${L.url}" target="_blank" style="font-size:12px;color:var(--sub)">youtu.be/${L.video} ↗</a>
-              <input readonly value="${full}" onclick="this.select()" style="flex:1;min-width:260px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--text);font-size:13px">
-              <button onclick="navigator.clipboard.writeText('${full}').then(()=>{this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)})" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:9px;font-size:13px;cursor:pointer">복사</button>
-            </div>
-            <div class="cards">
-              <div class="card"><div class="label">총 클릭 <span style="font-size:10px">조회 기간</span></div><div class="value">${fmt(L.total)}</div></div>
-              <div class="card"><div class="label">순클릭 <span style="font-size:10px">같은 사람 중복 제거</span></div><div class="value">${fmt(L.unique)}</div></div>
-              <div class="card"><div class="label">오늘</div><div class="value">${fmt(L.today)}</div></div>
-              <div class="card"><div class="label">어제</div><div class="value">${fmt(L.yday)}</div></div>
-            </div>
-            <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:14px" class="vl-grid">
-              <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 클릭</div><div style="position:relative;height:220px"><canvas id="vlChart_${L.k}"></canvas></div></div>
-              <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">시간대별 클릭 <span style="font-weight:400;color:var(--sub)">한국시간 · 기간 합산</span></div>
-                <div style="max-height:220px;overflow:auto"><table><thead><tr><th>시간</th><th>클릭</th></tr></thead><tbody>${hrRows}</tbody></table></div></div>
-            </div>
-            <div class="note">첫 클릭 ${L.first||"-"} · 마지막 클릭 ${L.last||"-"} · 순클릭은 브라우저 쿠키 기준이라 같은 사람이 다른 기기로 누르면 따로 셉니다.</div>
-          </div>`;
-        }).join("");
-        // 일별 막대 (기간 내 빈 날짜는 0으로 채움)
-        j.links.forEach(L=>{
-          const days=Object.keys(L.byDate).sort();
-          if(!days.length) return;
-          const labels=[]; const s=new Date(days[0]), e=new Date(Math.max(new Date(days[days.length-1]), new Date(j.today)));
-          for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) labels.push(d.toISOString().slice(0,10));
-          vlCharts[L.k]=new Chart(document.getElementById("vlChart_"+L.k),{type:"bar",
-            data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"클릭",data:labels.map(x=>L.byDate[x]||0),backgroundColor:getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(),borderRadius:4}]},
-            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
-        });
-      }catch(e){ box.innerHTML=`<div class="empty">불러오기 실패: ${e.message}</div>`; }
+        if(!j.links.some(L=>L.k===vlSel)) vlSel = j.links.length ? j.links[0].k : null;
+        vlRenderTable(); vlRenderDetail();
+      }catch(e){ document.getElementById("vlTbl").innerHTML=`<tr><td class="empty">불러오기 실패: ${e.message}</td></tr>`; }
+    }
+    function vlRenderTable(){
+      const L=vlData.links;
+      const head=`<thead><tr><th style="text-align:left">영상</th><th>링크</th><th>총 클릭</th><th>순클릭</th><th>오늘</th><th>어제</th><th>첫 클릭</th><th>마지막</th><th>등록</th></tr></thead>`;
+      const body=L.length?L.map(x=>`<tr onclick="vlSel='${x.k}';vlRenderTable();vlRenderDetail()" style="cursor:pointer;${x.k===vlSel?'background:var(--blue-soft)':''}">
+          <td style="text-align:left"><b>${x.name}</b><div style="font-size:11px;color:var(--sub)">youtu.be/${x.video}</div></td>
+          <td><code style="font-size:12px">/v/${x.k}</code> <button onclick="event.stopPropagation();vlCopy(this,'${location.origin+x.link}')" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:4px 9px;border-radius:7px;font-size:11px;cursor:pointer">복사</button></td>
+          <td class="strong">${fmt(x.total)}</td><td>${fmt(x.unique)}</td><td>${fmt(x.today)}</td><td class="muted">${fmt(x.yday)}</td>
+          <td class="muted">${x.first||"-"}</td><td class="muted">${x.last||"-"}</td><td class="muted">${x.created||"env"}</td></tr>`).join("")
+        :`<tr><td colspan="9" class="empty">등록된 영상 링크가 없어요.${ADMIN?" 위에서 만들어 보세요.":" (관리자 로그인 후 추가)"}</td></tr>`;
+      const tot=L.reduce((a,x)=>a+x.total,0), tu=L.reduce((a,x)=>a+x.unique,0), tt=L.reduce((a,x)=>a+x.today,0), ty=L.reduce((a,x)=>a+x.yday,0);
+      const foot=L.length>1?`<tfoot><tr><td style="text-align:left"><b>합계</b></td><td></td><td class="strong">${fmt(tot)}</td><td>${fmt(tu)}</td><td>${fmt(tt)}</td><td class="muted">${fmt(ty)}</td><td colspan="3"></td></tr></tfoot>`:"";
+      document.getElementById("vlTbl").innerHTML=head+"<tbody>"+body+"</tbody>"+foot;
+    }
+    function vlRenderDetail(){
+      const box=document.getElementById("vlDetail");
+      const L=vlData.links.find(x=>x.k===vlSel);
+      if(vlChart){ vlChart.destroy(); vlChart=null; }
+      if(!L){ box.innerHTML=""; return; }
+      const full=location.origin+L.link;
+      const hrs=Object.keys(L.byHour).sort();
+      const hrRows=hrs.length?hrs.map(h=>`<tr><td>${h}시</td><td class="strong">${fmt(L.byHour[h])}</td></tr>`).join(""):`<tr><td colspan="2" class="empty">이 기간 클릭이 없어요.</td></tr>`;
+      box.innerHTML=`<div class="panel">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+          <b style="font-size:15px">${L.name}</b>
+          <a href="${L.url}" target="_blank" style="font-size:12px;color:var(--sub)">youtu.be/${L.video} ↗</a>
+          <input readonly value="${full}" onclick="this.select()" style="flex:1;min-width:260px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--text);font-size:13px">
+          <button onclick="vlCopy(this,'${full}')" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:9px;font-size:13px;cursor:pointer">복사</button>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="label">총 클릭 <span style="font-size:10px">조회 기간</span></div><div class="value">${fmt(L.total)}</div></div>
+          <div class="card"><div class="label">순클릭 <span style="font-size:10px">중복 제거</span></div><div class="value">${fmt(L.unique)}</div></div>
+          <div class="card"><div class="label">오늘</div><div class="value">${fmt(L.today)}</div></div>
+          <div class="card"><div class="label">어제</div><div class="value">${fmt(L.yday)}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:14px" class="vl-grid">
+          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 클릭</div><div style="position:relative;height:220px"><canvas id="vlChart"></canvas></div></div>
+          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">시간대별 클릭 <span style="font-weight:400;color:var(--sub)">한국시간 · 기간 합산</span></div>
+            <div style="max-height:220px;overflow:auto"><table><thead><tr><th>시간</th><th>클릭</th></tr></thead><tbody>${hrRows}</tbody></table></div></div>
+        </div>
+        <div class="note">첫 클릭 ${L.first||"-"} · 마지막 클릭 ${L.last||"-"}</div>
+      </div>`;
+      const days=Object.keys(L.byDate).sort();
+      if(!days.length) return;
+      const labels=[]; const s=new Date(days[0]), e=new Date(Math.max(new Date(days[days.length-1]), new Date(vlData.today)));
+      for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) labels.push(d.toISOString().slice(0,10));
+      vlChart=new Chart(document.getElementById("vlChart"),{type:"bar",
+        data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"클릭",data:labels.map(x=>L.byDate[x]||0),backgroundColor:getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(),borderRadius:4}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+    }
+    function vlCopy(btn,url){
+      const ok=()=>{ const t=btn.textContent; btn.textContent="복사됨"; setTimeout(()=>btn.textContent=t,1200); };
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok).catch(()=>prompt("복사:",url));
+      else prompt("복사:",url);
+    }
+    // 링크 만들기 — 영상 select는 대시보드 영상 목록(VIDEOS: [id, 업로드일, ?, 제목])에서
+    function vlFillSelect(){
+      const sel=document.getElementById("vlAddSel"); if(sel.options.length>1) return;
+      const list=(VIDEOS||[]).slice().sort((a,b)=>(a[1]||"")<(b[1]||"")?1:-1);
+      sel.innerHTML='<option value="">영상 선택…</option>'+list.map(v=>`<option value="${v[0]}">${(v[1]||"").slice(0,10)} · ${(v[3]||"").replace(/"/g,'').slice(0,50)}</option>`).join("");
+    }
+    function vlPickVideo(){
+      const id=document.getElementById("vlAddSel").value; if(!id) return;
+      const v=VIDEOS.find(x=>x[0]===id);
+      document.getElementById("vlAddId").value=id;
+      if(v&&!document.getElementById("vlAddName").value) document.getElementById("vlAddName").value=(v[3]||"").split("|")[0].trim().slice(0,40);
+    }
+    async function vlCreate(){
+      const g=(id)=>document.getElementById(id).value.trim();
+      const st=document.getElementById("vlAddSt");
+      if(!g("vlAddId")){ st.textContent="❌ 영상을 고르거나 URL을 넣어주세요."; return; }
+      st.textContent="만드는 중…";
+      try{
+        const r=await fetch("/api/video-links",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({pw:ADMIN_PW,videoId:g("vlAddId"),name:g("vlAddName"),key:g("vlAddKey")})}).then(r=>r.json());
+        if(!r.ok){ st.textContent="❌ "+(r.error||"실패"); return; }
+        st.textContent="✅ 만들어짐: "+location.origin+"/v/"+r.link.k;
+        ["vlAddId","vlAddName","vlAddKey"].forEach(id=>document.getElementById(id).value="");
+        document.getElementById("vlAddSel").value="";
+        vlSel=r.link.k; await loadVideoLinks();
+      }catch(e){ st.textContent="❌ "+e.message; }
     }
 
     // ===== 인사이트 탭 =====
@@ -2445,6 +2511,7 @@
       const p=document.getElementById("adminPanel");
       if(p) p.style.display = ADMIN ? "" : "none";
       setupTitleEdit();   // 제목 편집 가능/불가 토글
+      const va=document.getElementById("vlAdd"); if(va){ va.style.display = ADMIN ? "" : "none"; if(ADMIN) vlFillSelect(); }   // 알림톡 링크 만들기 폼
     }
     function initAdmin(){
       // 새로고침하면 항상 로그아웃 상태에서 시작 (관리자 모드 유지 안 함)

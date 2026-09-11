@@ -2311,15 +2311,58 @@ app.get("/y/:key", (req, res) => {
 //   - 배포한 키는 바꾸지 말 것 — 이미 발송된 알림톡의 링크가 죽는다
 // ===================================================================
 const VL_TAB = process.env.VIDEO_LINK_TAB || "영상링크로그";
+const VL_CFG_TAB = process.env.VIDEO_LINK_CFG_TAB || "영상링크";   // 링크 목록: 키 · 영상ID · 표시명 · 등록일
 const VL_DEFAULT = "osl1=jdV7XdTCytA=Options Story 1편";
+// 링크 목록 = env(기본) + 시트 '영상링크' 탭(대시보드에서 추가한 것). 시트가 우선.
 const VL_LINKS = {};
-for (const item of String(process.env.VIDEO_LINKS || VL_DEFAULT).split(";")) {
-  const [k, vidId, name] = item.split("=").map((x) => (x || "").trim());
-  if (!k || !vidId || !/^[a-z0-9_-]+$/.test(k)) continue;
-  VL_LINKS[k] = { name: name || vidId, video: vidId, url: `https://youtu.be/${vidId}` };
+function vlAdd(k, vidId, name, created) {
+  k = String(k || "").toLowerCase().trim(); vidId = String(vidId || "").trim();
+  if (!k || !vidId || !/^[a-z0-9_-]{2,30}$/.test(k) || !/^[A-Za-z0-9_-]{11}$/.test(vidId)) return false;
+  VL_LINKS[k] = { k, name: (name || "").trim() || vidId, video: vidId, url: `https://youtu.be/${vidId}`, created: created || "" };
+  return true;
 }
-const VL_KEYS = Object.keys(VL_LINKS);
+for (const item of String(process.env.VIDEO_LINKS || VL_DEFAULT).split(";")) {
+  const [k, vidId, name] = item.split("=");
+  vlAdd(k, vidId, name, "");
+}
+async function loadVideoLinkCfg() {
+  if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
+  try {
+    const sheets = getSheetsClient();
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VL_CFG_TAB}!A2:D` });
+    for (const row of r.data.values || []) vlAdd(row[0], row[1], row[2], row[3] || "");
+  } catch (_) { /* 탭 없음 = env만 사용 */ }
+}
+loadVideoLinkCfg().catch(() => {});
+const vlKeys = () => Object.keys(VL_LINKS).sort((a, b) => (VL_LINKS[b].created || "") < (VL_LINKS[a].created || "") ? -1 : 1);   // 최근 등록이 위
 let vlBuffer = [];   // {ts, key, video, vid, ref}
+
+// 링크 추가 (관리자) — 대시보드 '알림톡 링크' 탭에서. 키를 비우면 자동 생성
+app.post("/api/video-links", async (req, res) => {
+  try {
+    const { pw, videoId, name } = req.body || {};
+    let key = String((req.body || {}).key || "").toLowerCase().trim();
+    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    const vidId = String(videoId || "").trim().match(/[A-Za-z0-9_-]{11}/);   // URL을 붙여넣어도 ID만 뽑음
+    if (!vidId) return res.status(400).json({ ok: false, error: "영상 ID(11자)를 확인하세요." });
+    if (key && !/^[a-z0-9_-]{2,30}$/.test(key)) return res.status(400).json({ ok: false, error: "키는 소문자·숫자·-_ 2~30자만 가능합니다." });
+    if (key && VL_LINKS[key]) return res.status(400).json({ ok: false, error: `'${key}'는 이미 쓰는 키입니다.` });
+    if (!key) { do { key = "v" + Math.random().toString(36).slice(2, 7); } while (VL_LINKS[key]); }
+    const created = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const nm = String(name || "").trim() || vidId[0];
+    // 시트에 먼저 쓰고(재시작해도 남게), 성공하면 메모리에 반영
+    if (GOOGLE_SERVICE_ACCOUNT && SHEET_ID) {
+      const sheets = getSheetsClient();
+      await ensureTab(sheets, VL_CFG_TAB, ["링크키", "영상ID", "표시명", "등록일"]);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID, range: `${VL_CFG_TAB}!A:D`, valueInputOption: "RAW",
+        requestBody: { values: [[key, vidId[0], nm, created]] },
+      });
+    }
+    if (!vlAdd(key, vidId[0], nm, created)) return res.status(400).json({ ok: false, error: "값이 올바르지 않습니다." });
+    res.json({ ok: true, link: VL_LINKS[key] });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 app.get("/v/:key", (req, res) => {
   const key = String(req.params.key || "").toLowerCase();
@@ -2406,7 +2449,8 @@ app.get("/api/video-links", async (req, res) => {
     const yday = kst(new Date(Date.now() - 86400000).toISOString()).d;
 
     const links = {};
-    VL_KEYS.forEach((k) => { links[k] = { k, name: VL_LINKS[k].name, video: VL_LINKS[k].video, url: VL_LINKS[k].url, link: `/v/${k}`,
+    const keys = vlKeys();
+    keys.forEach((k) => { links[k] = { k, name: VL_LINKS[k].name, video: VL_LINKS[k].video, url: VL_LINKS[k].url, link: `/v/${k}`, created: VL_LINKS[k].created || "",
       total: 0, unique: 0, today: 0, yday: 0, first: "", last: "", byDate: {}, byHour: {}, _v: new Set(), _anon: 0 }; });
     for (const v of all) {
       const L = links[v.key]; if (!L) continue;
@@ -2421,7 +2465,7 @@ app.get("/api/video-links", async (req, res) => {
       if (!L.first || t.d < L.first) L.first = t.d;
       if (!L.last || t.d > L.last) L.last = t.d;
     }
-    const out = VL_KEYS.map((k) => { const L = links[k]; L.unique = L._v.size + L._anon; delete L._v; delete L._anon; return L; });
+    const out = keys.map((k) => { const L = links[k]; L.unique = L._v.size + L._anon; delete L._v; delete L._anon; return L; });
     res.json({ ok: true, from, to, today, links: out });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
