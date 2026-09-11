@@ -2258,7 +2258,21 @@ const CH_LINKS = {
   hubmy:    { name: process.env.CH_NAME_HUBMY    || "옵션허브 · 마이페이지",     url: process.env.CH_URL_HUBMY    || CH_YT_URL },
   hubedu:   { name: process.env.CH_NAME_HUBEDU   || "옵션허브 · 사전교육",       url: process.env.CH_URL_HUBEDU   || CH_YT_URL },
 };
+// 영상별 링크 — 특정 영상으로 보내는 유입도 같은 방식으로 센다(/y/키 → youtu.be/영상ID).
+//   env CH_VIDEO_LINKS="키=영상ID=표시명;키2=영상ID2=표시명2" 로 재배포 없이 추가/변경.
+//   키는 소문자·영숫자만(경로에서 lowercase 처리됨). 영상ID는 대소문자 구분되니 키로 쓰지 말 것.
+const CH_VIDEO_DEFAULT = "osl1=jdV7XdTCytA=영상 · Options Story 1편";
+for (const item of String(process.env.CH_VIDEO_LINKS || CH_VIDEO_DEFAULT).split(";")) {
+  const [k, vidId, name] = item.split("=").map((x) => (x || "").trim());
+  if (!k || !vidId || !/^[a-z0-9_-]+$/.test(k) || CH_LINKS[k]) continue;
+  CH_LINKS[k] = { name: name || `영상 · ${vidId}`, url: `https://youtu.be/${vidId}`, video: vidId };
+}
 const CH_KEYS = Object.keys(CH_LINKS);
+
+// 링크 목록(키·이름·목적지)은 비밀이 아니다(링크 자체가 공개) → 관리자 화면이 비번 없이 목록을 그릴 수 있게 공개
+app.get("/api/channel-links/keys", (req, res) => {
+  res.json({ ok: true, keys: CH_KEYS.map((k) => ({ k, name: CH_LINKS[k].name, url: CH_LINKS[k].url, video: CH_LINKS[k].video || "" })) });
+});
 
 let chBuffer = [];   // {ts, key, vid, ref}
 
@@ -2374,7 +2388,7 @@ app.get("/api/channel-links", async (req, res) => {
 
     res.json({
       ok: true, from, to,
-      keys: CH_KEYS.map((k) => ({ k, name: CH_LINKS[k].name, url: CH_LINKS[k].url })),
+      keys: CH_KEYS.map((k) => ({ k, name: CH_LINKS[k].name, url: CH_LINKS[k].url, video: CH_LINKS[k].video || "" })),
       totals, uniques, total, uTotal: allVid.size + allAnon,
       byDate, byDateU, monthly,
     });

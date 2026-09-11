@@ -328,12 +328,22 @@
             {k:"etc",     name:"기타",        c:"#9aa0ab"},
         ];
         // 외부 배치용 채널 링크 (서버 /y/:key 리다이렉트)
+        // 목록은 서버(/api/channel-links/keys)가 진짜. 아래는 서버 응답 전 임시값.
+        var CH_COLORS = {kakaopay:"#f5c400", edu:"#7c3aed", hubmy:"#0ea5e9", hubedu:"#22a06b"};
+        var CH_PALETTE = ["#ef4444","#f97316","#14b8a6","#6366f1","#ec4899","#84cc16","#a855f7","#0891b2"];
         var CH = [
             {k:"kakaopay", name:"카카오페이 · 마이페이지", c:"#f5c400"},
             {k:"edu",      name:"카카오페이 · 사전교육",   c:"#7c3aed"},
             {k:"hubmy",    name:"옵션허브 · 마이페이지",   c:"#0ea5e9"},
             {k:"hubedu",   name:"옵션허브 · 사전교육",     c:"#22a06b"},
         ];
+        function setChKeys(keys){
+            var extra = 0;
+            CH = keys.map(function(x){
+                var c = CH_COLORS[x.k] || CH_PALETTE[(extra++) % CH_PALETTE.length];
+                return {k:x.k, name:x.name, c:c, url:x.url, video:x.video||""};
+            });
+        }
         var pad = function(n){ return String(n).padStart(2,"0"); };
         var ymd = function(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
         var fmt = function(n){ return (n||0).toLocaleString("ko-KR"); };
@@ -368,11 +378,12 @@
         })();
 
         // 외부 배치용 채널 링크 생성 + 복사
-        (function buildChLinks(){
+        function buildChLinks(){
             var base = location.origin + "/y/";
             document.getElementById("chLinkList").innerHTML = CH.map(function(s){
                 var url = base + s.k;
-                return '<div class="linkrow"><span class="lname"><span class="dot" style="background:'+s.c+'"></span>'+s.name+'</span>'+
+                var dst = s.video ? '<span class="muted" style="margin-left:6px;font-size:11px">→ youtu.be/'+s.video+'</span>' : '';
+                return '<div class="linkrow"><span class="lname"><span class="dot" style="background:'+s.c+'"></span>'+s.name+dst+'</span>'+
                     '<input class="lurl" readonly value="'+url+'" onclick="this.select()">'+
                     '<button class="copy" type="button" data-url="'+url+'">복사</button></div>';
             }).join("");
@@ -384,7 +395,12 @@
                     else fb();
                 };
             });
-        })();
+        }
+        buildChLinks();
+        // 서버가 아는 키 목록으로 교체 (영상별 링크 등 env로 추가된 키 반영)
+        fetch("/api/channel-links/keys").then(function(r){ return r.json(); })
+            .then(function(j){ if(j && j.ok && j.keys && j.keys.length){ setChKeys(j.keys); buildChLinks(); if(lastCh) renderCh(lastCh); } })
+            .catch(function(){});
 
         document.querySelectorAll(".quick button").forEach(function(b){
             b.onclick = function(){ setRange(b.dataset.r); load(); };
