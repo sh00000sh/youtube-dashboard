@@ -2429,6 +2429,30 @@ async function flushVideoLinks() {
 }
 setInterval(() => flushVideoLinks().catch(() => {}), 30 * 1000);
 
+// 클릭 기록 초기화 (관리자) — key 지정 시 그 영상만, 없으면 전체. 테스트 클릭 지울 때 씀
+app.post("/api/video-links/reset", async (req, res) => {
+  try {
+    const { pw } = req.body || {};
+    const key = String((req.body || {}).key || "").toLowerCase().trim();
+    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    const before = vlBuffer.length;
+    vlBuffer = key ? vlBuffer.filter((v) => v.key !== key) : [];
+    let removed = before - vlBuffer.length;
+    if (GOOGLE_SERVICE_ACCOUNT && SHEET_ID) {
+      const sheets = getSheetsClient();
+      let rows = [];
+      try { rows = (await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VL_TAB}!A2:E` })).data.values || []; } catch (_) {}
+      const keep = key ? rows.filter((r) => String(r[1] || "").toLowerCase() !== key) : [];
+      removed += rows.length - keep.length;
+      if (rows.length) {
+        await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${VL_TAB}!A2:E` });
+        if (keep.length) await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${VL_TAB}!A2`, valueInputOption: "RAW", requestBody: { values: keep } });
+      }
+    }
+    res.json({ ok: true, removed });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // 메인 대시보드용 집계 (공개 — 대시보드 다른 읽기 API와 동일)
 //   링크별: 총 클릭 · 순클릭 · 오늘/어제 클릭 · 일별 · 시간대별(KST)
 app.get("/api/video-links", async (req, res) => {
