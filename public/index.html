@@ -231,6 +231,7 @@
     /* ===== 📱 모바일 반응형 (태블릿~폰) ===== */
     @media (max-width:760px){
       body{padding:14px;overflow-x:hidden;}   /* 페이지 전체가 옆으로 새는 것 방지 */
+      .vl-grid{grid-template-columns:1fr !important;}   /* 알림톡 링크: 그래프·시간대표 세로 배치 */
       /* ① 타이틀 한 줄 고정 */
       h1{font-size:16px;white-space:nowrap;}
       /* ② 관리자·다크 버튼 더 작게 (인라인 스타일 덮어쓰기) */
@@ -730,6 +731,20 @@
       </div>
       <div class="note">※ 노출수·CTR·시간단위(24시간) 추이는 유튜브 API로 제공되지 않습니다(스튜디오 전용). 24시간은 업로드 후 로봇이 쌓은 스냅샷이 있을 때만 표시됩니다.</div>
     </div>
+    </div>
+
+    <div class="sec" id="sec-vlink" style="display:none">
+    <!-- 알림톡 등으로 발송한 영상 링크(/v/키)의 클릭 집계. 데이터: /api/video-links -->
+    <h2>💬 알림톡 링크 클릭 <span class="kpi-badge">발송 링크(/v/키)를 누른 사람 · 한국시간</span>
+      <select id="vlPeriod" onchange="loadVideoLinks()" style="margin-left:auto">
+        <option value="7">최근 7일</option>
+        <option value="30" selected>최근 30일</option>
+        <option value="all">전체</option>
+      </select>
+      <button onclick="loadVideoLinks()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
+    </h2>
+    <div class="desc">알림톡·문자에 붙인 링크는 우리 서버를 한 번 거쳐 유튜브로 넘어가요. 그래서 <b>몇 명이 눌렀는지</b>가 여기 잡힙니다. 유튜브 스튜디오에는 '외부 → eugenefn.up.railway.app'로만 보여요. <span id="vlAt"></span></div>
+    <div id="vlList"><div class="empty">불러오는 중…</div></div>
     </div>
     </div><!-- /secWrap -->
 
@@ -2056,6 +2071,7 @@
       {cat:"explore", label:"🔎 탐색", subs:[
         {id:"sec-vtable",  label:"영상 상세",       secs:["sec-vtable"],  draw:()=>renderVideos()},
         {id:"sec-vd",      label:"게시 후 성과",    secs:["sec-vd"],      draw:()=>{ if(vd.id)drawVd(); }},
+        {id:"sec-vlink",   label:"알림톡 링크",     secs:["sec-vlink"],   draw:()=>loadVideoLinks()},
         {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
         {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
         {id:"sec-dchart",  label:"일일 그래프",     secs:["sec-dchart"],  draw:()=>drawChart()},
@@ -2092,6 +2108,57 @@
       ALL_SECS.forEach(secId=>{ const el=document.getElementById(secId); if(el) el.style.display=(sub.secs.includes(secId)?"":"none"); });
       document.getElementById("navSub").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
       if(sub.draw) sub.draw();
+    }
+
+    // ===== 알림톡 링크 클릭 (/api/video-links) =====
+    const vlCharts={};   // key → Chart (재렌더 시 파괴)
+    async function loadVideoLinks(){
+      const p=document.getElementById("vlPeriod").value;
+      const q=new URLSearchParams();
+      if(p!=="all"){ const d=new Date(); d.setDate(d.getDate()-(Number(p)-1)); q.set("from",d.toISOString().slice(0,10)); }
+      const box=document.getElementById("vlList");
+      try{
+        const j=await (await fetch("/api/video-links?"+q)).json();
+        if(!j.ok) throw new Error(j.error||"실패");
+        document.getElementById("vlAt").textContent="· "+new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})+" 기준";
+        if(!j.links.length){ box.innerHTML='<div class="empty">등록된 영상 링크가 없어요. (Railway 환경변수 VIDEO_LINKS)</div>'; return; }
+        Object.values(vlCharts).forEach(c=>c.destroy());
+        box.innerHTML=j.links.map(L=>{
+          const full=location.origin+L.link;
+          const hrs=Object.keys(L.byHour).sort();
+          const hrRows=hrs.length?hrs.map(h=>`<tr><td>${h}시</td><td class="strong">${fmt(L.byHour[h])}</td></tr>`).join(""):`<tr><td colspan="2" class="empty">이 기간 클릭이 없어요.</td></tr>`;
+          return `<div class="panel" style="margin-bottom:16px">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+              <b style="font-size:15px">${L.name}</b>
+              <a href="${L.url}" target="_blank" style="font-size:12px;color:var(--sub)">youtu.be/${L.video} ↗</a>
+              <input readonly value="${full}" onclick="this.select()" style="flex:1;min-width:260px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--text);font-size:13px">
+              <button onclick="navigator.clipboard.writeText('${full}').then(()=>{this.textContent='복사됨';setTimeout(()=>this.textContent='복사',1200)})" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:9px;font-size:13px;cursor:pointer">복사</button>
+            </div>
+            <div class="cards">
+              <div class="card"><div class="label">총 클릭 <span style="font-size:10px">조회 기간</span></div><div class="value">${fmt(L.total)}</div></div>
+              <div class="card"><div class="label">순클릭 <span style="font-size:10px">같은 사람 중복 제거</span></div><div class="value">${fmt(L.unique)}</div></div>
+              <div class="card"><div class="label">오늘</div><div class="value">${fmt(L.today)}</div></div>
+              <div class="card"><div class="label">어제</div><div class="value">${fmt(L.yday)}</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:14px" class="vl-grid">
+              <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 클릭</div><div style="position:relative;height:220px"><canvas id="vlChart_${L.k}"></canvas></div></div>
+              <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">시간대별 클릭 <span style="font-weight:400;color:var(--sub)">한국시간 · 기간 합산</span></div>
+                <div style="max-height:220px;overflow:auto"><table><thead><tr><th>시간</th><th>클릭</th></tr></thead><tbody>${hrRows}</tbody></table></div></div>
+            </div>
+            <div class="note">첫 클릭 ${L.first||"-"} · 마지막 클릭 ${L.last||"-"} · 순클릭은 브라우저 쿠키 기준이라 같은 사람이 다른 기기로 누르면 따로 셉니다.</div>
+          </div>`;
+        }).join("");
+        // 일별 막대 (기간 내 빈 날짜는 0으로 채움)
+        j.links.forEach(L=>{
+          const days=Object.keys(L.byDate).sort();
+          if(!days.length) return;
+          const labels=[]; const s=new Date(days[0]), e=new Date(Math.max(new Date(days[days.length-1]), new Date(j.today)));
+          for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) labels.push(d.toISOString().slice(0,10));
+          vlCharts[L.k]=new Chart(document.getElementById("vlChart_"+L.k),{type:"bar",
+            data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"클릭",data:labels.map(x=>L.byDate[x]||0),backgroundColor:getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(),borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+        });
+      }catch(e){ box.innerHTML=`<div class="empty">불러오기 실패: ${e.message}</div>`; }
     }
 
     // ===== 인사이트 탭 =====

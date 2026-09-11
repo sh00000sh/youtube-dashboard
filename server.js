@@ -2258,15 +2258,6 @@ const CH_LINKS = {
   hubmy:    { name: process.env.CH_NAME_HUBMY    || "옵션허브 · 마이페이지",     url: process.env.CH_URL_HUBMY    || CH_YT_URL },
   hubedu:   { name: process.env.CH_NAME_HUBEDU   || "옵션허브 · 사전교육",       url: process.env.CH_URL_HUBEDU   || CH_YT_URL },
 };
-// 영상별 링크 — 특정 영상으로 보내는 유입도 같은 방식으로 센다(/y/키 → youtu.be/영상ID).
-//   env CH_VIDEO_LINKS="키=영상ID=표시명;키2=영상ID2=표시명2" 로 재배포 없이 추가/변경.
-//   키는 소문자·영숫자만(경로에서 lowercase 처리됨). 영상ID는 대소문자 구분되니 키로 쓰지 말 것.
-const CH_VIDEO_DEFAULT = "osl1=jdV7XdTCytA=영상 · Options Story 1편";
-for (const item of String(process.env.CH_VIDEO_LINKS || CH_VIDEO_DEFAULT).split(";")) {
-  const [k, vidId, name] = item.split("=").map((x) => (x || "").trim());
-  if (!k || !vidId || !/^[a-z0-9_-]+$/.test(k) || CH_LINKS[k]) continue;
-  CH_LINKS[k] = { name: name || `영상 · ${vidId}`, url: `https://youtu.be/${vidId}`, video: vidId };
-}
 const CH_KEYS = Object.keys(CH_LINKS);
 
 // 링크 목록(키·이름·목적지)은 비밀이 아니다(링크 자체가 공개) → 관리자 화면이 비번 없이 목록을 그릴 수 있게 공개
@@ -2308,6 +2299,95 @@ app.get("/y/:key", (req, res) => {
   } catch (_) {}
   res.set("Cache-Control", "no-store");
   res.redirect(302, link.url);
+});
+
+// ===================================================================
+//  영상 링크 추적 (알림톡 등 발송용) — 특정 영상으로 보내는 링크의 클릭을 센다
+//   - GET /v/:key → 클릭 1건 기록 후 youtu.be/영상ID 로 302
+//   - 채널 링크(/y/, 외부 배치)와는 목적이 다르다(영상 자체 성과) → 시트 탭·집계·화면 모두 분리
+//     · 시트: 영상링크로그 · 화면: 메인 대시보드(/) 탐색 → 알림톡 링크
+//   - env VIDEO_LINKS="키=영상ID=표시명;키2=영상ID2=표시명2" 로 재배포 없이 추가/변경
+//     키는 소문자·영숫자만(경로에서 lowercase 처리). 영상ID는 대소문자 구분되니 키로 쓰지 말 것.
+//   - 배포한 키는 바꾸지 말 것 — 이미 발송된 알림톡의 링크가 죽는다
+// ===================================================================
+const VL_TAB = process.env.VIDEO_LINK_TAB || "영상링크로그";
+const VL_DEFAULT = "osl1=jdV7XdTCytA=Options Story 1편";
+const VL_LINKS = {};
+for (const item of String(process.env.VIDEO_LINKS || VL_DEFAULT).split(";")) {
+  const [k, vidId, name] = item.split("=").map((x) => (x || "").trim());
+  if (!k || !vidId || !/^[a-z0-9_-]+$/.test(k)) continue;
+  VL_LINKS[k] = { name: name || vidId, video: vidId, url: `https://youtu.be/${vidId}` };
+}
+const VL_KEYS = Object.keys(VL_LINKS);
+let vlBuffer = [];   // {ts, key, video, vid, ref}
+
+app.get("/v/:key", (req, res) => {
+  const key = String(req.params.key || "").toLowerCase();
+  const link = VL_LINKS[key];
+  res.set("Cache-Control", "no-store");
+  if (!link) return res.redirect(302, CH_YT_URL);   // 모르는 키 → 채널 홈 (막다른 길 금지)
+  let vid = readCookie(req, "cvid");
+  if (!vid) {
+    vid = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    res.cookie("cvid", vid, { maxAge: 400 * 24 * 3600 * 1000, httpOnly: true, sameSite: "lax", path: "/" });
+  }
+  try { vlBuffer.push({ ts: new Date().toISOString(), key, video: link.video, vid, ref: String(req.get("referer") || "").slice(0, 120) }); } catch (_) {}
+  res.redirect(302, link.url);
+});
+
+async function flushVideoLinks() {
+  if (!vlBuffer.length || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
+  const batch = vlBuffer; vlBuffer = [];
+  try {
+    const sheets = getSheetsClient();
+    await ensureTab(sheets, VL_TAB, ["타임스탬프", "링크키", "영상ID", "방문자ID", "리퍼러"]);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${VL_TAB}!A:E`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: batch.map((v) => [v.ts, v.key, v.video || "", v.vid || "", v.ref || ""]) },
+    });
+  } catch (e) { vlBuffer = batch.concat(vlBuffer); console.log("flushVideoLinks err:", e.message); }
+}
+setInterval(() => flushVideoLinks().catch(() => {}), 30 * 1000);
+
+// 메인 대시보드용 집계 (공개 — 대시보드 다른 읽기 API와 동일)
+//   링크별: 총 클릭 · 순클릭 · 오늘/어제 클릭 · 일별 · 시간대별(KST)
+app.get("/api/video-links", async (req, res) => {
+  try {
+    const from = String(req.query.from || "2000-01-01");
+    const to = String(req.query.to || "2999-12-31");
+    let rows = [];
+    try {
+      const sheets = getSheetsClient();
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VL_TAB}!A2:E` });
+      rows = r.data.values || [];
+    } catch (_) { /* 탭 없음 = 아직 클릭 0 */ }
+    const all = rows.map((x) => ({ ts: x[0], key: x[1], vid: x[3] })).concat(vlBuffer);
+
+    // 날짜·시간은 한국시간 기준(ts는 UTC ISO)
+    const kst = (ts) => { const t = Date.parse(ts); if (isNaN(t)) return null; const d = new Date(t + 9 * 3600 * 1000); return { d: d.toISOString().slice(0, 10), h: String(d.getUTCHours()).padStart(2, "0") }; };
+    const today = kst(new Date().toISOString()).d;
+    const yday = kst(new Date(Date.now() - 86400000).toISOString()).d;
+
+    const links = {};
+    VL_KEYS.forEach((k) => { links[k] = { k, name: VL_LINKS[k].name, video: VL_LINKS[k].video, url: VL_LINKS[k].url, link: `/v/${k}`,
+      total: 0, unique: 0, today: 0, yday: 0, first: "", last: "", byDate: {}, byHour: {}, _v: new Set(), _anon: 0 }; });
+    for (const v of all) {
+      const L = links[v.key]; if (!L) continue;
+      const t = kst(v.ts); if (!t) continue;
+      if (t.d === today) L.today++;      // 오늘·어제는 조회 기간과 무관하게 항상
+      if (t.d === yday) L.yday++;
+      if (t.d < from || t.d > to) continue;
+      L.total++;
+      if (v.vid) L._v.add(v.vid); else L._anon++;
+      L.byDate[t.d] = (L.byDate[t.d] || 0) + 1;
+      L.byHour[t.h] = (L.byHour[t.h] || 0) + 1;
+      if (!L.first || t.d < L.first) L.first = t.d;
+      if (!L.last || t.d > L.last) L.last = t.d;
+    }
+    const out = VL_KEYS.map((k) => { const L = links[k]; L.unique = L._v.size + L._anon; delete L._v; delete L._anon; return L; });
+    res.json({ ok: true, from, to, today, links: out });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // 버퍼 → 시트 일괄 기록 (30초 간격). 실패 시 버퍼 복원
