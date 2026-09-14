@@ -2129,7 +2129,7 @@
 
     // ===== 알림톡 링크 클릭 (/api/video-links) =====
     // 영상별 요약 표 → 행 클릭 시 상세(카드·일별·시간대별). 관리자면 링크 만들기 폼 노출.
-    let vlData=null, vlSel=null, vlChart=null;
+    let vlData=null, vlSel=null, vlChart=null, vlDay=null;   // vlDay: 시간대 표 날짜. null=아직 안 고름(마지막 클릭일로), "all"=기간 전체
     // 초기화 버튼 잠금: 평소엔 숨김. 🔒 해제 후 60초만 보이고 자동 재잠금 (실수 방지)
     let vlUnlocked=false, vlLockLeft=0, vlLockTimer=null;
     function vlToggleLock(){
@@ -2173,8 +2173,13 @@
       if(vlChart){ vlChart.destroy(); vlChart=null; }
       if(!L){ box.innerHTML=""; return; }
       const full=location.origin+L.link;
-      const hrs=Object.keys(L.byHour).sort();
-      const hrRows=hrs.length?hrs.map(h=>`<tr><td>${h}시</td><td class="strong">${fmt(L.byHour[h])}</td></tr>`).join(""):`<tr><td colspan="2" class="empty">이 기간 클릭이 없어요.</td></tr>`;
+      if(vlDay && vlDay!=="all" && !L.byDateHour[vlDay]) vlDay=null;
+      if(!vlDay) vlDay = L.last || "all";   // 기본: 마지막으로 클릭이 있던 날
+      const dayMode = vlDay!=="all";
+      const hrSrc = dayMode ? (L.byDateHour[vlDay]||{}) : L.byHour;
+      const hrs=Object.keys(hrSrc).sort();
+      const hrRows=hrs.length?hrs.map(h=>`<tr><td>${h}시</td><td class="strong">${fmt(hrSrc[h])}</td></tr>`).join(""):`<tr><td colspan="2" class="empty">클릭이 없어요.</td></tr>`;
+      const hrSum=hrs.reduce((a,h)=>a+hrSrc[h],0);
       box.innerHTML=`<div class="panel">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <b style="font-size:15px">${L.name}</b>
@@ -2189,19 +2194,22 @@
           <div class="card"><div class="label">어제</div><div class="value">${fmt(L.yday)}</div></div>
         </div>
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:14px" class="vl-grid">
-          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 클릭</div><div style="position:relative;height:220px"><canvas id="vlChart"></canvas></div></div>
-          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">시간대별 클릭 <span style="font-weight:400;color:var(--sub)">한국시간 · 기간 합산</span></div>
+          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 클릭 <span style="font-weight:400;color:var(--sub)">막대를 누르면 그 날의 시간대별</span></div><div style="position:relative;height:220px"><canvas id="vlChart"></canvas></div></div>
+          <div><div style="font-size:13px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px">시간대별 클릭 <span id="vlHrLbl" style="font-weight:400;color:var(--blue)">${dayMode?vlDay+" · "+fmt(hrSum)+"건":"기간 전체 합산"}</span>${dayMode?`<button onclick="vlDay='all';vlRenderDetail()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:3px 8px;border-radius:7px;font-size:11px;cursor:pointer">기간 전체</button>`:""}</div>
             <div style="max-height:220px;overflow:auto"><table><thead><tr><th>시간</th><th>클릭</th></tr></thead><tbody>${hrRows}</tbody></table></div></div>
         </div>
         <div class="note" style="display:flex;align-items:center;gap:10px">첫 클릭 ${L.first||"-"} · 마지막 클릭 ${L.last||"-"}${ADMIN?`<button onclick="vlToggleLock()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer">${vlUnlocked?"🔓 잠금 ("+vlLockLeft+"초 뒤 자동)":"🔒 초기화 잠금 해제"}</button>`:""}${ADMIN&&vlUnlocked?`<button onclick="vlReset('${L.k}','${L.name.replace(/'/g,"")}')" style="background:var(--chip);color:#e5484d;border:1px solid var(--line);padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer">🗑 이 영상 클릭 기록 초기화</button>`:""}</div>
       </div>`;
       const days=Object.keys(L.byDate).sort();
       if(!days.length) return;
+      const blue=getComputedStyle(document.documentElement).getPropertyValue("--blue").trim();
       const labels=[]; const s=new Date(days[0]), e=new Date(Math.max(new Date(days[days.length-1]), new Date(vlData.today)));
       for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) labels.push(d.toISOString().slice(0,10));
       vlChart=new Chart(document.getElementById("vlChart"),{type:"bar",
-        data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"클릭",data:labels.map(x=>L.byDate[x]||0),backgroundColor:getComputedStyle(document.documentElement).getPropertyValue("--blue").trim(),borderRadius:4}]},
-        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+        data:{labels:labels.map(x=>x.slice(5)),datasets:[{label:"클릭",data:labels.map(x=>L.byDate[x]||0),backgroundColor:labels.map(x=>x===vlDay?blue:blue+"66"),borderRadius:4}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}},
+          onClick:(ev,els)=>{ if(!els.length) return; const d=labels[els[0].index]; vlDay = (vlDay===d) ? "all" : d; vlRenderDetail(); },
+          onHover:(ev,els)=>{ ev.native.target.style.cursor = els.length ? "pointer" : "default"; }}});
     }
     // 클릭 기록 초기화(관리자) — 테스트 클릭 지울 때. 시트 영상링크로그에서 해당 키 행 삭제
     async function vlReset(key,name){

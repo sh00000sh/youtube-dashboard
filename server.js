@@ -2475,7 +2475,7 @@ app.get("/api/video-links", async (req, res) => {
     const links = {};
     const keys = vlKeys();
     keys.forEach((k) => { links[k] = { k, name: VL_LINKS[k].name, video: VL_LINKS[k].video, url: VL_LINKS[k].url, link: `/v/${k}`, created: VL_LINKS[k].created || "",
-      total: 0, unique: 0, today: 0, yday: 0, first: "", last: "", byDate: {}, byHour: {}, _v: new Set(), _anon: 0 }; });
+      total: 0, unique: 0, today: 0, yday: 0, first: "", last: "", byDate: {}, byHour: {}, byDateHour: {}, _v: new Set(), _anon: 0 }; });
     for (const v of all) {
       const L = links[v.key]; if (!L) continue;
       const t = kst(v.ts); if (!t) continue;
@@ -2486,6 +2486,7 @@ app.get("/api/video-links", async (req, res) => {
       if (v.vid) L._v.add(v.vid); else L._anon++;
       L.byDate[t.d] = (L.byDate[t.d] || 0) + 1;
       L.byHour[t.h] = (L.byHour[t.h] || 0) + 1;
+      L.byDateHour[t.d] = L.byDateHour[t.d] || {}; L.byDateHour[t.d][t.h] = (L.byDateHour[t.d][t.h] || 0) + 1;   // 날짜별 시간대
       if (!L.first || t.d < L.first) L.first = t.d;
       if (!L.last || t.d > L.last) L.last = t.d;
     }
