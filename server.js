@@ -1439,7 +1439,7 @@ async function buildDailyByVideo() {
   Object.keys(byDay).forEach((day) => {
     byDay[day].forEach((v) => {
       if (titles[v.id]) { v.title = titles[v.id]; v.isPost = false; }
-      else { v.title = "게시물"; v.isPost = true; }
+      else { v.title = postTitleCache[v.id] || "게시물"; v.isPost = true; }   // 게시물 실제 제목(캐시에 있으면)
     });
   });
   const out = { ok: true, byDay };
@@ -1454,6 +1454,68 @@ app.get("/api/daily-by-video", async (req, res) => {
 // ── 게시물 일별 조회수 영구 적재 ────────────────────────────────
 //  YouTube Analytics는 최근 30일만 조회되므로, 매일 시트에 쌓아 "최초 업로드일 이후 전체 누적"을 만든다.
 const POSTDAY_TAB = process.env.POSTDAY_TAB || "게시물일별";
+
+// ── 게시물 실제 제목 ─────────────────────────────────────────
+//  Data API videos.list는 게시물을 못 돌려주지만, 공개 oEmbed는 게시물 본문을 title로 준다.
+//  본문 첫 줄들에서 "26. 09. 07 Options Trend" 날짜와 헤드라인(🔎 오늘의 종목 · …)을 뽑아 제목으로 쓴다.
+//  한 번 가져온 건 시트 '게시물제목' 탭에 저장 → 재시작해도 다시 안 긁음.
+const POSTTITLE_TAB = process.env.POSTTITLE_TAB || "게시물제목";
+const postTitleCache = {};        // id → title
+let postTitleLoaded = false;
+async function loadPostTitles() {
+  if (postTitleLoaded) return; postTitleLoaded = true;
+  if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
+  try {
+    const sheets = getSheetsClient();
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${POSTTITLE_TAB}!A2:B` });
+    (r.data.values || []).forEach((x) => { if (x[0] && x[1]) postTitleCache[x[0]] = x[1]; });
+  } catch (_) {}
+}
+function parsePostTitle(raw) {
+  const lines = String(raw || "").replace(/\r/g, "").split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) return "";
+  // 날짜 줄: "26. 09. 07 Options Trend" / "26.07.08 Options Trend" → "26.09.07 Options Trend"
+  let date = "", head = "";
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const m = ln.match(/^(\d{2})\.\s*(\d{2})\.\s*(\d{2})\s*(Options\s*Trend)?/i);
+    if (m && !date) { date = `${m[1]}.${m[2]}.${m[3]}`; continue; }
+    if (!head) {
+      head = ln;   // 날짜가 아닌 첫 줄 = 헤드라인
+      // "1️⃣ 오늘의 지수" 같은 섹션 라벨이면 다음 줄(본문 첫 문장)을 이어 붙임
+      if (/^\d️?⃣/.test(ln) && lines[i + 1]) head = ln + " · " + lines[i + 1];
+    }
+  }
+  if (!head && lines.length > 1) head = lines[1];
+  head = head.replace(/\s+/g, " ").slice(0, 48);
+  return (date ? `${date} ` : "") + (head || lines[0].slice(0, 40));
+}
+async function fetchPostTitle(id) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(id)}&format=json`);
+    if (!r.ok) return "";
+    const j = await r.json();
+    return parsePostTitle(j.title);
+  } catch (_) { return ""; }
+}
+// 없는 것만 가져와서 캐시+시트에 추가. 5개씩 병렬
+async function ensurePostTitles(ids) {
+  await loadPostTitles();
+  const need = ids.filter((id) => !postTitleCache[id]);
+  const added = [];
+  for (let i = 0; i < need.length; i += 5) {
+    const chunk = need.slice(i, i + 5);
+    const got = await Promise.all(chunk.map(fetchPostTitle));
+    chunk.forEach((id, k) => { if (got[k]) { postTitleCache[id] = got[k]; added.push([id, got[k]]); } });
+  }
+  if (added.length && GOOGLE_SERVICE_ACCOUNT && SHEET_ID) {
+    try {
+      const sheets = getSheetsClient();
+      await ensureTab(sheets, POSTTITLE_TAB, ["게시물ID", "제목"]);
+      await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${POSTTITLE_TAB}!A:B`, valueInputOption: "RAW", requestBody: { values: added } });
+    } catch (e) { console.log("postTitle save err:", e.message); }
+  }
+}
 
 async function readPostDailySheet() {
   if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return {};
@@ -1528,11 +1590,12 @@ app.get("/api/posts", async (req, res) => {
         map[id].days.push({ date: day, views: m.views, likes: m.likes, comments: m.comments });
       });
     });
+    // 실제 제목(oEmbed). 못 가져온 것(삭제 등)만 첫 조회일 기준 임시 제목
+    await ensurePostTitles(Object.keys(map));
     const posts = Object.values(map)
       .map((p) => {
         const firstSeen = p.days[0]?.date || null, lastSeen = p.days[p.days.length - 1]?.date || null;
-        // 채널 게시물 = 데일리 "Options Trend" 시황 → 첫 조회일 기준으로 제목 생성
-        const title = firstSeen ? `${firstSeen.slice(2).replace(/-/g, ".")} Options Trend 시황` : "게시물";
+        const title = postTitleCache[p.id] || (firstSeen ? `${firstSeen.slice(2).replace(/-/g, ".")} 게시물 (제목 미확인)` : "게시물");
         return { ...p, firstSeen, lastSeen, title };
       })
       .sort((a, b) => b.views - a.views);
