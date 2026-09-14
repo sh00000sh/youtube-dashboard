@@ -813,8 +813,22 @@
     // 관리자 패널 "📐 재산정 KPI 적용" 버튼이 넣는 값 (= 위 기본값).
     // 시트에 저장된 설정이 기본값보다 우선하므로 재산정 반영은 이 버튼 → 💾 설정 저장 순서로 한다
     const KPI_PRESET = { date:"2026-09-14", kpi: JSON.parse(JSON.stringify(KPI)) };
+    // ── KPI 세대 ──
+    //  1기(론칭, ~2026-09-13)의 KPI는 그대로 두고, 2기(2026-09-14~)부터 새 KPI를 적용한다.
+    //  과거 날짜·과거 업로드 영상은 그 시점의 KPI로 색칠해야 "그때 목표를 달성했는지"가 남는다.
+    //  KPI(현재 세대)는 시트 설정으로 바뀌지만 1기는 고정값.
+    const KPI_PHASE2_FROM="2026-09-14";
+    const KPI_PHASE1 = {
+      daily:{ views:800, impr:400, ctr:5.5, avp:65, subs:2, eng:3 },
+      video:{ views:1000, impr:300, ctr:5, avp:65, subs:2, eng:3 },
+      video_short:{ views:1000, impr:400, ctr:5, avp:70, subs:2, eng:3 },
+      video_long:{ views:150, impr:3000, ctr:2, avp:30, subs:2, eng:3 },
+    };
+    const ymdFull=(d)=>{ d=String(d||"").trim(); return d.length===8 ? "20"+d : d; };   // 26-08-10 → 2026-08-10
+    const kpiAt=(date)=> (date && ymdFull(date) < KPI_PHASE2_FROM) ? KPI_PHASE1 : KPI;
+    const phaseOf=(date)=> (date && ymdFull(date) < KPI_PHASE2_FROM) ? 1 : 2;
     // KPI 그룹 키: 영상 형태 필터(all/short/long)에 대응
-    const kpiFor=(form)=> form==="short"?KPI.video_short : form==="long"?KPI.video_long : KPI.video;
+    const kpiFor=(form,date)=>{ const K=kpiAt(date); return form==="short"?K.video_short : form==="long"?K.video_long : K.video; };
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
     const SINCE = "26-06-01";              // 본격 업로드 시작일 (전체 기간 기준)
 
@@ -881,15 +895,15 @@
     });
     // 토스풍: 블루 단색 계열로 통일 (명도 차이로 구분)
     const METRICS=[
-      {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
-      {key:1,label:"구독자",color:"#1b64da",kpi:KPI.daily.subs},
+      {key:6,label:"조회수",color:"#3182f6",kpi:"views"},
+      {key:1,label:"구독자",color:"#1b64da",kpi:"subs"},
       {key:3,label:"좋아요",color:"#5b9bf8",kpi:0},
       {key:4,label:"댓글",color:"#86b7ff",kpi:0},
       {key:5,label:"공유",color:"#2f6fd6",kpi:0},
     ];
     const GROWTH=[
-      {key:6,label:"조회수",color:"#3182f6",kpi:KPI.daily.views},
-      {key:1,label:"구독자",color:"#1b64da",kpi:KPI.daily.subs},
+      {key:6,label:"조회수",color:"#3182f6",kpi:"views"},
+      {key:1,label:"구독자",color:"#1b64da",kpi:"subs"},
       {key:3,label:"좋아요",color:"#5b9bf8",kpi:0},
       {key:4,label:"댓글",color:"#86b7ff",kpi:0},
       {key:5,label:"공유",color:"#2f6fd6",kpi:0},
@@ -1018,7 +1032,7 @@
       const dr=periodRows(document.getElementById("dailyPeriod").value);
       const labels=dr.map(r=>r[0]); const data=dr.map(r=>N(r[m.key]));
       const ds=[{type:"bar",label:m.label,data,backgroundColor:m.color,borderRadius:6,maxBarThickness:30}];
-      if(m.kpi)ds.push({type:"line",label:"KPI",data:labels.map(()=>m.kpi),borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
+      if(m.kpi)ds.push({type:"line",label:"KPI",data:labels.map(d=>kpiAt(d).daily[m.kpi]),borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
       if(chart)chart.destroy();
       chart=new Chart(document.getElementById("chart"),{plugins:[actionLinePlugin],data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:!!m.kpi,labels:{color:"#8b95a1",boxWidth:12}}},
@@ -1048,7 +1062,9 @@
         {label:"누적 "+m.label,data:actualPad,borderColor:m.color,backgroundColor:m.color+"22",borderWidth:2.5,pointRadius:0,fill:true,tension:.25},
         {label:"예측(현재 페이스)",data:fc,borderColor:m.color,borderDash:[2,3],borderWidth:1.5,pointRadius:0,fill:false,tension:.25}
       ];
-      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:allLabels.map((_,i)=>m.kpi*(i+1)),borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
+      // 누적 목표선: 날짜마다 그 세대의 일별 KPI를 더함 (미래 구간은 현재 KPI)
+      let kAcc=0; const kLine=allLabels.map((d,i)=>{ kAcc += (i<labels.length ? kpiAt(d).daily[m.kpi] : KPI.daily[m.kpi]); return kAcc; });
+      if(m.kpi) datasets.push({label:"누적 KPI 목표",data:kLine,borderColor:tgtCol(),borderDash:[6,5],borderWidth:2,pointRadius:0,fill:false});
       if(growth)growth.destroy();
       growth=new Chart(document.getElementById("growthChart"),{type:"line",
         data:{labels:allLabels,datasets},
@@ -2005,25 +2021,26 @@
     }
 
     function renderDailyTable(){
-      document.getElementById("dailyKpiBadge").textContent=`KPI: 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·참여율 ${KPI.daily.eng}%·구독자 +${KPI.daily.subs}`;
+      document.getElementById("dailyKpiBadge").textContent=`2기 KPI(${KPI_PHASE2_FROM.slice(5)}~): 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·참여율 ${KPI.daily.eng}%·구독자 +${KPI.daily.subs}`;
       const el=document.getElementById("dailyRows");
       // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간 12특이사항
       const rows=sortRows(DAILY, document.getElementById("dailySortKey").value, document.getElementById("dailySortDir").value, 0);
       if(!rows.length){el.innerHTML='<tr><td colspan="13" class="empty">데이터 없음</td></tr>';return;}
       el.innerHTML=rows.map(x=>{
         const engR=N(x[6])?(N(x[3])+N(x[4])+N(x[5]))/N(x[6])*100:0;
+        const KD=kpiAt(x[0]).daily, ph=phaseOf(x[0]);
         return `<tr>
-        <td>${x[0]??""}</td>
-        <td class="${kCls(N(x[1]),KPI.daily.subs)}">${fmt(x[1])}</td>
-        <td class="${x[7]?kCls(N(x[7]),KPI.daily.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
-        <td class="${x[8]?kCls(N(x[8]),KPI.daily.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?ctrStr(x[8]):"-"}</td>
-        <td class="${kCls(N(x[6]),KPI.daily.views)}">${fmt(x[6])}</td>
-        <td class="${kCls(toPctNum(x[9]),KPI.daily.avp)}">${pctStr(x[9])}</td>
+        <td>${x[0]??""}${ph===1?' <span class="muted" title="1기 KPI(론칭 ~9/13) 기준" style="font-size:10px">①</span>':''}</td>
+        <td class="${kCls(N(x[1]),KD.subs)}">${fmt(x[1])}</td>
+        <td class="${x[7]?kCls(N(x[7]),KD.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
+        <td class="${x[8]?kCls(N(x[8]),KD.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?ctrStr(x[8]):"-"}</td>
+        <td class="${kCls(N(x[6]),KD.views)}">${fmt(x[6])}</td>
+        <td class="${kCls(toPctNum(x[9]),KD.avp)}">${pctStr(x[9])}</td>
         <td class="muted">${x[11]??"-"}</td>
         <td>${fmt(x[3])}</td>
         <td>${fmt(x[4])}</td>
         <td>${fmt(x[5])}</td>
-        <td class="${kCls(engR,KPI.daily.eng)}">${engR.toFixed(1)}%</td>
+        <td class="${kCls(engR,KD.eng)}">${engR.toFixed(1)}%</td>
         <td class="muted">${fmt(x[2])}</td>
         <td class="muted"><span class="memo">${x[12]??""}</span></td>
       </tr>`;}).join("");
@@ -2035,10 +2052,10 @@
       const ff=document.getElementById("videoForm").value;
       // 형태를 고르면 그 형태의 KPI로 색칠 — '전체'일 때는 각 행의 형태에 맞는 KPI를 적용
       const KV=kpiFor(ff);
-      const kOf=(x)=> ff==="all" ? kpiFor(isShort(x)?"short":"long") : KV;
+      const kOf=(x)=> kpiFor(ff==="all" ? (isShort(x)?"short":"long") : ff, x[1]);   // 업로드일 기준 세대
       document.getElementById("videoKpiBadge").textContent = ff==="all"
         ? "KPI: 행마다 형태별 기준 적용 (숏폼/롱폼 각각)"
-        : `${ff==="short"?"숏폼":"롱폼"} KPI: 노출수 ${fmt(KV.impr)}·CTR ${KV.ctr}%·조회수 ${fmt(KV.views)}·평균조회율 ${KV.avp}%·참여율 ${KV.eng}%·구독전환 ${KV.subs}`;
+        : `${ff==="short"?"숏폼":"롱폼"} 2기 KPI(${KPI_PHASE2_FROM.slice(5)}~, 이전 업로드는 1기 기준): 노출수 ${fmt(KV.impr)}·CTR ${KV.ctr}%·조회수 ${fmt(KV.views)}·평균조회율 ${KV.avp}%·참여율 ${KV.eng}%·구독전환 ${KV.subs}`;
       let list=VIDEOS;
       if(ff==="short") list=VIDEOS.filter(x=>isShort(x));
       else if(ff==="long") list=VIDEOS.filter(x=>!isShort(x));
@@ -2049,7 +2066,7 @@
         const K=kOf(x);
         return `<tr>
         <td><img src="https://i.ytimg.com/vi/${x[0]}/mqdefault.jpg" class="thumb" loading="lazy" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')"></td>
-        <td>${x[1]??""}</td>
+        <td>${x[1]??""}${phaseOf(x[1])===1?' <span class="muted" title="1기 KPI(론칭 ~9/13) 기준" style="font-size:10px">①</span>':''}</td>
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td class="muted">${x[4]??""}</td>
