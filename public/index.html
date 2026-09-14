@@ -357,6 +357,7 @@
         <pre id="dedupeOut" style="display:none;margin-top:10px;padding:10px;background:var(--chip);border:1px solid var(--line);border-radius:10px;font-size:12px;max-height:320px;overflow:auto;white-space:pre-wrap"></pre>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+        <button onclick="applyKpiPreset()" title="실측 데이터로 재산정한 KPI 세트를 폼에 채웁니다. 저장을 눌러야 반영돼요" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">📐 재산정 KPI 적용 (2026-09-14)</button>
         <button onclick="saveConfig()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">💾 설정 저장</button>
         <span id="cfgStatus" style="font-size:13px;color:var(--muted)"></span>
       </div>
@@ -796,15 +797,22 @@
     // ===== 설정 =====
     // impr=노출수, ctr=노출클릭률(%) KPI 추가
     // 과거 숏폼(유기적, 광고70%↑만 제외) 실측 기반 KPI: 조회수 989 · 조회율 70.7% · 구독전환 2.31
+    // ── 2026-09-14 전면 재산정 (근거: harness _workspace/KPI_재산정_20260914.md) ──
+    //  실측 창: 일별 8/15~9/11(28일) · 숏폼 9/1 이후 13편 · 롱폼 8/1 이후 17편 · 스튜디오 8/20 실측
+    //  원칙: 현 실적 중앙값~평균 사이에 "한 단계 위"를 놓는다. 대시보드가 못 재는 지표(일별 노출·CTR)는 스튜디오 값 기준
     const KPI = {
-      daily:{ views:800, impr:400, ctr:5.5, avp:65, subs:2, eng:3 },   // eng=참여율(%)
-      video:{ views:1000, impr:300, ctr:5, avp:65, subs:2, eng:3 },    // 전체(형태 무관) 기준
-      // 형태별 KPI — 숏폼·롱폼은 성과 스케일이 완전히 달라 같은 잣대로 재면 둘 다 의미가 없음
-      // 숏폼: 과거 유기적 숏폼 실측(조회 989·조회율 70.7%·구독전환 2.31) 기반
-      video_short:{ views:1000, impr:400, ctr:5, avp:70, subs:2, eng:3 },
-      // 롱폼: 현 실적(평균 104회·23.3%·CTR 0.9%)에서 한 단계 위 목표
-      video_long:{ views:150, impr:3000, ctr:2, avp:30, subs:2, eng:3 },
+      // 일별: 최근 28일 평균 499회·중앙값 235회(숏폼 발행일에 2,000회+ 스파이크). 구독 +1.25/일
+      daily:{ views:500, impr:1000, ctr:2.5, avp:35, subs:2, eng:1.5 },   // eng=참여율(%)
+      // 전체(형태 무관): 숏폼·롱폼 섞인 채널 평균. 판단용이 아니라 참고용
+      video:{ views:500, impr:1500, ctr:3, avp:50, subs:1, eng:2 },
+      // 숏폼: 9/1 이후 중앙값 755회 (교육형 1,150~1,370 · 시황형 160~320 으로 갈림). 구독 전환 0.1/편·참여 0.6%
+      video_short:{ views:800, impr:400, ctr:5, avp:70, subs:1, eng:1 },
+      // 롱폼: 8/1 이후 평균 153회·중앙값 125회, 최근 4편 243·281·557·99(OSL1 초기). CTR 실측 1.1~3.3% · 참여 5.4%
+      video_long:{ views:200, impr:3000, ctr:2.5, avp:30, subs:2, eng:5 },
     };
+    // 관리자 패널 "📐 재산정 KPI 적용" 버튼이 넣는 값 (= 위 기본값).
+    // 시트에 저장된 설정이 기본값보다 우선하므로 재산정 반영은 이 버튼 → 💾 설정 저장 순서로 한다
+    const KPI_PRESET = { date:"2026-09-14", kpi: JSON.parse(JSON.stringify(KPI)) };
     // KPI 그룹 키: 영상 형태 필터(all/short/long)에 대응
     const kpiFor=(form)=> form==="short"?KPI.video_short : form==="long"?KPI.video_long : KPI.video;
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
@@ -2747,6 +2755,15 @@
       });
       const st=document.getElementById("cfgStatus");
       if(st) st.textContent="제안값을 넣었어요. '저장'을 눌러야 반영돼요.";
+    }
+    // 재산정 KPI 세트를 폼에 채움 (저장은 사용자가)
+    function applyKpiPreset(){
+      document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
+        const v=KPI_PRESET.kpi[inp.dataset.grp]?.[inp.dataset.k]; if(v==null) return;
+        if(String(inp.value)!==String(v)){ inp.value=v; inp.style.background="rgba(49,130,246,.12)"; setTimeout(()=>inp.style.background="",1500); }
+      });
+      const st=document.getElementById("cfgStatus");
+      if(st) st.textContent=KPI_PRESET.date+" 재산정 값을 넣었어요. 💾 설정 저장을 눌러야 반영돼요.";
     }
     function fillConfigForm(){
       document.querySelectorAll("#adminPanel input[data-grp]").forEach(inp=>{
