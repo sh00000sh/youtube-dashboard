@@ -2374,26 +2374,34 @@ app.get("/y/:key", (req, res) => {
 //   - 배포한 키는 바꾸지 말 것 — 이미 발송된 알림톡의 링크가 죽는다
 // ===================================================================
 const VL_TAB = process.env.VIDEO_LINK_TAB || "영상링크로그";
-const VL_CFG_TAB = process.env.VIDEO_LINK_CFG_TAB || "영상링크";   // 링크 목록: 키 · 영상ID · 표시명 · 등록일
+const VL_CFG_TAB = process.env.VIDEO_LINK_CFG_TAB || "영상링크";   // 링크 목록: 키 · 영상ID · 표시명 · 등록일 · 재생목록ID
 const VL_DEFAULT = "osl1=jdV7XdTCytA=Options Story 1편";
 // 링크 목록 = env(기본) + 시트 '영상링크' 탭(대시보드에서 추가한 것). 시트가 우선.
 const VL_LINKS = {};
-function vlAdd(k, vidId, name, created) {
+//  list(재생목록ID)를 주면 watch?v=…&list=… 로 보낸다 — 영상이 끝나면 재생목록 다음 편으로 이어진다.
+//  (youtu.be 단축 주소는 list 파라미터를 무시하는 앱이 있어 전체 주소를 쓴다)
+function vlAdd(k, vidId, name, created, list) {
   k = String(k || "").toLowerCase().trim(); vidId = String(vidId || "").trim();
+  list = String(list || "").trim();
   if (!k || !vidId || !/^[a-z0-9_-]{2,30}$/.test(k) || !/^[A-Za-z0-9_-]{11}$/.test(vidId)) return false;
-  VL_LINKS[k] = { k, name: (name || "").trim() || vidId, video: vidId, url: `https://youtu.be/${vidId}`, created: created || "" };
+  if (list && !/^(PL|UU|OL|RD|LL|FL)[A-Za-z0-9_-]{8,}$/.test(list)) list = "";
+  VL_LINKS[k] = {
+    k, name: (name || "").trim() || vidId, video: vidId, list,
+    url: list ? `https://www.youtube.com/watch?v=${vidId}&list=${list}` : `https://youtu.be/${vidId}`,
+    created: created || "",
+  };
   return true;
 }
 for (const item of String(process.env.VIDEO_LINKS || VL_DEFAULT).split(";")) {
-  const [k, vidId, name] = item.split("=");
-  vlAdd(k, vidId, name, "");
+  const [k, vidId, name, list] = item.split("=");   // 키=영상ID=표시명[=재생목록ID]
+  vlAdd(k, vidId, name, "", list);
 }
 async function loadVideoLinkCfg() {
   if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
   try {
     const sheets = getSheetsClient();
-    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VL_CFG_TAB}!A2:D` });
-    for (const row of r.data.values || []) vlAdd(row[0], row[1], row[2], row[3] || "");
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${VL_CFG_TAB}!A2:E` });
+    for (const row of r.data.values || []) vlAdd(row[0], row[1], row[2], row[3] || "", row[4] || "");
   } catch (_) { /* 탭 없음 = env만 사용 */ }
 }
 loadVideoLinkCfg().catch(() => {});
@@ -2404,6 +2412,7 @@ let vlBuffer = [];   // {ts, key, video, vid, ref}
 app.post("/api/video-links", async (req, res) => {
   try {
     const { pw, videoId, name } = req.body || {};
+    // 재생목록ID: 그대로 넣어도 되고, 재생목록 주소를 붙여넣어도 뽑아낸다
     let key = String((req.body || {}).key || "").toLowerCase().trim();
     if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
     const vidId = String(videoId || "").trim().match(/[A-Za-z0-9_-]{11}/);   // URL을 붙여넣어도 ID만 뽑음
@@ -2413,16 +2422,19 @@ app.post("/api/video-links", async (req, res) => {
     if (!key) { do { key = "v" + Math.random().toString(36).slice(2, 7); } while (VL_LINKS[key]); }
     const created = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
     const nm = String(name || "").trim() || vidId[0];
+    const listRaw = String((req.body || {}).list || "").trim();
+    const list = (listRaw.match(/(?:list=)?((?:PL|UU|OL|RD|LL|FL)[A-Za-z0-9_-]{8,})/) || [])[1] || "";
+    if (listRaw && !list) return res.status(400).json({ ok: false, error: "재생목록 ID를 확인하세요 (PL… 로 시작)" });
     // 시트에 먼저 쓰고(재시작해도 남게), 성공하면 메모리에 반영
     if (GOOGLE_SERVICE_ACCOUNT && SHEET_ID) {
       const sheets = getSheetsClient();
-      await ensureTab(sheets, VL_CFG_TAB, ["링크키", "영상ID", "표시명", "등록일"]);
+      await ensureTab(sheets, VL_CFG_TAB, ["링크키", "영상ID", "표시명", "등록일", "재생목록ID"]);
       await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID, range: `${VL_CFG_TAB}!A:D`, valueInputOption: "RAW",
-        requestBody: { values: [[key, vidId[0], nm, created]] },
+        spreadsheetId: SHEET_ID, range: `${VL_CFG_TAB}!A:E`, valueInputOption: "RAW",
+        requestBody: { values: [[key, vidId[0], nm, created, list]] },
       });
     }
-    if (!vlAdd(key, vidId[0], nm, created)) return res.status(400).json({ ok: false, error: "값이 올바르지 않습니다." });
+    if (!vlAdd(key, vidId[0], nm, created, list)) return res.status(400).json({ ok: false, error: "값이 올바르지 않습니다." });
     res.json({ ok: true, link: VL_LINKS[key] });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -2537,7 +2549,7 @@ app.get("/api/video-links", async (req, res) => {
 
     const links = {};
     const keys = vlKeys();
-    keys.forEach((k) => { links[k] = { k, name: VL_LINKS[k].name, video: VL_LINKS[k].video, url: VL_LINKS[k].url, link: `/v/${k}`, created: VL_LINKS[k].created || "",
+    keys.forEach((k) => { links[k] = { k, name: VL_LINKS[k].name, video: VL_LINKS[k].video, list: VL_LINKS[k].list || "", url: VL_LINKS[k].url, link: `/v/${k}`, created: VL_LINKS[k].created || "",
       total: 0, unique: 0, today: 0, yday: 0, first: "", last: "", byDate: {}, byHour: {}, byDateHour: {}, _v: new Set(), _anon: 0 }; });
     for (const v of all) {
       const L = links[v.key]; if (!L) continue;

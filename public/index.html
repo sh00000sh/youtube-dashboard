@@ -752,6 +752,7 @@
         <select id="vlAddSel" onchange="vlPickVideo()" style="min-width:240px;max-width:100%;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px"><option value="">영상 선택…</option></select>
         <input id="vlAddId" placeholder="또는 영상 URL / ID" style="width:220px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
         <input id="vlAddName" placeholder="표시명 (예: Options Story 1편)" style="flex:1;min-width:200px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <input id="vlAddList" placeholder="재생목록 ID(선택) PL…" title="넣으면 영상이 끝나고 재생목록 다음 편으로 이어집니다" style="width:190px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
         <input id="vlAddKey" placeholder="키(선택) 예: osl2" style="width:130px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
         <button onclick="vlCreate()" style="background:var(--blue);color:#fff;padding:9px 16px;border-radius:9px;font-size:13px">만들기</button>
         <span id="vlAddSt" style="font-size:12.5px;color:var(--sub)"></span>
@@ -2183,7 +2184,7 @@
       const L=vlData.links;
       const head=`<thead><tr><th style="text-align:left">영상</th><th>링크</th><th>총 클릭</th><th>순클릭</th><th>오늘</th><th>어제</th><th>첫 클릭</th><th>마지막</th><th>등록</th></tr></thead>`;
       const body=L.length?L.map(x=>`<tr onclick="vlSel='${x.k}';vlRenderTable();vlRenderDetail()" style="cursor:pointer;${x.k===vlSel?'background:var(--blue-soft)':''}">
-          <td style="text-align:left"><b>${x.name}</b><div style="font-size:11px;color:var(--sub)">youtu.be/${x.video}</div></td>
+          <td style="text-align:left"><b>${x.name}</b><div style="font-size:11px;color:var(--sub)">youtu.be/${x.video}${x.list?' · 재생목록 ▶':''}</div></td>
           <td><code style="font-size:12px">/v/${x.k}</code> <button onclick="event.stopPropagation();vlCopy(this,'${location.origin+x.link}')" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:4px 9px;border-radius:7px;font-size:11px;cursor:pointer">복사</button></td>
           <td class="strong">${fmt(x.total)}</td><td>${fmt(x.unique)}</td><td>${fmt(x.today)}</td><td class="muted">${fmt(x.yday)}</td>
           <td class="muted">${x.first||"-"}</td><td class="muted">${x.last||"-"}</td><td class="muted">${x.created||"env"}</td></tr>`).join("")
@@ -2208,7 +2209,7 @@
       box.innerHTML=`<div class="panel">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <b style="font-size:15px">${L.name}</b>
-          <a href="${L.url}" target="_blank" style="font-size:12px;color:var(--sub)">youtu.be/${L.video} ↗</a>
+          <a href="${L.url}" target="_blank" style="font-size:12px;color:var(--sub)">${L.list?"재생목록으로 이어짐 · ":""}youtu.be/${L.video} ↗</a>
           <input readonly value="${full}" onclick="this.select()" style="flex:1;min-width:260px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--chip);color:var(--text);font-size:13px">
           <button onclick="vlCopy(this,'${full}')" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:9px;font-size:13px;cursor:pointer">복사</button>
         </div>
@@ -2269,10 +2270,10 @@
       st.textContent="만드는 중…";
       try{
         const r=await fetch("/api/video-links",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({pw:ADMIN_PW,videoId:g("vlAddId"),name:g("vlAddName"),key:g("vlAddKey")})}).then(r=>r.json());
+          body:JSON.stringify({pw:ADMIN_PW,videoId:g("vlAddId"),name:g("vlAddName"),key:g("vlAddKey"),list:g("vlAddList")})}).then(r=>r.json());
         if(!r.ok){ st.textContent="❌ "+(r.error||"실패"); return; }
         st.textContent="✅ 만들어짐: "+location.origin+"/v/"+r.link.k;
-        ["vlAddId","vlAddName","vlAddKey"].forEach(id=>document.getElementById(id).value="");
+        ["vlAddId","vlAddName","vlAddKey","vlAddList"].forEach(id=>document.getElementById(id).value="");
         document.getElementById("vlAddSel").value="";
         vlSel=r.link.k; await loadVideoLinks();
       }catch(e){ st.textContent="❌ "+e.message; }
