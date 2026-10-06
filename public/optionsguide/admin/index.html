@@ -57,6 +57,10 @@
         .empty { text-align:center; color:#9aa0ab; padding:24px; font-size:13px; }
         .pctm { color:#9aa0ab; font-size:11px; margin-left:3px; }
 
+        .vlrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:4px; }
+        .vlrow input { padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; font-size:13px; font-family:inherit; }
+        .linkrow .lname.wide { width:auto; flex:1; min-width:120px; }
+        .linkrow .plist { font-weight:400; color:#6b7280; font-size:11.5px; }
         .linkrow { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f0f1f3; }
         .linkrow:last-child { border-bottom:none; }
         .linkrow .lname { width:96px; font-size:13px; font-weight:600; flex-shrink:0; }
@@ -142,6 +146,19 @@
         <div class="panel" style="margin-top:16px">
             <h2>🔗 유입경로 링크 <span class="muted">— 채널마다 아래 링크를 복사해 사용하세요</span></h2>
             <div id="linkList"></div>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
+            <h2>🎬 영상 링크 <span class="muted">— 알림톡·문자로 보낼 링크. 누른 수는 유튜브 대시보드에서 봅니다</span></h2>
+            <div class="vlrow">
+                <input id="vlId" placeholder="유튜브 주소 또는 영상ID" style="flex:2;min-width:180px">
+                <input id="vlName" placeholder="표시명 (예: 콜옵션 가격 3가지)" style="flex:2;min-width:160px">
+                <input id="vlList" placeholder="재생목록 ID(선택) PL…" title="넣으면 영상이 끝나고 재생목록 다음 편으로 이어집니다" style="flex:1.4;min-width:150px">
+                <input id="vlKey" placeholder="키(선택)" style="width:110px">
+                <button class="go" id="vlAdd" type="button">만들기</button>
+            </div>
+            <div class="muted" id="vlMsg" style="font-size:12px;margin:6px 0 4px"></div>
+            <div id="vlList2"></div>
         </div>
 
         <div id="result" style="display:none">
@@ -405,6 +422,52 @@
         fetch("/api/channel-links/keys").then(function(r){ return r.json(); })
             .then(function(j){ if(j && j.ok && j.keys && j.keys.length){ setChKeys(j.keys); buildChLinks(); if(lastCh) renderCh(lastCh); } })
             .catch(function(){});
+
+        // ── 영상 링크(알림톡 발송용) ─────────────────────────
+        function vlCopyBind(sel){
+            document.querySelectorAll(sel+" .copy").forEach(function(btn){
+                btn.onclick = function(){
+                    var ok = function(){ btn.textContent="복사됨"; btn.classList.add("ok"); setTimeout(function(){ btn.textContent="복사"; btn.classList.remove("ok"); }, 1200); };
+                    var fb = function(){ var inp=btn.previousElementSibling; inp.focus(); inp.select(); try{document.execCommand("copy");}catch(e){} ok(); };
+                    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(btn.dataset.url).then(ok).catch(fb); }
+                    else fb();
+                };
+            });
+        }
+        function loadVideoLinks(){
+            fetch("/api/video-links").then(function(r){ return r.json(); }).then(function(j){
+                if(!j || !j.ok) return;
+                var el = document.getElementById("vlList2");
+                if(!j.links.length){ el.innerHTML = '<div class="muted" style="font-size:12.5px;padding:6px 0">아직 만든 영상 링크가 없어요.</div>'; return; }
+                el.innerHTML = j.links.map(function(L){
+                    var url = location.origin + L.link;
+                    return '<div class="linkrow"><span class="lname wide"><span class="dot" style="background:#ef4444"></span>'+L.name+
+                        (L.list ? ' <span class="plist">· 재생목록으로 이어짐</span>' : '')+'</span>'+
+                        '<input class="lurl" readonly value="'+url+'" onclick="this.select()">'+
+                        '<button class="copy" type="button" data-url="'+url+'">복사</button></div>';
+                }).join("");
+                vlCopyBind("#vlList2");
+            }).catch(function(){});
+        }
+        loadVideoLinks();
+        document.getElementById("vlAdd").onclick = function(){
+            var g = function(id){ return document.getElementById(id).value.trim(); };
+            var msg = document.getElementById("vlMsg");
+            var pw = document.getElementById("pw").value;
+            if(!pw){ msg.textContent = "❌ 위에 관리자 비밀번호를 먼저 입력하세요."; return; }
+            if(!g("vlId")){ msg.textContent = "❌ 유튜브 주소나 영상ID를 넣어주세요."; return; }
+            msg.textContent = "만드는 중…";
+            fetch("/api/video-links", { method:"POST", headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({ pw: pw, videoId: g("vlId"), name: g("vlName"), key: g("vlKey"), list: g("vlList") }) })
+                .then(function(r){ return r.json(); })
+                .then(function(j){
+                    if(!j.ok){ msg.textContent = "❌ " + (j.error || "실패"); return; }
+                    msg.textContent = "✅ 만들어졌어요: " + location.origin + "/v/" + j.link.k;
+                    ["vlId","vlName","vlList","vlKey"].forEach(function(id){ document.getElementById(id).value = ""; });
+                    loadVideoLinks();
+                })
+                .catch(function(e){ msg.textContent = "❌ " + e.message; });
+        };
 
         document.querySelectorAll(".quick button").forEach(function(b){
             b.onclick = function(){ setRange(b.dataset.r); load(); };

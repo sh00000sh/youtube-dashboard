@@ -2414,7 +2414,8 @@ app.post("/api/video-links", async (req, res) => {
     const { pw, videoId, name } = req.body || {};
     // 재생목록ID: 그대로 넣어도 되고, 재생목록 주소를 붙여넣어도 뽑아낸다
     let key = String((req.body || {}).key || "").toLowerCase().trim();
-    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    // optionsguide/admin은 '방문 분석' 비밀번호를 쓰므로 둘 중 하나면 통과시킨다(같은 운영자)
+    if (!checkPw(pw) && !checkVisitsPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
     const vidId = String(videoId || "").trim().match(/[A-Za-z0-9_-]{11}/);   // URL을 붙여넣어도 ID만 뽑음
     if (!vidId) return res.status(400).json({ ok: false, error: "영상 ID(11자)를 확인하세요." });
     if (key && !/^[a-z0-9_-]{2,30}$/.test(key)) return res.status(400).json({ ok: false, error: "키는 소문자·숫자·-_ 2~30자만 가능합니다." });
@@ -2509,7 +2510,7 @@ app.post("/api/video-links/reset", async (req, res) => {
   try {
     const { pw } = req.body || {};
     const key = String((req.body || {}).key || "").toLowerCase().trim();
-    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    if (!checkPw(pw) && !checkVisitsPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
     const before = vlBuffer.length;
     vlBuffer = key ? vlBuffer.filter((v) => v.key !== key) : [];
     let removed = before - vlBuffer.length;
