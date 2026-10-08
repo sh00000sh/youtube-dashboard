@@ -289,6 +289,40 @@
       .sb-inner{gap:14px;padding:11px 14px;}
       .sb-item .v{font-size:14px;}
     }
+    /* ===== 기간 직접 선택 달력 팝업 ===== */
+    #dpk{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}
+    #dpk.on{display:flex}
+    .dpk-box{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-h);padding:18px 20px 16px;width:min(680px,calc(100vw - 28px));max-height:calc(100vh - 40px);overflow:auto}
+    .dpk-hd{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+    .dpk-hd h3{font-size:16px;font-weight:700;margin:0}
+    .dpk-hd .x{margin-left:auto;background:var(--chip);border:1px solid var(--line);color:var(--text);width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:15px;line-height:1}
+    .dpk-sel{font-size:13px;color:var(--sub);margin-bottom:12px}
+    .dpk-sel b{color:var(--blue)}
+    .dpk-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+    .dpk-presets button{background:var(--chip);border:1px solid var(--line);color:var(--text);padding:6px 11px;border-radius:999px;font-size:12px;cursor:pointer}
+    .dpk-presets button:hover{background:var(--hover);border-color:var(--blue)}
+    .dpk-months{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .dpk-m .mh{display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:700;margin-bottom:8px}
+    .dpk-m .mh button{background:none;border:none;color:var(--sub);font-size:16px;cursor:pointer;padding:0 6px}
+    .dpk-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+    .dpk-grid .wd{font-size:11px;color:var(--sub);text-align:center;padding:4px 0}
+    .dpk-grid .d{text-align:center;padding:7px 0;font-size:12.5px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+    .dpk-grid .d:hover{background:var(--hover)}
+    .dpk-grid .d.off{visibility:hidden}
+    .dpk-grid .d.nodata{color:var(--sub);opacity:.42}
+    .dpk-grid .d.in{background:var(--blue-soft);border-radius:0}
+    .dpk-grid .d.e1,.dpk-grid .d.e2{background:var(--blue);color:#fff;font-weight:700}
+    .dpk-grid .d.e1{border-radius:8px 0 0 8px}
+    .dpk-grid .d.e2{border-radius:0 8px 8px 0}
+    .dpk-grid .d.e1.e2{border-radius:8px}
+    .dpk-ft{display:flex;align-items:center;gap:8px;margin-top:14px}
+    .dpk-ft .hint{font-size:12px;color:var(--sub);flex:1}
+    .dpk-ft button{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--line)}
+    .dpk-ft .ok{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .dpk-ft .ok:disabled{opacity:.4;cursor:default}
+    .dpk-ft .no{background:var(--chip);color:var(--text)}
+    @media (max-width:620px){ .dpk-months{grid-template-columns:1fr} }
+
     /* 아주 좁은 폰 */
     @media (max-width:430px){
       body{padding:11px;}
@@ -299,6 +333,21 @@
   </style>
 </head>
 <body>
+  <!-- 기간 직접 선택 달력 (기간 셀렉트의 "날짜 지정"에서 열림) -->
+  <div id="dpk" onclick="if(event.target===this)dpkClose()">
+    <div class="dpk-box">
+      <div class="dpk-hd"><h3>📅 기간 직접 선택</h3><button class="x" onclick="dpkClose()">✕</button></div>
+      <div class="dpk-sel" id="dpkSel"></div>
+      <div class="dpk-presets" id="dpkPresets"></div>
+      <div class="dpk-months" id="dpkMonths"></div>
+      <div class="dpk-ft">
+        <span class="hint" id="dpkHint"></span>
+        <button class="no" onclick="dpkClose()">취소</button>
+        <button class="ok" id="dpkOk" onclick="dpkApply()">적용</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 상단 고정 요약 바 -->
   <div id="stickyBar">
     <div class="sb-inner" id="sbInner"></div>
@@ -394,6 +443,7 @@
           <option value="28">최근 28일</option>
           <option value="7">최근 7일</option>
           <option value="90">최근 90일</option>
+          <option value="custom">📅 날짜 지정…</option>
         </select>
       </h2>
       <div class="desc">채널 성장의 최종 성적표예요. 괄호 안은 <b>직전 같은 기간과 비교한 변화</b>예요.</div>
@@ -421,6 +471,7 @@
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
+        <option value="custom">📅 날짜 지정…</option>
       </select>
       <select id="gaugeForm" style="display:none">
         <option value="all">전체 형태</option>
@@ -446,6 +497,7 @@
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
+        <option value="custom">📅 날짜 지정…</option>
       </select>
     </h2>
     <div class="desc">선택한 기간 동안 모은 총합이에요. 카드 아래 숫자는 가장 최근 날의 성과와 전일 대비 변화예요. <b>여기 '누적 조회수'는 애널리틱스 일별 조회수의 기간 합계</b>라, 상단 프로필의 '유튜브 표기 누적'(유튜브 공개 카운트, 반영이 느리고 일부 조회 제외)과 숫자가 다를 수 있어요.</div>
@@ -465,6 +517,7 @@
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
+        <option value="custom">📅 날짜 지정…</option>
       </select>
     </h2>
     <div class="desc">숫자가 쌓여가는 흐름이에요. 파란 선이 빨간 점선(목표)을 넘으면 KPI 페이스를 앞서고 있는 거예요. 옅은 점선은 현재 속도로 갔을 때의 예측이에요.</div>
@@ -566,6 +619,7 @@
         <option value="7">최근 7일</option>
         <option value="28">최근 28일</option>
         <option value="90">최근 90일</option>
+        <option value="custom">📅 날짜 지정…</option>
       </select>
     </h2>
     <div class="panel">
@@ -737,10 +791,11 @@
     <div class="sec" id="sec-vlink" style="display:none">
     <!-- 알림톡 등으로 발송한 영상 링크(/v/키)의 클릭 집계. 데이터: /api/video-links -->
     <h2>💬 알림톡 링크 클릭 <span class="kpi-badge">발송 링크(/v/키)를 누른 사람 · 한국시간</span>
-      <select id="vlPeriod" onchange="loadVideoLinks()" style="margin-left:auto">
+      <select id="vlPeriod" style="margin-left:auto">
         <option value="7">최근 7일</option>
         <option value="30" selected>최근 30일</option>
         <option value="all">전체</option>
+        <option value="custom">📅 날짜 지정…</option>
       </select>
       <button onclick="loadVideoLinks()" style="background:var(--blue);color:#fff;padding:8px 14px;font-size:13px;border-radius:10px">🔄 새로고침</button>
     </h2>
@@ -910,10 +965,138 @@
       {key:5,label:"공유",color:"#2f6fd6",kpi:0},
     ];
 
-    // 기간 필터 헬퍼: "all"=5/11 이후 전체, 그 외=최근 N일
+    // ===== 기간 직접 선택(달력) =====
+    // DAILY의 날짜는 "YY-MM-DD", 달력은 "YYYY-MM-DD"로 다룬다
+    const d2=(d)=>String(d||"").length===10?String(d).slice(2):String(d||"");
+    let RANGE=null;   // {from,to} (YYYY-MM-DD)
+    try{ const v=JSON.parse(localStorage.getItem("dashRange")||"null"); if(v&&v.from&&v.to) RANGE=v; }catch(_){}
+    const rangeLabel=()=> RANGE ? RANGE.from.slice(2)+" ~ "+RANGE.to.slice(2) : "날짜 지정…";
+    // 셀렉트의 "날짜 지정" 라벨을 지금 고른 기간으로 바꿔 둔다
+    function syncRangeLabels(){
+      document.querySelectorAll('option[value="custom"]').forEach(o=>o.textContent="📅 "+rangeLabel());
+    }
+
+    // 기간 필터 헬퍼: "all"=5/11 이후 전체, "custom"=달력으로 고른 구간, 그 외=최근 N일
     function periodRows(sel){
+      if(sel==="custom"){
+        if(!RANGE) return DAILY.filter(r=>r[0]>=SINCE);
+        const a=d2(RANGE.from), b=d2(RANGE.to);
+        return DAILY.filter(r=>r[0]>=a&&r[0]<=b);
+      }
       if(sel==="all"||!sel) return DAILY.filter(r=>r[0]>=SINCE);
       return DAILY.slice(-Number(sel));
+    }
+    // 카드 제목에 쓰는 기간 라벨
+    function periodLabel(sel){
+      if(sel==="custom"&&RANGE) return RANGE.from.slice(2)+" ~ "+RANGE.to.slice(2);
+      if(sel==="all"||!sel) return "전체";
+      return "최근 "+sel+"일";
+    }
+
+    // ===== 달력 팝업 =====
+    // 두 달치를 띄우고 시작일 → 종료일 순으로 찍는다. 데이터가 없는 날은 흐리게(고를 수는 있음).
+    const dpk={ anchor:null, from:null, to:null, m:null, onDone:null };
+    const dISO=(y,m,d)=>y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    const dpkHasData=(iso)=>DAILY.some(r=>r[0]===d2(iso));
+    function dpkDataBounds(){
+      if(!DAILY.length) return null;
+      return { min:"20"+DAILY[0][0], max:"20"+DAILY[DAILY.length-1][0] };
+    }
+    function dpkOpen(selectEl, onDone){
+      dpk.anchor=selectEl; dpk.onDone=onDone||null;
+      dpk.from=RANGE?RANGE.from:null; dpk.to=RANGE?RANGE.to:null;
+      const base=dpk.to?new Date(dpk.to):new Date();
+      dpk.m=new Date(base.getFullYear(), base.getMonth()-1, 1);   // 왼쪽 달
+      document.getElementById("dpk").classList.add("on");
+      dpkRender();
+    }
+    function dpkClose(){
+      document.getElementById("dpk").classList.remove("on");
+      // 적용하지 않고 닫으면 셀렉트를 원래 값으로 되돌린다
+      if(dpk.anchor && dpk.anchor.value==="custom" && !RANGE) dpk.anchor.value=dpk.anchor.dataset.prev||"28";
+      dpk.anchor=null; dpk.onDone=null;
+    }
+    function dpkShift(n){ dpk.m=new Date(dpk.m.getFullYear(), dpk.m.getMonth()+n, 1); dpkRender(); }
+    function dpkPick(iso){
+      if(!dpk.from || (dpk.from && dpk.to)){ dpk.from=iso; dpk.to=null; }
+      else if(iso<dpk.from){ dpk.to=dpk.from; dpk.from=iso; }
+      else dpk.to=iso;
+      dpkRender();
+    }
+    function dpkPreset(from,to){ dpk.from=from; dpk.to=to; dpk.m=new Date(new Date(to).getFullYear(), new Date(to).getMonth()-1, 1); dpkRender(); }
+    function dpkApply(){
+      if(!dpk.from) return;
+      RANGE={ from:dpk.from, to:dpk.to||dpk.from };
+      try{ localStorage.setItem("dashRange", JSON.stringify(RANGE)); }catch(_){}
+      syncRangeLabels();
+      const done=dpk.onDone;
+      document.getElementById("dpk").classList.remove("on");
+      dpk.anchor=null; dpk.onDone=null;
+      if(done) done();
+    }
+    function dpkRender(){
+      const b=dpkDataBounds();
+      // 프리셋
+      const t=new Date(); t.setHours(0,0,0,0);
+      const iso=(d)=>dISO(d.getFullYear(), d.getMonth(), d.getDate());
+      const ago=(n)=>{ const d=new Date(t); d.setDate(d.getDate()-(n-1)); return iso(d); };
+      const mStart=(off)=>{ const d=new Date(t.getFullYear(), t.getMonth()+off, 1); return iso(d); };
+      const mEnd=(off)=>{ const d=new Date(t.getFullYear(), t.getMonth()+off+1, 0); return iso(d); };
+      const presets=[
+        ["최근 7일", ago(7), iso(t)],
+        ["최근 28일", ago(28), iso(t)],
+        ["최근 90일", ago(90), iso(t)],
+        ["이번 달", mStart(0), iso(t)],
+        ["지난달", mStart(-1), mEnd(-1)],
+      ];
+      if(b) presets.push(["데이터 전체", b.min, b.max]);
+      document.getElementById("dpkPresets").innerHTML=presets
+        .map(x=>'<button onclick="dpkPreset(\''+x[1]+'\',\''+x[2]+'\')">'+x[0]+"</button>").join("");
+
+      // 선택 상태 문구
+      const selBox=document.getElementById("dpkSel");
+      if(!dpk.from) selBox.innerHTML="시작일을 누르고, 이어서 종료일을 누르세요.";
+      else if(!dpk.to) selBox.innerHTML="<b>"+dpk.from+"</b> 부터 — 종료일을 눌러 주세요.";
+      else {
+        const n=Math.round((Date.parse(dpk.to)-Date.parse(dpk.from))/86400000)+1;
+        selBox.innerHTML="<b>"+dpk.from+" ~ "+dpk.to+"</b> · "+n+"일";
+      }
+      document.getElementById("dpkOk").disabled=!dpk.from;
+      document.getElementById("dpkHint").textContent = b ? "데이터 있는 날짜: "+b.min+" ~ "+b.max : "";
+
+      // 두 달치 그리드
+      const WD=["일","월","화","수","목","금","토"];
+      let html="";
+      for(let k=0;k<2;k++){
+        const cur=new Date(dpk.m.getFullYear(), dpk.m.getMonth()+k, 1);
+        const y=cur.getFullYear(), mo=cur.getMonth();
+        const first=new Date(y,mo,1).getDay(), last=new Date(y,mo+1,0).getDate();
+        let cells=WD.map(w=>'<div class="wd">'+w+"</div>").join("");
+        for(let i=0;i<first;i++) cells+='<div class="d off"></div>';
+        for(let d=1;d<=last;d++){
+          const v=dISO(y,mo,d);
+          const cls=["d"];
+          if(!dpkHasData(v)) cls.push("nodata");
+          if(dpk.from&&dpk.to&&v>dpk.from&&v<dpk.to) cls.push("in");
+          if(v===dpk.from) cls.push("e1");
+          if(v===(dpk.to||dpk.from)) cls.push("e2");
+          cells+='<div class="'+cls.join(" ")+'" onclick="dpkPick(\''+v+'\')">'+d+"</div>";
+        }
+        const navL = k===0 ? '<button onclick="dpkShift(-1)">‹</button>' : "<span></span>";
+        const navR = k===1 ? '<button onclick="dpkShift(1)">›</button>' : "<span></span>";
+        html+='<div class="dpk-m"><div class="mh">'+navL+"<span>"+y+"."+(mo+1)+"</span>"+navR+'</div><div class="dpk-grid">'+cells+"</div></div>";
+      }
+      document.getElementById("dpkMonths").innerHTML=html;
+    }
+
+    // 기간 셀렉트 공통 연결: "날짜 지정"을 고르면 달력을 띄우고, 적용되면 다시 그린다
+    function bindPeriod(id, fn){
+      const el=document.getElementById(id); if(!el) return;
+      el.dataset.prev=el.value;
+      el.onchange=()=>{
+        if(el.value==="custom"){ dpkOpen(el, ()=>{ el.dataset.prev="custom"; fn(); }); return; }
+        el.dataset.prev=el.value; fn();
+      };
     }
 
     function renderChannel(c){
@@ -1122,7 +1305,10 @@
       if(type==="video"){
         // 영상별: KPI를 "달성한 영상의 비율"로 (예: 6개 중 4개가 1000회 이상 → 67%)
         let vids=VIDEOS;
-        if(sel!=="all"){
+        if(sel==="custom"&&RANGE){
+          const a=d2(RANGE.from), b2=d2(RANGE.to);
+          vids=VIDEOS.filter(v=>(v[1]||"")>=a&&(v[1]||"")<=b2);
+        } else if(sel!=="all"&&sel!=="custom"){
           const cut=new Date(); cut.setDate(cut.getDate()-Number(sel));
           const cs=cut.toISOString().slice(2,10);
           vids=VIDEOS.filter(v=>(v[1]||"")>=cs);
@@ -1232,9 +1418,10 @@
       const v=TRAFFIC&&TRAFFIC.videos&&TRAFFIC.videos[vid];
       return v&&v.total? v.share*100 : null;
     };
-    // 채널 검색 유입 비중(%) — 기간(7/28/90)
+    // 채널 검색 유입 비중(%) — 집계가 7/28/90만 있어, 직접 선택 기간은 28일 값으로 대체한다
     const chSearchShare=(days)=>{
-      const c=TRAFFIC&&TRAFFIC.channel&&TRAFFIC.channel[days];
+      const k=(days==="custom"||!days)?28:days;
+      const c=TRAFFIC&&TRAFFIC.channel&&TRAFFIC.channel[k];
       return c&&c.total? c.searchShare*100 : null;
     };
 
@@ -1308,18 +1495,35 @@
       return arr.length?daysAgo(arr[0]):null;
     }
     // 기간 합계 + 직전 동일기간 대비 변화율
+    // days가 "custom"이면 고른 구간과 "그 직전 같은 길이"를 비교한다
     function periodDelta(colIdx, days){
+      if(days==="custom"){
+        const cur=periodRows("custom"), n=cur.length;
+        const i0=cur.length?DAILY.indexOf(cur[0]):-1;
+        const prev=(i0>0)?DAILY.slice(Math.max(0,i0-n),i0):[];
+        const sum=(a)=>a.reduce((x,r)=>x+N(r[colIdx]),0);
+        const c=sum(cur), pv=sum(prev);
+        return { cur:c, prev:pv, pct: pv? (c-pv)/pv*100 : null, hasPrev: prev.length>=Math.min(n,3) };
+      }
+      return periodDeltaN(colIdx, Number(days)||28);
+    }
+    function periodDeltaN(colIdx, days){
       const rows=[...DAILY].sort((a,b)=>(a[0]<b[0]?-1:1));
       const cur=rows.slice(-days), prev=rows.slice(-days*2,-days);
       const s=(a)=>a.reduce((t,r)=>t+N(r[colIdx]),0);
       const c=s(cur), p=s(prev);
       return { cur:c, prev:p, pct: p? (c-p)/p*100 : null, hasPrev: prev.length>=Math.min(days,3) };
     }
-    // 최근 N일 안에 올린 영상
+    // 최근 N일 안에 올린 영상 ("custom"이면 달력으로 고른 구간 안)
     const recentVids=(days,form)=>{
+      const okForm=(v)=>form==="all"?true:(form==="short"?isShort(v):!isShort(v));
+      if(days==="custom"){
+        if(!RANGE) return VIDEOS.filter(okForm);
+        const a=d2(RANGE.from), b=d2(RANGE.to);
+        return VIDEOS.filter(v=>{ const u=v[1]||""; return u>=a&&u<=b&&okForm(v); });
+      }
       const cut=new Date(); cut.setDate(cut.getDate()-days);
-      return VIDEOS.filter(v=>{ const d=ymd(v[1]); if(!d||d<cut) return false;
-        return form==="all"?true:(form==="short"?isShort(v):!isShort(v)); });
+      return VIDEOS.filter(v=>{ const d=ymd(v[1]); if(!d||d<cut) return false; return okForm(v); });
     };
     // 1,000회당 구독전환 — 형태 간 '유입의 질'을 같은 잣대로 비교
     const subPer1k=(arr)=>{ const v=arr.reduce((a,r)=>a+N(r[8]),0), s=arr.reduce((a,r)=>a+N(r[12]),0); return v? s/v*1000 : 0; };
@@ -1338,7 +1542,9 @@
       const box=document.getElementById("briefResult");
       if(!box) return;
       if(!DAILY.length){ box.innerHTML=""; return; }
-      const P=Number(document.getElementById("briefPeriod").value||28);
+      const Psel=document.getElementById("briefPeriod").value||"28";
+      const P=Psel==="custom"?"custom":Number(Psel);
+      const PL=periodLabel(Psel);
 
       // ---------- 결과층 ----------
       const dv=periodDelta(6,P), ds=periodDelta(1,P);
@@ -1347,9 +1553,9 @@
         <div class="value" style="font-size:30px">${val}${dltHtml(pct)}</div>
         <div class="why">${why}</div></div>`;
       box.innerHTML=
-        card(`조회수 · 최근 ${P}일`, fmt(dv.cur), dv.hasPrev?dv.pct:null,
-             `직전 ${P}일 <b>${fmt(dv.prev)}회</b> → 지금 <b>${fmt(dv.cur)}회</b>. 채널이 도달한 총량이에요.`)+
-        card(`구독자 순증 · 최근 ${P}일`, "+"+fmt(ds.cur), ds.hasPrev?ds.pct:null,
+        card(`조회수 · ${PL}`, fmt(dv.cur), dv.hasPrev?dv.pct:null,
+             `직전 같은 기간 <b>${fmt(dv.prev)}회</b> → 지금 <b>${fmt(dv.cur)}회</b>. 채널이 도달한 총량이에요.`)+
+        card(`구독자 순증 · ${PL}`, "+"+fmt(ds.cur), ds.hasPrev?ds.pct:null,
              `조회 1,000회당 <b>${dv.cur?(ds.cur/dv.cur*1000).toFixed(1):0}명</b>이 구독했어요. 도달이 실제 팬으로 남는 비율이에요.`);
 
       // ---------- 원인층 ----------
@@ -1368,7 +1574,7 @@
       const pubBad = (sD==null||sD>=7)||(lD==null||lD>=14);
       const pubWarn= (sD!=null&&sD>=4)||(lD!=null&&lD>=10);
       cbox.innerHTML=
-        c2(`발행량 · 최근 ${P}일`, `숏폼 ${sV.length} · 롱폼 ${lV.length}편`,
+        c2(`발행량 · ${PL}`, `숏폼 ${sV.length} · 롱폼 ${lV.length}편`,
            pubBad?RED:pubWarn?YEL:GRN,
            `마지막 업로드 — 숏폼 <b>${sD==null?"기록 없음":sD+"일 전"}</b> · 롱폼 <b>${lD==null?"기록 없음":lD+"일 전"}</b>.
             발행이 끊기면 신규 유입이 먼저 멈춰요. <a onclick="goSub('explore','sec-upload')">업로드 성과 →</a>`)+
@@ -1401,7 +1607,7 @@
         })()+
         // ⑤ 검색 유입 — 제목·챕터·재생목록 작업의 성패를 재는 지표
         (()=>{
-          const ch=chSearchShare(P);
+          const ch=chSearchShare(P);   // 직접 선택 기간은 28일 집계로 대체됨
           // 롱폼만 따로: 검색은 롱폼 자산화의 지표라 롱폼 평균이 본질
           const lg=lV.map(v=>searchShare(v[0])).filter(x=>x!=null);
           const lAvg=lg.length? lg.reduce((a,b)=>a+b,0)/lg.length : null;
@@ -1422,7 +1628,7 @@
       if(lD==null||lD>=10) acts.push(["롱폼 발행", `마지막 롱폼이 ${lD==null?"기록 없음":lD+"일 전"}이에요. 롱폼은 구독 전환과 시청시간을 만드는 축이에요.`, RED]);
       if(lA>0&&lA<kL.avp) acts.push(["롱폼 오프닝 재편집", `롱폼 평균 조회율 ${lA.toFixed(0)}%로 KPI ${kL.avp}%에 못 미쳐요. 0~15초 훅부터 점검하세요.`, YEL]);
       if(sQ<1&&sV.length) acts.push(["숏폼 → 롱폼 연결 장치", `숏폼 1,000회당 구독이 ${sQ.toFixed(1)}명이에요. 고정 댓글·최종화면에 롱폼을 연결해 유입을 붙잡으세요.`, YEL]);
-      if(dv.hasPrev&&dv.pct<-15) acts.push(["조회수 하락 원인 점검", `직전 ${P}일 대비 ${Math.abs(dv.pct).toFixed(0)}% 줄었어요. 발행 리듬과 최근 영상 성과를 함께 보세요.`, RED]);
+      if(dv.hasPrev&&dv.pct<-15) acts.push(["조회수 하락 원인 점검", `직전 같은 기간 대비 ${Math.abs(dv.pct).toFixed(0)}% 줄었어요. 발행 리듬과 최근 영상 성과를 함께 보세요.`, RED]);
       if(!acts.length) acts.push(["현 페이스 유지", "지표가 모두 기준 안에 있어요. 발행 리듬을 그대로 유지하세요.", GRN]);
       document.getElementById("briefAction").innerHTML=acts.slice(0,3).map((a,i)=>
         `<div class="act"><div class="rk" style="background:${a[2]}">${i+1}</div>
@@ -2168,7 +2374,8 @@
     async function loadVideoLinks(){
       const p=document.getElementById("vlPeriod").value;
       const q=new URLSearchParams();
-      if(p!=="all"){ const d=new Date(); d.setDate(d.getDate()-(Number(p)-1)); q.set("from",d.toISOString().slice(0,10)); }
+      if(p==="custom"&&RANGE){ q.set("from",RANGE.from); q.set("to",RANGE.to); }
+      else if(p!=="all"&&p!=="custom"){ const d=new Date(); d.setDate(d.getDate()-(Number(p)-1)); q.set("from",d.toISOString().slice(0,10)); }
       document.getElementById("vlAdd").style.display = ADMIN ? "" : "none";
       if(ADMIN) vlFillSelect();
       try{
@@ -2863,12 +3070,14 @@
     document.getElementById("liveForm").onchange=()=>renderLive();
     document.getElementById("gaugeType").onchange=renderGauge;
     document.getElementById("uploadMode").onchange=drawWeekday;
-    document.getElementById("gaugePeriod").onchange=renderGauge;
+    bindPeriod("gaugePeriod", renderGauge);
     document.getElementById("gaugeForm").onchange=renderGauge;
-    document.getElementById("briefPeriod").onchange=renderBrief;
-    document.getElementById("cumPeriod").onchange=renderCumulative;
-    document.getElementById("growthPeriod").onchange=drawGrowth;
-    document.getElementById("dailyPeriod").onchange=drawChart;
+    bindPeriod("briefPeriod", renderBrief);
+    bindPeriod("cumPeriod", renderCumulative);
+    bindPeriod("growthPeriod", drawGrowth);
+    bindPeriod("dailyPeriod", drawChart);
+    bindPeriod("vlPeriod", loadVideoLinks);
+    syncRangeLabels();
     (async()=>{ await loadConfig(); await loadActions(); await load(); initAdmin(); loadTraffic(); })();
   </script>
 </body>
