@@ -38,7 +38,7 @@ const {
 } = process.env;
 
 const DAYS = Number(process.env.SYNC_DAYS || 30);     // 며칠치 가져올지 (기본 30일)
-const MAX_VIDEOS = Number(process.env.MAX_VIDEOS || 50);
+const MAX_VIDEOS = Math.min(200, Number(process.env.MAX_VIDEOS || 200));   // 10/26: 50편이면 조회수 낮은 최근 영상(시황 숏폼·롱폼)이 빠져 조회율·구독이 0으로 남았다
 // 초기 반응 측정: ①수동 입력(영상초기반응 탭, 시간 단위 — 최우선) ②없으면 Analytics 첫 N일(소급)
 const EARLY_DAYS = Number(process.env.EARLY_DAYS || 1);       // 자동 폴백: 게시 첫 N일
 const EARLY_WINDOW_H = Number(process.env.EARLY_WINDOW_H || 6); // 수동 입력 기준 시간(6h)
@@ -1262,18 +1262,32 @@ async function fetchUploadsViewSum() {
     `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${CHANNEL_ID}&key=${YOUTUBE_API_KEY}`)).json();
   const up = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
   if (!up) return null;
-  const pl = await (await fetch(
-    `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId=${up}&key=${YOUTUBE_API_KEY}`)).json();
-  const ids = (pl.items || []).map((it) => it.contentDetails.videoId).filter(Boolean);
-  let sum = 0;
+  // 10/26: 예전엔 최근 50편만 더해서, 새 영상이 올라오면 가장 오래된 영상이 합계에서 빠져 '오늘 조회수'가 0으로 떨어졌다.
+  //  → 업로드 재생목록 전체를 페이지 넘겨 더한다(e). 예전 스냅샷과 이어 비교하려고 최근 50편 합계(views)도 같이 낸다.
+  const ids = [];
+  let token = "";
+  for (let page = 0; page < 40; page++) {
+    const pl = await (await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId=${up}&key=${YOUTUBE_API_KEY}${token ? "&pageToken=" + token : ""}`)).json();
+    (pl.items || []).forEach((it) => { const v = it.contentDetails && it.contentDetails.videoId; if (v) ids.push(v); });
+    if (!pl.nextPageToken) break;
+    token = pl.nextPageToken;
+  }
+  const recent = new Set(ids.slice(0, 50));
+  let all = 0, recent50 = 0;
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const vs = await (await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${chunk.join(",")}&key=${YOUTUBE_API_KEY}`)).json();
-    (vs.items || []).forEach((it) => sum += Number(it.statistics?.viewCount || 0));
+    (vs.items || []).forEach((it) => { const n = Number(it.statistics?.viewCount || 0); all += n; if (recent.has(it.id)) recent50 += n; });
   }
-  return sum;
+  return { views: recent50, e: all };
 }
+// 스냅샷 두 점 사이 조회수: 둘 다 전체 합계(E열)가 있으면 그걸로, 아니면 예전 최근 50편 합계(D열)로
+const snapDelta = (from, to) => (from && to)
+  ? Math.max(0, (from.e != null && to.e != null) ? to.e - from.e : to.views - from.views) : null;
+const snapRow = (x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || x[2] || 0),
+  e: (x[4] != null && String(x[4]).trim() !== "") ? Number(x[4]) : null });
 
 // 채널 누적 지표 1줄 기록 (구독자·채널누적·영상합계)
 async function channelSnapshotJob() {
@@ -1285,13 +1299,14 @@ async function channelSnapshotJob() {
   if (!st) return false;
   let viewSum = null;
   try { viewSum = await fetchUploadsViewSum(); } catch (_) { /* 합계 실패시 빈칸 */ }
-  await ensureTab(sheets, CHSNAP_TAB, ["타임스탬프", "구독자", "채널누적조회수", "영상합계조회수"]);
+  await ensureTab(sheets, CHSNAP_TAB, ["타임스탬프", "구독자", "채널누적조회수", "영상합계조회수", "영상합계조회수(전체)"]);
   // 사용자 수동 보정 탭도 같이 준비(없으면 생성) — A:날짜 B:조회수
   await ensureTab(sheets, DAILYFIX_TAB, ["날짜(2026-06-16 또는 26-06-16)", "조회수(스튜디오 고급분석 값)"]);
   await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A:D`,
+    spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A:E`,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[new Date().toISOString(), Number(st.subscriberCount || 0), Number(st.viewCount || 0), viewSum == null ? "" : viewSum]] },
+    requestBody: { values: [[new Date().toISOString(), Number(st.subscriberCount || 0), Number(st.viewCount || 0),
+      viewSum == null ? "" : viewSum.views, viewSum == null ? "" : viewSum.e]] },
   });
   return true;
 }
@@ -1307,7 +1322,7 @@ app.get("/api/daily-live", async (req, res) => {
     const nowSubs = Number(st.subscriberCount || 0);
     const displayTotal = Number(st.viewCount || 0);          // 표시용 채널 누적(유튜브가 느리게 갱신)
     let gainNow = null; try { gainNow = await fetchUploadsViewSum(); } catch (_) {}
-    if (gainNow == null) gainNow = displayTotal;             // 합계 실패시 채널 누적으로 폴백
+    if (gainNow == null) gainNow = { views: displayTotal, e: null };   // 합계 실패시 채널 누적으로 폴백
     const nowTs = Date.now();
     const todayK = kstDate(nowTs), ydayK = kstDate(nowTs - 24 * 3600000);
 
@@ -1316,9 +1331,9 @@ app.get("/api/daily-live", async (req, res) => {
     const sheets = getSheetsClient();
     let snaps = [];
     try {
-      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
-      // 기준값 = 영상합계(D열) 우선, 없으면 채널누적(C열) 폴백 — 오늘 새벽 baseline 확보용
-      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || x[2] || 0) }))
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:E` });
+      // 기준값 = 영상합계(E열 전체 → D열 최근 50편) 우선, 없으면 채널누적(C열) 폴백 — 오늘 새벽 baseline 확보용
+      snaps = (r.data.values || []).map(snapRow)
         .filter((s) => s.ts && s.views > 0).sort((a, b) => a.ts - b.ts);
     } catch (_) { /* 탭 없음 */ }
     const firstOfDay = {};
@@ -1328,9 +1343,8 @@ app.get("/api/daily-live", async (req, res) => {
     const snapDaily = {};
     const dks = Object.keys(firstOfDay).sort();
     for (let i = 0; i < dks.length; i++) {
-      const startV = firstOfDay[dks[i]].views;
-      const nextV = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]].views : gainNow;
-      snapDaily[dks[i]] = Math.max(0, nextV - startV);
+      const next = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]] : gainNow;
+      snapDaily[dks[i]] = snapDelta(firstOfDay[dks[i]], next) || 0;
     }
 
     // 3) Analytics 확정 일별 (백필) — 최근 30일
@@ -1373,7 +1387,7 @@ app.get("/api/daily-live", async (req, res) => {
 
     const todayStart = firstOfDay[todayK];
     // 오늘 = 라이브(영상합계 - 새벽 baseline). 수동값은 baseline 스냅샷이 아예 없을 때만 폴백
-    const todayViews = todayStart ? Math.max(0, gainNow - todayStart.views) : (manualFix[todayK] != null ? manualFix[todayK] : null);
+    const todayViews = todayStart ? snapDelta(todayStart, gainNow) : (manualFix[todayK] != null ? manualFix[todayK] : null);
     const todaySubs = todayStart ? (nowSubs - todayStart.subs) : (anaDaily[todayK] ? anaDaily[todayK].subsNet : null);
     // 어제: 확정(Analytics) 최우선 → 수동보정 → 스냅샷 추정. (스냅샷 추정은 부풀 수 있어 확정값을 먼저 씀)
     const yesterdayViews = (anaDaily[ydayK] != null) ? anaDaily[ydayK].views
@@ -1418,38 +1432,38 @@ async function gatherTodayLive() {
     // 채널스냅샷 읽기(영상합계 D열 우선)
     let snaps = [];
     try {
-      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
-      snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), subs: Number(x[1] || 0), views: Number(x[3] || x[2] || 0) }))
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:E` });
+      snaps = (r.data.values || []).map(snapRow)
         .filter((s) => s.ts && s.views > 0).sort((a, b) => a.ts - b.ts);
     } catch (_) { /* 탭 없음 */ }
 
     const daySnaps = (dk) => snaps.filter((s) => kstDate(s.ts) === dk);
     const todaySnaps = daySnaps(todayK), ydaySnaps = daySnaps(ydayK);
-    const todayBase = todaySnaps.length ? todaySnaps[0].views : null;   // 오늘 새벽 baseline
-    const ydayBase = ydaySnaps.length ? ydaySnaps[0].views : null;      // 어제 새벽 baseline
+    const todayBase = todaySnaps.length ? todaySnaps[0] : null;   // 오늘 새벽 baseline (스냅샷 한 줄)
+    const ydayBase = ydaySnaps.length ? ydaySnaps[0] : null;      // 어제 새벽 baseline
 
     // 오늘 시간대별 누적 조회수(baseline 대비) — 그래프용
     const series = [];
     if (todayBase != null) {
-      for (const s of todaySnaps) series.push({ h: Number(kstHourOfDay(s.ts).toFixed(2)), cum: Math.max(0, s.views - todayBase) });
+      for (const s of todaySnaps) series.push({ h: Number(kstHourOfDay(s.ts).toFixed(2)), cum: snapDelta(todayBase, s) });
       if (gainNow != null) {
         const last = series[series.length - 1];
-        const nowPoint = { h: Number(nowHour.toFixed(2)), cum: Math.max(0, gainNow - todayBase) };
+        const nowPoint = { h: Number(nowHour.toFixed(2)), cum: snapDelta(todayBase, gainNow) };
         if (!last || nowPoint.h - last.h > 0.05 || nowPoint.cum !== last.cum) series.push(nowPoint);
       }
     }
-    const todaySoFar = (gainNow != null && todayBase != null) ? Math.max(0, gainNow - todayBase) : (series.length ? series[series.length - 1].cum : null);
+    const todaySoFar = (gainNow != null && todayBase != null) ? snapDelta(todayBase, gainNow) : (series.length ? series[series.length - 1].cum : null);
 
     // 어제 같은 시각(현재 시각 이하)까지의 누적 — 페이스 비교 기준
     let ydaySameTime = null;
     if (ydayBase != null && ydaySnaps.length) {
       const upto = ydaySnaps.filter((s) => kstHourOfDay(s.ts) <= nowHour);
       const ref = upto.length ? upto[upto.length - 1] : ydaySnaps[ydaySnaps.length - 1];
-      ydaySameTime = Math.max(0, ref.views - ydayBase);
+      ydaySameTime = snapDelta(ydayBase, ref);
     }
     // 어제 하루 최종(= 오늘 첫 스냅샷 - 어제 첫 스냅샷) — 진행률 표시용
-    const ydayFull = (ydayBase != null && todaySnaps.length) ? Math.max(0, todaySnaps[0].views - ydayBase)
-      : (ydayBase != null && ydaySnaps.length ? Math.max(0, ydaySnaps[ydaySnaps.length - 1].views - ydayBase) : null);
+    const ydayFull = (ydayBase != null && todaySnaps.length) ? snapDelta(ydayBase, todaySnaps[0])
+      : (ydayBase != null && ydaySnaps.length ? snapDelta(ydayBase, ydaySnaps[ydaySnaps.length - 1]) : null);
 
     // 페이스: 오늘 지금까지 vs 어제 같은 시각
     let pacePct = null;
@@ -1752,10 +1766,10 @@ async function gatherStats() {
   // 최근 미확정일 보강: 채널스냅샷 기반 잠정 일별(영상) 조회수 — Analytics 2~3일 지연 커버
   try {
     const sheets = getSheetsClient();
-    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:D` });
-    const snaps = (r.data.values || []).map((x) => ({ ts: new Date(x[0]).getTime(), views: Number(x[3] || x[2] || 0) }))
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CHSNAP_TAB}!A2:E` });
+    const snaps = (r.data.values || []).map(snapRow)
       .filter((x) => x.ts && x.views > 0).sort((a, b) => a.ts - b.ts);
-    const firstOfDay = {}; snaps.forEach((sn) => { const dk = kstDate(sn.ts); if (firstOfDay[dk] == null) firstOfDay[dk] = sn.views; });
+    const firstOfDay = {}; snaps.forEach((sn) => { const dk = kstDate(sn.ts); if (firstOfDay[dk] == null) firstOfDay[dk] = sn; });
     const dks = Object.keys(firstOfDay).sort();
     const lastConfirmed = daily.length ? daily[daily.length - 1].date : null;
     const todayK0 = kstDate(Date.now());
@@ -1765,7 +1779,7 @@ async function gatherStats() {
       if (d >= todayK0) continue; // 오늘(진행 중)은 제외
       const next = (i + 1 < dks.length) ? firstOfDay[dks[i + 1]] : null;
       if (next == null) continue;
-      daily.push({ date: d, video: Math.max(0, next - firstOfDay[d]), post: null, 잠정: true });
+      daily.push({ date: d, video: snapDelta(firstOfDay[d], next), post: null, 잠정: true });
     }
     daily.sort((a, b) => (a.date < b.date ? -1 : 1));
   } catch (_) { /* 스냅샷 없으면 확정분만으로 진행 */ }

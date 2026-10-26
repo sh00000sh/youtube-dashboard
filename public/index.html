@@ -1008,7 +1008,9 @@
     // ===== 유틸 =====
     const N=(n)=>{const x=Number(String(n??"").replace(/[^0-9.-]/g,""));return isNaN(x)?0:x;};
     const fmt=(n)=>N(n).toLocaleString("ko-KR");
-    const toPctNum=(n)=>{const x=N(n);return x<=1?x*100:x;};
+    // 평균조회율: 시트에 '49.6%'(퍼센트 문자열)와 '1.54'(분수 = 154%, 반복재생 숏폼)가 섞여 있다.
+    // 예전엔 1 이하만 ×100 해서 1.54가 1.5%로 나왔다 → '%'가 있으면 그대로, 없으면 분수로 보고 ×100
+    const toPctNum=(n)=>{ if(n==null||n==="") return 0; const x=N(n); return String(n).includes("%")?x:x*100; };
     const pctStr=(n)=>{ if(n==null||n==="")return "-"; return toPctNum(n).toFixed(1)+"%"; };
     // CTR은 시트에서 이미 '0.6%'처럼 %값으로 옴 → ×100 하면 안 됨(그대로 %). 평균조회율(분수)과 규칙 다름.
     const ctrStr=(n)=>{ if(n==null||n==="")return "-"; return N(n).toFixed(1)+"%"; };
