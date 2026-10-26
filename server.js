@@ -958,12 +958,42 @@ app.get("/api/calendar", async (req, res) => {
   }
 });
 
-// 저장·삭제 (관리자) — body: { pw, op: "upsert"|"delete", item }
+// 저장·삭제 — body: { op: "upsert"|"delete", item, pw? }
+// 10/26 사용자: 캘린더는 '수정 모드' 없이 바로 고친다.
+// → 이 브라우저에서 비밀번호를 한 번 맞히면 30일짜리 서명 쿠키(cal_tok)를 주고, 그동안은 비밀번호 없이 저장된다.
+//   (관리자 비밀번호 자체는 브라우저에 남기지 않는다)
+const CAL_TOK_DAYS = 30;
+const calSign = (exp) => require("crypto").createHmac("sha256", ADMIN_PASSWORD || "").update("cal:" + exp).digest("hex");
+function calTokOk(req) {
+  if (!ADMIN_PASSWORD) return false;
+  const m = String(req.headers.cookie || "").match(/(?:^|;\s*)cal_tok=(\d+)\.([a-f0-9]{64})/);
+  if (!m || Number(m[1]) < Date.now()) return false;
+  const a = Buffer.from(m[2]), b = Buffer.from(calSign(m[1]));
+  return a.length === b.length && require("crypto").timingSafeEqual(a, b);
+}
+function calTokSet(req, res) {
+  const exp = Date.now() + CAL_TOK_DAYS * 86400000;
+  const secure = (req.get("x-forwarded-proto") || req.protocol) === "https" ? "; Secure" : "";
+  res.setHeader("Set-Cookie", `cal_tok=${exp}.${calSign(exp)}; Max-Age=${CAL_TOK_DAYS * 86400}; Path=/api/calendar; HttpOnly; SameSite=Strict${secure}`);
+}
+// 화면이 처음 열릴 때 '이 브라우저는 바로 편집 가능한지'만 알려 준다
+const calHits = new Map();
+app.get("/api/calendar/can-edit", (req, res) => res.json({ ok: true, canEdit: calTokOk(req) }));
 app.post("/api/calendar", async (req, res) => {
   try {
-    const { pw, op, item } = req.body || {};
-    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
-    if (!item || !item.id) return res.status(400).json({ ok: false, error: "id가 없습니다." });
+    const { op, item, pw } = req.body || {};
+    const ip = req.ip || "x", now = Date.now(), hits = (calHits.get(ip) || []).filter((t) => now - t < 60000);
+    if (hits.length >= 30) return res.status(429).json({ ok: false, error: "잠시 후 다시 시도해 주세요." });
+    hits.push(now); calHits.set(ip, hits);
+    if (pw != null && pw !== "") {
+      if (!checkPw(pw)) return res.status(401).json({ ok: false, needPw: true, error: "비밀번호가 올바르지 않습니다." });
+      calTokSet(req, res);
+    } else if (!calTokOk(req)) {
+      return res.status(401).json({ ok: false, needPw: true, error: "이 브라우저에서 처음 한 번만 비밀번호가 필요해요." });
+    }
+    if (!item || !item.id || !/^[\w:.-]{1,80}$/.test(item.id)) return res.status(400).json({ ok: false, error: "id가 없습니다." });
+    if (op !== "delete" && !["post", "event", "ytmeta"].includes(item.kind)) return res.status(400).json({ ok: false, error: "종류가 올바르지 않습니다." });
+    for (const k of CAL_COLS) if (item[k] != null && String(item[k]).length > 2000) return res.status(400).json({ ok: false, error: "내용이 너무 깁니다." });
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.status(500).json({ ok: false, error: "시트 연결 정보가 없습니다." });
     const sheets = getSheetsClient();
     let rows = await calRead(sheets);

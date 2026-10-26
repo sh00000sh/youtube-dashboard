@@ -16,8 +16,33 @@
   const SLOT_T = { am1: '09:30', am2: '11:00', pm1: '13:30', pm2: '15:00', pm3: '16:30', reel: '18:00', eve: '21:00' };
   const DOW = ['일', '월', '화', '수', '목', '금', '토'];
   const COLORS = ['coral', 'orange', 'yellow', 'green', 'mint', 'blue', 'purple', 'pink', 'gray'];
-  const KINDS = ['회의', '마감', '촬영', '기타'];
-  const KIND_C = { '회의': 'green', '마감': 'gray', '촬영': 'purple', '기타': 'gray' };
+  const KINDS = ['회의', '마감', '촬영', '휴무', '기타'];
+  const KIND_C = { '회의': 'green', '마감': 'gray', '촬영': 'purple', '휴무': 'coral', '기타': 'gray' };
+  // ── 휴장일·공휴일 (10/26 사용자: 미장 휴장, 한국 명절·공휴일, 휴무일을 캘린더에) ──
+  // kr = 한국 공휴일(국내 증시도 휴장), krx = 국내 증시만 휴장, us = 미국 증시 휴장, half = 미국 조기 폐장, info = 참고(서머타임)
+  // 출처: NYSE 2026~2028 휴장 공지(2025.12.23), 2026·2027 한국 공휴일(대체·임시공휴일 포함). 해마다 연말에 다음 해를 추가한다
+  const HOL_RAW = {
+    kr: ['2026-01-01 신정', '2026-02-16 설날 연휴', '2026-02-17 설날', '2026-02-18 설날 연휴', '2026-03-01 삼일절', '2026-03-02 대체공휴일(삼일절)',
+      '2026-05-01 노동절', '2026-05-05 어린이날', '2026-05-24 부처님오신날', '2026-05-25 대체공휴일(부처님오신날)', '2026-06-03 지방선거', '2026-06-06 현충일',
+      '2026-07-17 제헌절', '2026-08-15 광복절', '2026-08-17 대체공휴일(광복절)', '2026-09-24 추석 연휴', '2026-09-25 추석', '2026-09-26 추석 연휴',
+      '2026-10-03 개천절', '2026-10-05 대체공휴일(개천절)', '2026-10-09 한글날', '2026-12-25 성탄절',
+      '2027-01-01 신정', '2027-02-06 설날 연휴', '2027-02-07 설날', '2027-02-08 설날 연휴', '2027-02-09 대체공휴일(설날)', '2027-03-01 삼일절',
+      '2027-05-01 노동절', '2027-05-03 대체공휴일(노동절)', '2027-05-05 어린이날', '2027-05-13 부처님오신날', '2027-06-06 현충일',
+      '2027-07-17 제헌절', '2027-07-19 대체공휴일(제헌절)', '2027-08-15 광복절', '2027-08-16 대체공휴일(광복절)',
+      '2027-09-14 추석 연휴', '2027-09-15 추석', '2027-09-16 추석 연휴', '2027-10-03 개천절', '2027-10-04 대체공휴일(개천절)',
+      '2027-10-09 한글날', '2027-10-11 대체공휴일(한글날)', '2027-12-25 성탄절', '2027-12-27 대체공휴일(성탄절)'],
+    krx: ['2026-12-31 국내 증시 연말 휴장', '2027-12-31 국내 증시 연말 휴장'],
+    us: ['2026-01-01 신정', '2026-01-19 마틴 루서 킹 데이', '2026-02-16 대통령의 날', '2026-04-03 성금요일', '2026-05-25 메모리얼 데이',
+      '2026-06-19 준틴스', '2026-07-03 독립기념일(대체)', '2026-09-07 노동절', '2026-11-26 추수감사절', '2026-12-25 성탄절',
+      '2027-01-01 신정', '2027-01-18 마틴 루서 킹 데이', '2027-02-15 대통령의 날', '2027-03-26 성금요일', '2027-05-31 메모리얼 데이',
+      '2027-06-18 준틴스(대체)', '2027-07-05 독립기념일(대체)', '2027-09-06 노동절', '2027-11-25 추수감사절', '2027-12-24 성탄절(대체)'],
+    half: ['2026-11-27 추수감사절 다음 날', '2026-12-24 성탄 전날', '2027-11-26 추수감사절 다음 날'],
+    info: ['2026-03-08 미국 서머타임 시작', '2026-11-01 미국 서머타임 종료', '2027-03-14 미국 서머타임 시작', '2027-11-07 미국 서머타임 종료'],
+  };
+  const HOL = {};
+  Object.entries(HOL_RAW).forEach(([t, arr]) => arr.forEach((x) => { const d = x.slice(0, 10); (HOL[d] = HOL[d] || []).push({ t, n: x.slice(11) }); }));
+  const holText = (h) => h.t === 'us' ? `🇺🇸 미장 휴장 · ${h.n}` : h.t === 'half' ? `🇺🇸 미장 조기 폐장(현지 13시) · ${h.n}` : h.t === 'info' ? `🕐 ${h.n}` : h.t === 'krx' ? `🇰🇷 ${h.n}` : `🇰🇷 ${h.n}`;
+  const holShort = (h) => h.t === 'us' ? `🇺🇸 휴장` : h.t === 'half' ? `🇺🇸 조기폐장` : h.t === 'info' ? `🕐 ${h.n.replace('미국 ', '')}` : h.t === 'krx' ? '🇰🇷 증시 휴장' : `🇰🇷 ${h.n.replace(/대체공휴일\(.+\)/, '대체공휴일')}`;
   const TYPES = ['반전형', '이득·손해형', '인용형', '인물 스토리형', '질문형', '숫자 강조형', '비교형', '미분류'];
   const YT_FROM = '2026-05-01';   // 이전 영상은 이 채널 운영 전 것이라 캘린더에 넣지 않는다
 
@@ -61,10 +86,13 @@
     loaded = true; rebuild(); renderCal();
   }
   function msg(t) { const el = $('ccMsg'); if (!el) return; el.textContent = t; clearTimeout(msg.t); msg.t = setTimeout(() => { el.textContent = ''; }, 3000); }
+  // 저장: 이 브라우저가 한 번 비밀번호를 맞혔으면(30일 쿠키) 그냥 저장되고,
+  // 아니면 수정 창 안에 비밀번호 칸이 한 번 뜬다. 대시보드 관리자 로그인 상태면 그 비밀번호를 그대로 쓴다.
   async function save(op, item) {
-    if (!ADMIN) { msg('수정하려면 오른쪽 위에서 관리자 로그인을 먼저 해 주세요.'); if (typeof openPwModal === 'function') openPwModal(); return false; }
+    const pwEl = $('ccPw'), pw = (pwEl && pwEl.value) || (typeof ADMIN !== 'undefined' && ADMIN ? ADMIN_PW : '');
     try {
-      const r = await fetch('/api/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pw: ADMIN_PW, op, item }) }).then((r) => r.json());
+      const r = await fetch('/api/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op, item, pw }) }).then((r) => r.json());
+      if (r.needPw) { askPw(r.error); return false; }
       if (!r.ok) { msg('저장하지 못했어요: ' + (r.error || '')); return false; }
       const i = raw.findIndex((x) => x.id === item.id);
       if (op === 'delete') { if (i >= 0) raw.splice(i, 1); } else if (i >= 0) raw[i] = { ...raw[i], ...item }; else raw.push(item);
@@ -114,7 +142,10 @@
       const c = document.createElement('div'); c.tabIndex = 0; c.setAttribute('role', 'button');
       c.className = 'day' + (d.getMonth() !== cur.getMonth() ? ' out' : '') + (key === td ? ' today' : '') + (key === sel ? ' sel' : '') + (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '');
       c.setAttribute('aria-label', `${d.getMonth() + 1}월 ${d.getDate()}일, 콘텐츠 ${ps.length}개, 일정 ${es.length}개`);
+      const hs = HOL[key] || [];
+      if (hs.some((h) => h.t === 'kr')) c.classList.add('sun');   // 한국 공휴일은 날짜를 빨갛게
       const dn = document.createElement('span'); dn.className = 'dn'; dn.textContent = d.getDate(); c.appendChild(dn);
+      hs.forEach((h) => { const t = document.createElement('span'); t.className = 'hol h-' + h.t; t.textContent = holShort(h); t.title = holText(h); c.appendChild(t); });
       const groups = new Map(); ps.forEach((p) => { const l = labelOf(p); if (!groups.has(l)) groups.set(l, []); groups.get(l).push(p); });
       const items = [...[...groups.values()].map((g) => ['grp', g]), ...es.map((e) => ['ev', e])];
       items.slice(0, 4).forEach(([k, x]) => c.appendChild(k === 'grp' ? grpBlk(x, key) : evBlk(x)));
@@ -142,6 +173,7 @@
     const rows = [...ps.map((p) => ({ t: pTime(p), k: 'post', x: p })), ...es.map((e) => ({ t: e.time || '', k: 'ev', x: e }))]
       .sort((a, b) => (a.t || '99').localeCompare(b.t || '99'));
     const box = $('ccTl'); box.textContent = '';
+    (HOL[sel] || []).forEach((h) => { const t = document.createElement('div'); t.className = 'holrow h-' + h.t; t.textContent = holText(h); box.appendChild(t); });
     if (!rows.length) { const e0 = document.createElement('p'); e0.className = 'empty'; e0.textContent = '이 날 기록이 없어요. 아래 + 콘텐츠로 시간과 함께 넣어 주세요.'; box.appendChild(e0); return; }
     const part = (t) => !t ? '시간 미정' : t < '12:00' ? '오전' : t < '18:00' ? '오후' : '저녁';
     let last = null;
@@ -185,12 +217,23 @@
     const t = f.querySelector('.sh-title:not([readonly])'); if (t) t.focus();
   }
   function closeSheet() { $('ccSheet').close(); }
+  function askPw(why) {
+    const f = $('ccForm'); let row = $('ccPwRow');
+    if (!row) {
+      row = document.createElement('div'); row.id = 'ccPwRow'; row.className = 'pwrow';
+      const t = document.createElement('div'); t.className = 'kind'; t.id = 'ccPwWhy'; row.appendChild(t);
+      const i = mk('input', { type: 'password', id: 'ccPw', placeholder: '대시보드 관리자 비밀번호', autocomplete: 'current-password', 'aria-label': '비밀번호' }); row.appendChild(i);
+      f.insertBefore(row, f.querySelector('.acts'));
+    }
+    $('ccPwWhy').textContent = (why || '') + ' 한 번 맞히면 이 브라우저에선 30일 동안 바로 저장돼요.';
+    $('ccPw').focus();
+  }
   function acts(f, onSave, onDel) {
     const a = document.createElement('div'); a.className = 'acts';
     if (onDel) { const d = mk('button', { type: 'button', class: 'ccbtn del' }); d.textContent = '삭제'; d.addEventListener('click', () => { if (d.dataset.arm) onDel(); else { d.dataset.arm = 1; d.textContent = '한 번 더 누르면 삭제'; } }); a.appendChild(d); }
     const sp = document.createElement('span'); sp.className = 'sp'; a.appendChild(sp);
     const c = mk('button', { type: 'button', class: 'ccbtn' }); c.textContent = '닫기'; c.addEventListener('click', closeSheet);
-    const s = mk('button', { type: 'submit', class: 'ccbtn pri' }); s.textContent = ADMIN ? '저장' : '로그인하고 저장';
+    const s = mk('button', { type: 'submit', class: 'ccbtn pri' }); s.textContent = '저장';
     a.append(c, s); f.appendChild(a);
     f.onsubmit = async (ev) => { ev.preventDefault(); if (await onSave()) closeSheet(); };
   }

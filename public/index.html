@@ -362,6 +362,12 @@
     #sec-cal .blk.g{display:flex;gap:4px;align-items:center;}
     #sec-cal .blk .lt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
     #sec-cal .blk .cnt{flex:none;font-size:10.5px;font-variant-numeric:tabular-nums;background:rgba(255,255,255,.55);border-radius:999px;padding:0 5px;}
+    #sec-cal .hol{font-size:10.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 3px;color:var(--sub);}
+    #sec-cal .hol.h-kr,#sec-cal .hol.h-krx{color:var(--c-sun);}
+    #sec-cal .hol.h-us,#sec-cal .hol.h-half{color:var(--c-sat);}
+    #sec-cal .holrow{font-size:12.5px;padding:7px 10px;border-radius:8px;background:var(--chip);margin-bottom:4px;}
+    #sec-cal .holrow.h-kr,#sec-cal .holrow.h-krx{color:var(--c-sun);}
+    #sec-cal .holrow.h-us,#sec-cal .holrow.h-half{color:var(--c-sat);}
     #sec-cal .more{font-size:11px;color:var(--sub);padding-left:4px;}
     #sec-cal .legend{font-size:11.5px;gap:12px;margin-top:12px;}
     #sec-cal .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;}
@@ -406,6 +412,8 @@
     .ccsheet .qt{font:inherit;font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:999px;padding:3px 9px;cursor:pointer;justify-self:start;}
     .ccsheet .qt:hover{border-color:var(--blue);}
     .ccsheet .qt.on{background:var(--c-orange);color:var(--blk-fg);border-color:var(--c-orange);}
+    .ccsheet .pwrow{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:8px;background:var(--chip);}
+    .ccsheet .pwrow input{width:100%;}
     .ccsheet .acts{display:flex;gap:8px;margin-top:4px;}
     .ccsheet .acts .sp{margin-right:auto;}
     .ccsheet .ccbtn{font:inherit;font-size:13px;background:var(--card);color:var(--text);border:1px solid var(--divider);border-radius:8px;padding:6px 12px;cursor:pointer;}
@@ -906,7 +914,7 @@
     </div>
     <div class="sec" id="sec-cal" style="display:none">
     <h2>📅 콘텐츠 캘린더 <span class="kpi-badge">미주옵·회사 인스타 + 유튜브</span></h2>
-    <div class="desc">유튜브 영상은 업로드 시각대로 자동으로 들어와요. 인스타 게시물·릴스와 일정은 직접 넣고, 수정은 관리자 로그인 후에 할 수 있어요.</div>
+    <div class="desc">유튜브 영상은 업로드 시각대로 자동으로 들어와요. 인스타 게시물·릴스와 일정은 날짜를 눌러 바로 넣고 고칠 수 있어요(처음 한 번만 비밀번호). 🇰🇷 한국 공휴일·국내 증시 휴장, 🇺🇸 미국 증시 휴장·조기 폐장, 🕐 서머타임 전환일이 함께 표시돼요.</div>
     <div class="split">
       <section class="cpanel">
         <div class="calhead">
@@ -917,7 +925,7 @@
         </div>
         <div class="ccsum" id="ccSum">불러오는 중…</div>
         <div class="cal" id="ccCal"></div>
-        <div class="legend"><span><i style="background:var(--c-blue)"></i>미주옵_게시물</span><span><i style="background:var(--c-coral)"></i>미주옵_릴스</span><span><i style="background:var(--c-mint)"></i>회사_게시물</span><span><i style="background:var(--c-pink)"></i>회사_릴스</span><span><i style="background:var(--c-purple)"></i>유튜브_영상</span><span><i style="background:var(--c-yellow)"></i>유튜브_쇼츠</span><span><i style="background:var(--c-orange)"></i>유튜브_시황쇼츠</span><span>● 점 = 일정 · ✓ 올림 · 줄 그은 것 = 보류</span></div>
+        <div class="legend"><span><i style="background:var(--c-blue)"></i>미주옵_게시물</span><span><i style="background:var(--c-coral)"></i>미주옵_릴스</span><span><i style="background:var(--c-mint)"></i>회사_게시물</span><span><i style="background:var(--c-pink)"></i>회사_릴스</span><span><i style="background:var(--c-purple)"></i>유튜브_영상</span><span><i style="background:var(--c-yellow)"></i>유튜브_쇼츠</span><span><i style="background:var(--c-orange)"></i>유튜브_시황쇼츠</span><span>● 점 = 일정 · ✓ 올림 · 줄 그은 것 = 보류 · <b style="color:var(--c-sun)">🇰🇷 공휴일·휴장</b> · <b style="color:var(--c-sat)">🇺🇸 미장 휴장</b></span></div>
       </section>
       <section class="cpanel daycard" aria-live="polite">
         <h3 id="ccDayTitle">하루 시간표</h3>
@@ -2439,9 +2447,12 @@
     // ===== 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 =====
     // KPI 달성률(sec-kpi)은 성과 탭 하위로 이동했음.
     // sub: id(탭 키) · label · secs(보여줄 섹션 id 배열) · draw
-    // 3화면 구성: 오늘(매일) → 성과(주간 분석) → 탐색(파고들기)
+    // 화면 구성: 캘린더(일정) → 오늘(매일) → 성과(주간 분석) → 탐색(파고들기)
     // 기존 화면은 하나도 버리지 않고 '탐색'으로 이동만 시켰음.
     const NAV=[
+      {cat:"plan", label:"📅 캘린더", subs:[
+        {id:"sec-cal",     label:"콘텐츠 캘린더",   secs:["sec-cal"],     draw:()=>{ if(window.calDraw) calDraw(); }},
+      ]},
       {cat:"today", label:"📌 오늘", subs:[
         {id:"sec-brief",    label:"요약",           secs:["sec-brief"],    draw:()=>renderBrief()},
         {id:"sec-live",     label:"실시간",          secs:["sec-live"],     draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
@@ -2455,9 +2466,6 @@
         {id:"sec-compare", label:"과거 vs 현재",    secs:["sec-compare"],  draw:()=>{ if(cmpData)renderCompare(); }},
         {id:"sec-posts",   label:"게시물 성과",     secs:["sec-posts"],    draw:()=>loadPosts()},
       ]},
-      {cat:"plan", label:"📅 캘린더", subs:[
-        {id:"sec-cal",     label:"콘텐츠 캘린더",   secs:["sec-cal"],     draw:()=>{ if(window.calDraw) calDraw(); }},
-      ]},
       {cat:"explore", label:"🔎 탐색", subs:[
         {id:"sec-vtable",  label:"영상 상세",       secs:["sec-vtable"],  draw:()=>renderVideos()},
         {id:"sec-vd",      label:"게시 후 성과",    secs:["sec-vd"],      draw:()=>{ if(vd.id)drawVd(); }},
@@ -2470,7 +2478,7 @@
     ];
     const ALL_SUBS=NAV.flatMap(c=>c.subs);
     const ALL_SECS=[...new Set(ALL_SUBS.flatMap(s=>s.secs))];  // 토글 대상 섹션 전체
-    let activeCat="today", activeSub={};   // activeSub[cat]=현재 선택된 하위 탭 id
+    let activeCat="plan", activeSub={};   // 10/26 사용자: 캘린더가 가장 먼저   // activeSub[cat]=현재 선택된 하위 탭 id
     NAV.forEach(c=>activeSub[c.cat]=c.subs[0].id);
 
     function buildNav(){
