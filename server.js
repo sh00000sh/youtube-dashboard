@@ -1830,6 +1830,34 @@ async function getBench(force) {
   benchCache = { at: Date.now(), data };
   return data;
 }
+// 📸 인스타그램 (ig.js)
+require("./ig")({ app, getSheetsClient, ensureTab, SHEET_ID });
+
+// 🤝 다른 클로드 작업(영상 기획·제목·대본)이 읽어 가는 요약 — 사람이 읽을 수 있는 텍스트
+//   10/26 사용자: "코워크 프로젝트가 대시보드 분석 결과를 보고 앞으로 만드는 영상에 반영하면 좋겠다"
+app.get("/api/brief", async (req, res) => {
+  try {
+    const b = await getBench(false);
+    const L = [];
+    L.push(`# 유진투자선물 유튜브 채널 — 우리 채널 기준 요약 (${kstDate(Date.now())})`, "");
+    L.push("판정 기준은 유명 채널이 아니라 '우리 영상들의 중간값'이다. 시리즈마다 기준이 다르다.", "");
+    L.push("## 시리즈별 기준값 (업로드 24시간 조회수 중간값 / 보통 범위 · 다 자란 조회수 중간값)");
+    b.groups.forEach((g) => L.push(`- ${g.name} (${g.n}편): 24시간 ${g.v24 ? `${g.v24.med}회 (${g.v24.p25}~${g.v24.p75})` : "-"} · 다 자란 ${g.views ? g.views.med + "회" : "-"}`));
+    L.push("", "## 흐름 경보");
+    (b.alerts || []).length ? b.alerts.forEach((a) => { L.push(`- ${a.title} — ${a.detail}`); (a.diffs || []).forEach((d) => L.push(`  - ${d}`)); }) : L.push("- 없음");
+    L.push("", "## 데이터가 말하는 차이");
+    b.findings.forEach((x) => L.push(`- ${x.hi}이 ${x.lo}보다 ${x.ratio}배 (${x.ctx}: ${x.hiMed} vs ${x.loMed}, ${x.nHi}편·${x.nLo}편)`));
+    L.push("", "## 이번 주 해볼 것");
+    b.tryNext.forEach((t, i) => L.push(`${i + 1}. ${t.what} — 근거: ${t.why} — 판단: ${t.measure}`));
+    L.push("", "## 최근 2주 영상 (업로드 · 시리즈 · 제목 형태 · 24시간 조회수 · 우리 기준 위치)");
+    b.recent.forEach((v) => L.push(`- ${v.kdate} ${v.hour}시 · ${v.series} · ${v.hook} · ${v.v24 ?? (v.pace ? v.pace.h + "시간째 " + v.pace.v : "-")}회 · ${v.grade24 || (v.pace && v.pace.grade) || "-"} · "${v.title.split("#")[0].trim()}"`));
+    L.push("", "## 운영 원칙 (운영자 결정)", "- 롱폼은 교육 영상이라 오프닝·훅은 바꾸지 않는다.", "- 수익률·배수·수익금액 숫자는 제목·썸네일·카피에 쓰지 않는다(준법).",
+      "- 제목 형태 분류: '?·~까'=질문형, '왜·이유'=이유형, '~는데·~지만·~에도'=반전형, 나머지=뉴스 요약형.");
+    if (aiCache.text) L.push("", `## 최근 AI 리포트 (${aiCache.date})`, aiCache.text);
+    res.type("text/plain; charset=utf-8").send(L.join("\n"));
+  } catch (e) { res.status(500).type("text/plain").send("오류: " + e.message); }
+});
+
 app.get("/api/benchmarks", async (req, res) => {
   try {
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: false, error: "시트 연결 정보가 없습니다." });
