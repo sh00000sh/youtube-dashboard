@@ -101,11 +101,15 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
   app.get("/api/ig", async (req, res) => {
     try {
       let posts = [], history = [];
+      // 탭마다 따로 읽는다(한쪽 탭이 아직 없으면 batchGet 전체가 실패해서 게시물까지 비어 보였음)
+      const sheets = getSheetsClient();
       try {
-        const sheets = getSheetsClient();
-        const r = await sheets.spreadsheets.values.batchGet({ spreadsheetId: SHEET_ID, ranges: [`${IG_POST_TAB}!A2:P`, `${IG_ACC_TAB}!A2:D`] });
-        posts = (r.data.valueRanges?.[0]?.values || []).filter((x) => x[1]).map((x) => Object.fromEntries(IG_COLS.map((k, i) => [k, x[i] ?? ""])));
-        history = (r.data.valueRanges?.[1]?.values || []).map((x) => ({ at: x[0], account: x[1], followers: Number(x[2] || 0), media: Number(x[3] || 0) }));
+        const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A2:P` });
+        posts = (r.data.values || []).filter((x) => x[1]).map((x) => Object.fromEntries(IG_COLS.map((k, i) => [k, x[i] ?? ""])));
+      } catch (_) { /* 탭 없음 */ }
+      try {
+        const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_ACC_TAB}!A2:D` });
+        history = (r.data.values || []).map((x) => ({ at: x[0], account: x[1], followers: Number(x[2] || 0), media: Number(x[3] || 0) }));
       } catch (_) { /* 탭 없음 */ }
       res.json({ ok: true, accounts: Object.values(state), posts, history });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -121,6 +125,12 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
       const id = item.id && /^manual_[\w-]{1,40}$/.test(item.id) ? item.id : "manual_" + Date.now().toString(36);
       const sheets = getSheetsClient();
       await ensureTab(sheets, IG_POST_TAB, IG_COLS);
+      if (op === "followers") {   // 팔로워 수 직접 기록
+        await ensureTab(sheets, IG_ACC_TAB, ["시각", "계정", "팔로워", "게시물수"]);
+        await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${IG_ACC_TAB}!A:D`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
+          requestBody: { values: [[new Date().toISOString(), item.acc, Number(item.followers) || "", Number(item.media) || ""]] } });
+        return res.json({ ok: true });
+      }
       const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!B2:B` });
       const at = (r.data.values || []).findIndex((x) => x[0] === id);
       if (op === "delete") {
