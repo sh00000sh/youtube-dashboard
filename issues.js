@@ -100,6 +100,7 @@ module.exports = function setupIssues({ app, getSheetsClient, ensureTab, SHEET_I
       if (j.status && j.status !== "000" && j.status !== "013") throw new Error(`DART ${j.status} ${j.message || ""}`);
       for (const d of j.list || []) {
         if (!["Y", "K"].includes(d.corp_cls)) continue;   // 코스피·코스닥만
+        if (/기재정정|첨부정정/.test(d.report_nm) || /스팩|SPAC/i.test(d.corp_name)) continue;   // 정정 공시·스팩 합병은 뺀다
         const kind = DART_KINDS.find(([re]) => re.test(d.report_nm));
         if (!kind || seen.has("dart:" + d.rcept_no)) continue;
         let us = "";
