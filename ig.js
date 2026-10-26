@@ -100,18 +100,19 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
 
   app.get("/api/ig", async (req, res) => {
     try {
-      let posts = [], history = [];
+      let posts = [], history = [], dbg = null;
       // 탭마다 따로 읽는다(한쪽 탭이 아직 없으면 batchGet 전체가 실패해서 게시물까지 비어 보였음)
       const sheets = getSheetsClient();
       try {
         const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A2:P` });
         posts = (r.data.values || []).filter((x) => x[1]).map((x) => Object.fromEntries(IG_COLS.map((k, i) => [k, x[i] ?? ""])));
+        if (req.query.debug) dbg = { range: r.data.range, rows: (r.data.values || []).length, sample: (r.data.values || []).slice(-3).map((x) => x.slice(0, 3)) };
       } catch (_) { /* 탭 없음 */ }
       try {
         const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_ACC_TAB}!A2:D` });
         history = (r.data.values || []).map((x) => ({ at: x[0], account: x[1], followers: Number(x[2] || 0), media: Number(x[3] || 0) }));
       } catch (_) { /* 탭 없음 */ }
-      res.json({ ok: true, accounts: Object.values(state), posts, history });
+      res.json({ ok: true, accounts: Object.values(state), posts, history, ...(dbg ? { dbg } : {}) });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
   // ✍️ 직접 입력 (API 연결 전 임시 · 연결 뒤에도 API가 못 주는 값 보정용)
