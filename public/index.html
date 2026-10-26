@@ -330,7 +330,91 @@
       .card .value{font-size:20px;}
       .channel .info{gap:10px;}
     }
-  </style>
+      /* ===== 📅 콘텐츠 캘린더 (#sec-cal) ===== */
+    :root{--c-coral:#ffb8ab;--c-yellow:#ffe39a;--c-green:#bfe6b3;--c-mint:#a9e0d8;--c-blue:#b3cdfd;--c-purple:#d3c1ff;--c-pink:#ffc6de;--c-gray:#d7dde1;--c-orange:#ffcf9e;--c-sun:#d9534f;--c-sat:#3f72cf;--blk-fg:#25292c;}
+    body.dark{--c-coral:#e59a8d;--c-yellow:#e2c46f;--c-green:#98c58d;--c-mint:#84c2b9;--c-blue:#8eaee6;--c-purple:#b3a0e6;--c-pink:#e3a4c0;--c-gray:#9aa4ab;--c-orange:#e8ad72;--c-sun:#ef8a86;--c-sat:#86a8ec;}
+    #sec-cal .split{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:16px;align-items:start;}
+    #sec-cal .cpanel{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:18px 18px 16px;min-width:0;}
+    #sec-cal .daycard{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;}
+    #sec-cal .calhead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+    #sec-cal .calhead h3{font-size:19px;font-weight:800;margin-right:auto;font-variant-numeric:tabular-nums;}
+    #sec-cal .ccbtn{font:inherit;font-size:13px;background:var(--card);color:var(--text);border:1px solid var(--divider);border-radius:8px;padding:5px 11px;cursor:pointer;}
+    #sec-cal .ccbtn:hover{border-color:var(--blue);}
+    #sec-cal .ccbtn.pri{background:var(--blue);border-color:var(--blue);color:#fff;}
+    #sec-cal .ccbtn.del{color:var(--c-sun);}
+    #sec-cal .ccsum{font-size:12.5px;color:var(--sub);margin:-2px 0 10px;}
+    #sec-cal .ccsum b{color:var(--text);}
+    #sec-cal .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));}
+    #sec-cal .dow{text-align:center;color:var(--sub);font-size:12px;padding:4px 0 8px;}
+    #sec-cal .dow:first-child{color:var(--c-sun);} #sec-cal .dow:nth-child(7){color:var(--c-sat);}
+    #sec-cal .day{min-height:104px;border-top:1px solid var(--line);padding:4px 3px 6px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0;}
+    #sec-cal .day:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;}
+    #sec-cal .day.out .dn{opacity:.35;}
+    #sec-cal .day.sel{background:var(--blue-soft);border-radius:0 0 8px 8px;}
+    #sec-cal .dn{align-self:center;font-size:12.5px;font-variant-numeric:tabular-nums;width:26px;height:26px;line-height:26px;text-align:center;border-radius:999px;margin-bottom:2px;}
+    #sec-cal .day.sun .dn{color:var(--c-sun);} #sec-cal .day.sat .dn{color:var(--c-sat);}
+    #sec-cal .day.today .dn{background:var(--blue);color:#fff;font-weight:700;}
+    #sec-cal .blk{display:block;width:100%;text-align:left;font:inherit;font-size:11.5px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0;border-radius:4px;padding:1px 5px;background:var(--c-gray);color:var(--blk-fg);cursor:pointer;}
+    #sec-cal .blk:hover{filter:brightness(.95);}
+    #sec-cal .blk.hold{opacity:.5;text-decoration:line-through;}
+    #sec-cal .blk.line{background:none!important;color:var(--text);padding-left:3px;}
+    #sec-cal .blk.line::before{content:"";display:inline-block;width:7px;height:7px;border-radius:999px;background:var(--dot,var(--c-gray));margin-right:5px;vertical-align:1px;}
+    #sec-cal .blk.g{display:flex;gap:4px;align-items:center;}
+    #sec-cal .blk .lt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+    #sec-cal .blk .cnt{flex:none;font-size:10.5px;font-variant-numeric:tabular-nums;background:rgba(255,255,255,.55);border-radius:999px;padding:0 5px;}
+    #sec-cal .more{font-size:11px;color:var(--sub);padding-left:4px;}
+    #sec-cal .legend{font-size:11.5px;gap:12px;margin-top:12px;}
+    #sec-cal .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;}
+    #sec-cal .daycard h3{font-size:16px;font-weight:800;margin-bottom:4px;}
+    #sec-cal .note{font-size:12px;color:var(--sub);margin-bottom:12px;line-height:1.5;}
+    #sec-cal .tl{display:flex;flex-direction:column;gap:4px;}
+    #sec-cal .tl h3{font-size:12px;font-weight:700;color:var(--sub);margin:10px 0 2px;}
+    #sec-cal .tl h3:first-child{margin-top:0;}
+    #sec-cal .tli{display:grid;grid-template-columns:44px 4px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:8px;background:var(--bg);font:inherit;font-size:13px;text-align:left;color:var(--text);border:0;width:100%;cursor:pointer;}
+    #sec-cal .tli:hover{background:var(--hover);}
+    #sec-cal .tli .tm{font-variant-numeric:tabular-nums;font-size:12.5px;}
+    #sec-cal .tli .bar4{width:4px;align-self:stretch;border-radius:2px;}
+    #sec-cal .tli .lb{font-weight:700;font-size:12.5px;}
+    #sec-cal .tli .lb s{text-decoration:none;font-weight:400;color:var(--sub);margin-left:6px;font-size:11.5px;}
+    #sec-cal .tli small{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    #sec-cal .tli.ev .lb{font-weight:400;}
+    #sec-cal .tli.hold small{text-decoration:line-through;opacity:.6;}
+    #sec-cal .tli.flash{animation:ccfl 1.2s ease-out;}
+    @keyframes ccfl{from{box-shadow:0 0 0 3px var(--blue);}to{box-shadow:0 0 0 0 transparent;}}
+    #sec-cal .empty{padding:14px 0;text-align:left;font-size:13px;}
+    #sec-cal .ccmsg{font-size:12.5px;color:var(--g-tx);min-height:18px;margin-top:8px;}
+    #sec-cal .blk .ls{display:none;}
+    dialog.ccsheet{margin:auto;border:0;padding:0;border-radius:16px;background:var(--card);color:var(--text);width:min(460px,calc(100vw - 32px));box-shadow:0 18px 48px rgba(0,0,0,.25);}
+    dialog.ccsheet::backdrop{background:rgba(20,24,27,.35);}
+    .ccsheet form{padding:18px 20px 16px;display:flex;flex-direction:column;gap:12px;}
+    .ccsheet .sh-title{font:inherit;font-size:18px;font-weight:700;border:0;border-bottom:1px solid var(--divider);background:none;color:var(--text);padding:4px 0 8px;width:100%;border-radius:0;}
+    .ccsheet .sh-title.ro{line-height:1.45;}
+    .ccsheet .sh-title:focus-visible{outline:none;border-bottom-color:var(--blue);}
+    .ccsheet .row{display:grid;grid-template-columns:76px minmax(0,1fr);gap:10px;align-items:center;font-size:13px;}
+    .ccsheet .row>span{color:var(--sub);}
+    .ccsheet input,.ccsheet select,.ccsheet textarea{font:inherit;font-size:13px;color:var(--text);background:var(--bg);border:1px solid var(--divider);border-radius:6px;padding:5px 7px;}
+    .ccsheet .row input,.ccsheet .row select,.ccsheet textarea{width:100%;}
+    .ccsheet textarea{min-height:64px;resize:vertical;}
+    .ccsheet .kind{font-size:12px;color:var(--sub);}
+    .ccsheet .yinfo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--sub);}
+    .ccsheet .palette{display:flex;gap:8px;flex-wrap:wrap;}
+    .ccsheet .palette label{position:relative;}
+    .ccsheet .palette input{position:absolute;opacity:0;width:1px;height:1px;}
+    .ccsheet .palette span{display:block;width:24px;height:24px;border-radius:999px;border:2px solid transparent;cursor:pointer;}
+    .ccsheet .palette input:checked+span{border-color:var(--text);box-shadow:inset 0 0 0 2px var(--card);}
+    .ccsheet .quick{display:flex;flex-wrap:wrap;gap:6px;}
+    .ccsheet .qt{font:inherit;font-size:12px;background:var(--bg);color:var(--text);border:1px solid var(--divider);border-radius:999px;padding:3px 9px;cursor:pointer;justify-self:start;}
+    .ccsheet .qt:hover{border-color:var(--blue);}
+    .ccsheet .qt.on{background:var(--c-orange);color:var(--blk-fg);border-color:var(--c-orange);}
+    .ccsheet .acts{display:flex;gap:8px;margin-top:4px;}
+    .ccsheet .acts .sp{margin-right:auto;}
+    .ccsheet .ccbtn{font:inherit;font-size:13px;background:var(--card);color:var(--text);border:1px solid var(--divider);border-radius:8px;padding:6px 12px;cursor:pointer;}
+    .ccsheet .ccbtn.pri{background:var(--blue);border-color:var(--blue);color:#fff;}
+    .ccsheet .ccbtn.del{color:var(--c-sun);}
+    @media (max-width:960px){ #sec-cal .split{grid-template-columns:minmax(0,1fr);} #sec-cal .daycard{position:static;max-height:none;} }
+    @media (max-width:640px){ #sec-cal .day{min-height:70px;padding:2px 1px 4px;} #sec-cal .blk{font-size:10px;padding:0 3px;} #sec-cal .blk .bt,#sec-cal .blk .ck,#sec-cal .blk .lf{display:none;} #sec-cal .blk .ls{display:inline;}
+      dialog.ccsheet{margin:auto auto 0;width:100vw;max-width:100vw;border-radius:16px 16px 0 0;} }
+</style>
 </head>
 <body>
   <!-- 기간 직접 선택 달력 (기간 셀렉트의 "날짜 지정"에서 열림) -->
@@ -819,6 +903,31 @@
       <div class="note">행을 누르면 아래에 그 영상의 상세가 나와요. 순클릭은 브라우저 쿠키 기준(같은 사람이 다른 기기로 누르면 따로 셉니다).</div>
     </div>
     <div id="vlDetail"></div>
+    </div>
+    <div class="sec" id="sec-cal" style="display:none">
+    <h2>📅 콘텐츠 캘린더 <span class="kpi-badge">미주옵·회사 인스타 + 유튜브</span></h2>
+    <div class="desc">유튜브 영상은 업로드 시각대로 자동으로 들어와요. 인스타 게시물·릴스와 일정은 직접 넣고, 수정은 관리자 로그인 후에 할 수 있어요.</div>
+    <div class="split">
+      <section class="cpanel">
+        <div class="calhead">
+          <h3 id="ccTitle">—</h3>
+          <button class="ccbtn" id="ccPrev" aria-label="이전 달">‹</button>
+          <button class="ccbtn" id="ccToday">오늘</button>
+          <button class="ccbtn" id="ccNext" aria-label="다음 달">›</button>
+        </div>
+        <div class="ccsum" id="ccSum">불러오는 중…</div>
+        <div class="cal" id="ccCal"></div>
+        <div class="legend"><span><i style="background:var(--c-blue)"></i>미주옵_게시물</span><span><i style="background:var(--c-coral)"></i>미주옵_릴스</span><span><i style="background:var(--c-mint)"></i>회사_게시물</span><span><i style="background:var(--c-pink)"></i>회사_릴스</span><span><i style="background:var(--c-purple)"></i>유튜브_영상</span><span><i style="background:var(--c-yellow)"></i>유튜브_쇼츠</span><span><i style="background:var(--c-orange)"></i>유튜브_시황쇼츠</span><span>● 점 = 일정 · ✓ 올림 · 줄 그은 것 = 보류</span></div>
+      </section>
+      <section class="cpanel daycard" aria-live="polite">
+        <h3 id="ccDayTitle">하루 시간표</h3>
+        <p class="note">업로드 시간 순서대로 나와요. 항목을 누르면 수정 창이 떠요. 유튜브 영상은 시황 쇼츠 표시와 메모를 달 수 있어요.</p>
+        <div class="tl" id="ccTl"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="ccbtn pri" id="ccAddPost" type="button">+ 콘텐츠</button><button class="ccbtn" id="ccAddEv" type="button">+ 일정</button></div>
+        <div class="ccmsg" id="ccMsg" aria-live="polite"></div>
+      </section>
+    </div>
+    <dialog class="ccsheet" id="ccSheet" aria-label="콘텐츠 수정"><form id="ccForm" method="dialog"></form></dialog>
     </div>
     </div><!-- /secWrap -->
 
@@ -2346,6 +2455,9 @@
         {id:"sec-compare", label:"과거 vs 현재",    secs:["sec-compare"],  draw:()=>{ if(cmpData)renderCompare(); }},
         {id:"sec-posts",   label:"게시물 성과",     secs:["sec-posts"],    draw:()=>loadPosts()},
       ]},
+      {cat:"plan", label:"📅 캘린더", subs:[
+        {id:"sec-cal",     label:"콘텐츠 캘린더",   secs:["sec-cal"],     draw:()=>{ if(window.calDraw) calDraw(); }},
+      ]},
       {cat:"explore", label:"🔎 탐색", subs:[
         {id:"sec-vtable",  label:"영상 상세",       secs:["sec-vtable"],  draw:()=>renderVideos()},
         {id:"sec-vd",      label:"게시 후 성과",    secs:["sec-vd"],      draw:()=>{ if(vd.id)drawVd(); }},
@@ -3107,7 +3219,9 @@
     bindPeriod("dailyPeriod", drawChart);
     bindPeriod("vlPeriod", loadVideoLinks);
     syncRangeLabels();
-    (async()=>{ await loadConfig(); await loadActions(); await load(); initAdmin(); loadTraffic(); })();
+    (async()=>{ await loadConfig(); await loadActions(); await load(); initAdmin(); loadTraffic();
+      if(activeSub[activeCat]==="sec-cal"&&window.calDraw) calDraw(); })();
   </script>
+  <script src="/calendar.js"></script>
 </body>
 </html>

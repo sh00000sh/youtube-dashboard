@@ -924,6 +924,82 @@ app.post("/api/actions", async (req, res) => {
   }
 });
 
+// ===================================================================
+// 📅 콘텐츠 캘린더 — 인스타(미주옵·회사) 게시물과 일정, 유튜브 영상 메모
+//  - 유튜브 영상 자체는 /api/data 의 VIDEOS 에서 자동으로 그린다 (여기 저장 안 함)
+//  - 여기 저장하는 건: 인스타 게시물·릴스, 아직 안 올린 유튜브 계획, 그리고
+//    유튜브 영상별 덧붙임(kind=ytmeta, id="yt:<영상ID>": 시황 여부·메모)
+//  - 시트 탭이 비어 있으면 calendar_seed.json(기존 캘린더에서 옮긴 데이터)을 보여 주고,
+//    첫 저장 때 시드를 탭에 통째로 써 넣는다
+// ===================================================================
+const CAL_TAB = process.env.CAL_TAB || "콘텐츠캘린더";
+const CAL_COLS = ["id", "kind", "account", "format", "date", "time", "title", "status", "topic", "memo", "color", "title_type", "updated"];
+const calSeed = () => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, "calendar_seed.json"), "utf8")); } catch (_) { return []; } };
+const calRow = (it) => CAL_COLS.map((k) => (it[k] == null ? "" : String(it[k])));
+const calObj = (r) => Object.fromEntries(CAL_COLS.map((k, i) => [k, (r[i] || "").toString()]));
+
+async function calRead(sheets) {
+  try {
+    const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A2:M` });
+    return (r.data.values || []).map(calObj);
+  } catch (_) { return null; }   // 탭 없음
+}
+
+app.get("/api/calendar", async (req, res) => {
+  try {
+    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, items: calSeed(), seeded: false });
+    const sheets = getSheetsClient();
+    const rows = await calRead(sheets);
+    const items = (rows || []).filter((x) => x.id);
+    if (!items.length) return res.json({ ok: true, items: calSeed(), seeded: false });
+    res.json({ ok: true, items, seeded: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 저장·삭제 (관리자) — body: { pw, op: "upsert"|"delete", item }
+app.post("/api/calendar", async (req, res) => {
+  try {
+    const { pw, op, item } = req.body || {};
+    if (!checkPw(pw)) return res.status(401).json({ ok: false, error: "비밀번호가 올바르지 않습니다." });
+    if (!item || !item.id) return res.status(400).json({ ok: false, error: "id가 없습니다." });
+    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.status(500).json({ ok: false, error: "시트 연결 정보가 없습니다." });
+    const sheets = getSheetsClient();
+    let rows = await calRead(sheets);
+    if (!rows || !rows.filter((x) => x.id).length) {
+      // 처음 저장 — 탭을 만들고 헤더와 시드를 먼저 써 넣는다
+      await ensureTabExists(sheets, CAL_TAB);
+      const seed = calSeed();
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A1`, valueInputOption: "RAW",
+        requestBody: { values: [CAL_COLS, ...seed.map(calRow)] },
+      });
+      rows = seed.map((x) => calObj(calRow(x)));
+    }
+    const idx = rows.findIndex((x) => x.id === item.id);
+    if (op === "delete") {
+      if (idx >= 0) await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A${idx + 2}:M${idx + 2}` });
+      return res.json({ ok: true });
+    }
+    const row = calRow({ ...item, updated: new Date().toISOString() });
+    if (idx >= 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A${idx + 2}:M${idx + 2}`, valueInputOption: "RAW",
+        requestBody: { values: [row] },
+      });
+    } else {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A:M`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
+        requestBody: { values: [row] },
+      });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // 설정 저장 (관리자) — _설정 탭 A1에 JSON 통째로
 app.post("/api/config", async (req, res) => {
   try {
