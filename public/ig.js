@@ -50,7 +50,7 @@
       return `<div class="bcard" style="cursor:default">
         <div class="bk">@${esc(a.handle)} · ${a.configured ? (a.ok ? `마지막 수집 ${a.lastSync ? new Date(a.lastSync).toLocaleString("ko-KR") : "-"}` : `⚠️ ${esc(a.error || "아직 수집 전")}`) : "연결 안 됨"}</div>
         <div class="bt">${esc(a.key)} 계정</div>
-        <div class="bn"><b>${f(a.followers)}</b> <span class="bsub">팔로워${dF != null ? ` · 7일 ${dF >= 0 ? "+" : ""}${dF}` : ""}</span></div>
+        <div class="bn"><b>${f(a.followers ?? (now ? now.followers : null))}</b> <span class="bsub">팔로워${dF != null ? ` · 7일 ${dF >= 0 ? "+" : ""}${dF}` : ""}</span></div>
         <div class="bw">최근 30일 게시물 <b>${last30.length}</b> · 도달 중간값 <b>${f(med(last30.map((p) => p.reach)))}</b> · 참여율 <b>${p1(med(last30.map((p) => p.eng)))}</b></div>
         <div class="bw">저장률 <b>${p1(med(last30.map((p) => p.saveR)))}</b> · 공유율 <b>${p1(med(last30.map((p) => p.shareR)))}</b> · 도달 1천당 팔로우 <b>${f(med(last30.map((p) => p.fol1k)), 1)}</b></div>
       </div>`;
