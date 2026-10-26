@@ -107,7 +107,9 @@
     return { ps, es };
   }
   const tspan = (t) => { const s = document.createElement('span'); s.className = 'bt'; s.textContent = t; return s; };
-  function flashRows(ids) { ids.forEach((id) => { const r = document.querySelector(`#sec-cal .tli[data-id="${CSS.escape(id)}"]`); if (r) { r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash'); } }); }
+  function flashRows(ids) {
+    // 좁은 화면에선 시간표가 달력 아래에 있으니 그쪽으로 내려 준다
+    if (window.innerWidth < 960) { const dc = document.querySelector('#sec-cal .daycard'); if (dc) dc.scrollIntoView({ behavior: 'smooth', block: 'start' }); } ids.forEach((id) => { const r = document.querySelector(`#sec-cal .tli[data-id="${CSS.escape(id)}"]`); if (r) { r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash'); } }); }
   function grpBlk(g, day) {
     const b = document.createElement('button'); b.type = 'button'; const p0 = g[0];
     const allDone = g.every((p) => p.status === '올림'), allHold = g.every((p) => p.status === '보류');
@@ -119,13 +121,14 @@
     b.appendChild(lt);
     if (g.length > 1) { const c = document.createElement('span'); c.className = 'cnt'; c.textContent = g.length; b.appendChild(c); }
     b.title = g.map((p) => `${pTime(p) || '시간 미정'} ${p.title || ''}`).join('\n');
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); const same = sel === day; sel = day; if (!same) renderCal(); if (g.length === 1) openPost(p0); else flashRows(g.map((p) => p.id)); });
+    // 10/26 사용자: 달력에서 누르면 창 없이 오른쪽 목록만 — 수정 창은 오른쪽 목록 항목을 누를 때만
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); const same = sel === day; sel = day; if (!same) renderCal(); flashRows(g.map((p) => p.id)); });
     return b;
   }
   function evBlk(x) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'blk line';
     b.style.setProperty('--dot', `var(--c-${eColor(x)})`); b.append(tspan(x.time ? x.time + ' ' : ''), x.title);
-    b.addEventListener('click', (ev) => { ev.stopPropagation(); openEvent(x); });
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); const same = sel === x.date; sel = x.date; if (!same) renderCal(); flashRows([x.id]); });
     return b;
   }
   function renderCal() {
@@ -150,7 +153,7 @@
       const items = [...[...groups.values()].map((g) => ['grp', g]), ...es.map((e) => ['ev', e])];
       items.slice(0, 4).forEach(([k, x]) => c.appendChild(k === 'grp' ? grpBlk(x, key) : evBlk(x)));
       if (items.length > 4) { const m = document.createElement('span'); m.className = 'more'; m.textContent = `+${items.length - 4}`; c.appendChild(m); }
-      const pick = () => { if (sel === key) openEvent({ date: key }); else { sel = key; renderCal(); } };
+      const pick = () => { if (sel !== key) { sel = key; renderCal(); } flashRows([]); };
       c.addEventListener('click', pick);
       c.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
       cal.appendChild(c);
@@ -193,7 +196,7 @@
         sm.textContent = p.title || '';
         row.addEventListener('click', () => openPost(p));
       } else {
-        const e = r.x; row.className = 'tli ev'; bar.style.background = `var(--c-${eColor(e)})`;
+        const e = r.x; row.className = 'tli ev'; row.dataset.id = e.id; bar.style.background = `var(--c-${eColor(e)})`;
         lb.textContent = e.format || '일정'; sm.textContent = e.title + (e.memo ? ' · ' + e.memo : '');
         row.addEventListener('click', () => openEvent(e));
       }
