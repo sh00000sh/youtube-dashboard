@@ -446,7 +446,7 @@
           <option value="custom">📅 날짜 지정…</option>
         </select>
       </h2>
-      <div class="desc">채널 성장의 최종 성적표예요. 괄호 안은 <b>직전 같은 기간과 비교한 변화</b>예요.</div>
+      <div class="desc" id="briefDesc">채널 성장의 최종 성적표예요. 괄호 안은 <b>직전 같은 기간과 비교한 변화</b>예요.</div>
       <div class="cards" id="briefResult" style="grid-template-columns:repeat(2,1fr)"></div>
 
       <h2 style="margin-top:26px">🔍 원인 <span class="kpi-badge">결과가 왜 그런지 설명하는 4가지</span></h2>
@@ -1307,11 +1307,11 @@
         let vids=VIDEOS;
         if(sel==="custom"&&RANGE){
           const a=d2(RANGE.from), b2=d2(RANGE.to);
-          vids=VIDEOS.filter(v=>(v[1]||"")>=a&&(v[1]||"")<=b2);
+          vids=VIDEOS.filter(v=>d2(v[1])>=a&&d2(v[1])<=b2);
         } else if(sel!=="all"&&sel!=="custom"){
           const cut=new Date(); cut.setDate(cut.getDate()-Number(sel));
           const cs=cut.toISOString().slice(2,10);
-          vids=VIDEOS.filter(v=>(v[1]||"")>=cs);
+          vids=VIDEOS.filter(v=>d2(v[1])>=cs);
         }
         if(form==="short") vids=vids.filter(v=>isShort(v));
         else if(form==="long") vids=vids.filter(v=>!isShort(v));
@@ -1520,7 +1520,7 @@
       if(days==="custom"){
         if(!RANGE) return VIDEOS.filter(okForm);
         const a=d2(RANGE.from), b=d2(RANGE.to);
-        return VIDEOS.filter(v=>{ const u=v[1]||""; return u>=a&&u<=b&&okForm(v); });
+        return VIDEOS.filter(v=>{ const u=d2(v[1]); return u>=a&&u<=b&&okForm(v); });
       }
       const cut=new Date(); cut.setDate(cut.getDate()-days);
       return VIDEOS.filter(v=>{ const d=ymd(v[1]); if(!d||d<cut) return false; return okForm(v); });
@@ -1552,6 +1552,35 @@
         <div class="label">${label}</div>
         <div class="value" style="font-size:30px">${val}${dltHtml(pct)}</div>
         <div class="why">${why}</div></div>`;
+      // 고른 기간이 데이터 첫날부터면 '직전 기간'이 없다 → 비교 대신 누적 성적표를 보여 준다
+      const firstDay=([...DAILY].sort((a,b)=>a[0]<b[0]?-1:1)[0]||[])[0]||"";
+      const isAll = P==="custom" && !!RANGE && d2(RANGE.from)<=firstDay;
+      document.getElementById("briefDesc").innerHTML = isAll
+        ? "데이터가 쌓인 <b>첫날부터 지금까지의 누적 성적표</b>예요. 비교할 직전 기간이 없어 총량으로 보여 줘요."
+        : "채널 성장의 최종 성적표예요. 괄호 안은 <b>직전 같은 기간과 비교한 변화</b>예요.";
+      if(isAll){
+        const allV=recentVids(P,"all"), aS=allV.filter(isShort), aL=allV.filter(v=>!isShort(v));
+        const nDays=periodRows(P).length||1;
+        const t0=ymd(d2(RANGE.from)), t1=ymd(d2(RANGE.to));
+        const weeks=Math.max(1,((t1&&t0)?(t1-t0)/86400000+1:nDays)/7);
+        const top=(arr)=>arr.length?[...arr].sort((a,b)=>N(b[8])-N(a[8]))[0]:null;
+        const tS=top(aS), tL=top(aL);
+        const lnk=(v)=>v?`<a onclick="openVideo('${v[0]}',\`${(v[3]||'').replace(/`/g,'')}\`,'${v[1]||''}')">${(v[3]||'').slice(0,28)}${(v[3]||'').length>28?'…':''}</a> <b>${fmt(N(v[8]))}회</b>`:"없음";
+        const tag=`<span class="dlt flat">누적</span>`;
+        const cardA=(label,val,why)=>`<div class="card"><div class="label">${label}</div>
+          <div class="value" style="font-size:30px">${val}${tag}</div><div class="why">${why}</div></div>`;
+        const subsNow=CHANNEL&&CHANNEL.subscribers;
+        box.innerHTML=
+          cardA(`조회수 · ${PL}`, fmt(dv.cur),
+            `운영 <b>${fmt(nDays)}일</b> · 하루 평균 <b>${fmt(Math.round(dv.cur/nDays))}회</b>. 채널이 지금까지 도달한 총량이에요.`)+
+          cardA(`구독자 순증 · ${PL}`, "+"+fmt(ds.cur),
+            `${subsNow?`현재 구독자 <b>${fmt(subsNow)}명</b> · `:""}조회 1,000회당 <b>${dv.cur?(ds.cur/dv.cur*1000).toFixed(1):0}명</b>이 구독했어요.`)+
+          cardA(`업로드 · ${PL}`, `${fmt(allV.length)}편`,
+            `숏폼 <b>${aS.length}편</b> · 롱폼 <b>${aL.length}편</b> · 주 평균 <b>${(allV.length/weeks).toFixed(1)}편</b>.
+             편당 평균 조회수 <b>${allV.length?fmt(Math.round(allV.reduce((a,r)=>a+N(r[8]),0)/allV.length)):0}회</b>. <a onclick="goSub('explore','sec-upload')">업로드 성과 →</a>`)+
+          cardA(`가장 많이 본 영상 · ${PL}`, tS||tL?fmt(Math.max(N((tS||[])[8]),N((tL||[])[8])))+"회":"-",
+            `숏폼 1위 ${lnk(tS)}<br>롱폼 1위 ${lnk(tL)}`);
+      } else
       box.innerHTML=
         card(`조회수 · ${PL}`, fmt(dv.cur), dv.hasPrev?dv.pct:null,
              `직전 같은 기간 <b>${fmt(dv.prev)}회</b> → 지금 <b>${fmt(dv.cur)}회</b>. 채널이 도달한 총량이에요.`)+
@@ -1634,7 +1663,7 @@
         `<div class="act"><div class="rk" style="background:${a[2]}">${i+1}</div>
          <div><div class="ab">${a[0]}</div><div class="aw">${a[1]}</div></div></div>`).join("");
 
-      renderVerdict({sD,lD,dv,sQ,lQ,sA,lA,P});
+      renderVerdict({sD,lD,dv,sQ,lQ,sA,lA,P,PL});
     }
 
     // 한 줄 판정 배너
@@ -1652,7 +1681,7 @@
       // 🔴 경고
       if(m.sD==null||m.sD>=7){ level="bad"; reasons.push("숏폼 발행이 7일 이상 끊겼습니다"); }
       if(m.lD==null||m.lD>=14){ level="bad"; reasons.push("롱폼 발행이 14일 이상 끊겼습니다"); }
-      if(m.dv.hasPrev&&m.dv.pct<=-25){ level="bad"; reasons.push(`조회수가 직전 ${m.P}일 대비 ${Math.abs(m.dv.pct).toFixed(0)}% 줄었습니다`); }
+      if(m.dv.hasPrev&&m.dv.pct<=-25){ level="bad"; reasons.push(`조회수가 직전 같은 기간 대비 ${Math.abs(m.dv.pct).toFixed(0)}% 줄었습니다`); }
       // 🟡 주의
       if(level!=="bad"){
         if(m.sD!=null&&m.sD>=4){ level="warn"; reasons.push("숏폼 발행 간격이 벌어지고 있습니다"); }
@@ -1666,7 +1695,7 @@
       el.className=`verdict ${cls}`;
       el.innerHTML=`<div class="vi">${ico}</div><div>
         <div class="vt">${word} — ${why}</div>
-        <div class="vs">${upLine} 최근 ${m.P}일 조회수 <b>${fmt(m.dv.cur)}회</b>${m.dv.hasPrev?` (직전 ${m.P}일 대비 ${m.dv.pct>=0?"+":""}${m.dv.pct.toFixed(0)}%)`:""} · 구독 <b>+${fmt(periodDelta(1,m.P).cur)}</b></div>
+        <div class="vs">${upLine} ${m.PL} 조회수 <b>${fmt(m.dv.cur)}회</b>${m.dv.hasPrev?` (직전 같은 기간 대비 ${m.dv.pct>=0?"+":""}${m.dv.pct.toFixed(0)}%)`:""} · 구독 <b>+${fmt(periodDelta(1,m.P).cur)}</b></div>
       </div>`;
     }
 
