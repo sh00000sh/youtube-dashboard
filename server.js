@@ -1824,7 +1824,9 @@ async function getBench(force) {
   const { videos } = await readForDashboard(sheets);
   let snaps = [];
   try { const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:E` }); snaps = r.data.values || []; } catch (_) {}
-  const data = computeBench(videos, snaps);
+  let acts = [];
+  try { const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${ACTION_TAB}!A2:D` }); acts = r.data.values || []; } catch (_) {}
+  const data = computeBench(videos, snaps, Date.now(), acts);
   benchCache = { at: Date.now(), data };
   return data;
 }
@@ -2021,6 +2023,9 @@ async function runAIReport(force) {
     그룹별: bench.groups.map((g) => ({ 구분: g.name, 편수: g.n, 업로드24시간_중간값: g.v24 ? g.v24.med : null, 업로드24시간_보통범위: g.v24 ? `${g.v24.p25}~${g.v24.p75}` : null, 다자란조회수_중간값: g.views ? g.views.med : null })),
     최근7일_영상_우리기준: bench.recent.filter((v) => v.age <= 7.5).map((v) => ({ 제목: v.title.split("#")[0].trim().slice(0, 30), 시리즈: v.series, 업로드: `${v.kdate} ${v.hour}시`,
       업로드24시간조회: v.v24, 그_위치: v.grade24 || (v.pace ? `${v.pace.h}시간째 ${v.pace.v}회(같은 시점 중간값 ${v.pace.med}회, ${v.pace.grade})` : "기록 없음"), 지금까지조회: v.views })),
+    흐름경보: (bench.alerts || []).map((a) => ({ 경보: a.title, 숫자: a.detail, 차이: a.diffs, 조치이력: (a.actions || []).map((x) => `${x.date} ${x.kind} ${x.note}`),
+      잘된구간: a.peak ? a.peak.영상.map((v) => `${v.date} ${v.hour}시 "${v.title}" ${v.v24}회 (${v.hook})`) : undefined,
+      최근구간: a.recent ? a.recent.영상.map((v) => `${v.date} ${v.hour}시 "${v.title}" ${v.v24}회 (${v.hook})`) : undefined })),
     잘된것_안된것_차이: bench.findings.map((x) => `${x.hi}이 ${x.lo}보다 ${x.ratio}배 (${x.ctx}: ${x.hiMed} vs ${x.loMed}, ${x.nHi}편·${x.nLo}편)`),
     데이터에서_나온_실험후보: bench.tryNext.map((t) => `${t.what} — ${t.why} — 판단: ${t.measure}`),
     시리즈흐름: bench.trends.map((t) => `${t.series}: 최근2주 24시간 중간값 ${t.recentMed}회 (그 전 ${t.prevMed}회, ${t.change}%)`),
@@ -2068,6 +2073,8 @@ async function runAIReport(force) {
 10. 30일 뒤 조회수 같은 먼 미래 예측은 하지 마라. 필요하면 "다음 영상 24시간 목표 = 그 시리즈 상위 25% 값" 정도만.
 11. "꾸준히 업로드", "콘텐츠 다양화", "숏폼과 롱폼 구분" 같은 일반론 금지. 이 채널 데이터에서만 나오는 말만.
 12. 준법: 수익률·배수·수익금액 숫자를 제목·썸네일·카피에 쓰라는 제안은 하지 마라.
+12-1. 롱폼은 교육 영상이라 오프닝·도입부·훅을 바꾸라는 제안은 하지 마라(운영자 결정). 롱폼 평균조회율이 낮다는 지적도 하지 마라.
+12-2. "흐름경보"가 있으면 [달라진 점] 맨 앞에서 반드시 다뤄라: 어느 시리즈가 언제 잘 나오다가 언제부터 떨어졌는지, 잘 된 구간과 지금 구간이 무엇이 다른지(제목 형태·업로드 시간·조치이력)를 데이터 그대로 짚고, [이번 주 실험]에 그걸 되돌리는 실험을 넣어라.
 13. 데이터에 없는 것을 지어내지 마라. 숫자는 데이터에 있는 것만.`,
     messages: [{ role: "user", content: "채널 데이터:\n" + JSON.stringify(summary, null, 1) }],
   };

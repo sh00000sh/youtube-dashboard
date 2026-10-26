@@ -63,7 +63,23 @@
       : `<div class="empty">데이터에서 바로 나오는 실험이 아직 없어요.</div>`;
     const tr = (B.trends || []).length ? B.trends.map((t) => `<li>${esc(t.series)} · 최근 2주 24시간 조회수 중간값 <b>${f(t.recentMed)}회</b> <span class="${t.change >= 0 ? "pos" : "neg"}">(${t.change >= 0 ? "+" : ""}${t.change}%)</span> <span class="bsub">그 전 4주 ${f(t.prevMed)}회 · ${t.nRecent}편 vs ${t.nPrev}편</span></li>`).join("") : `<li class="bsub">비교할 만큼 편수가 쌓인 시리즈가 아직 없어요.</li>`;
 
+    // ⓪ 흐름 경보 (잘 나오다 꺾임 / 연속 부진 / 상승)
+    const al = (B.alerts || []).map((a) => `<div class="balert ${a.level}">
+      <div class="bt">${a.level === "bad" ? "📉" : a.level === "warn" ? "⚠️" : "📈"} ${esc(a.title)}</div>
+      <div class="bw">${esc(a.detail)}</div>
+      ${(a.diffs || []).map((d) => `<div class="bw">· ${esc(d)}</div>`).join("")}
+      ${(a.actions || []).length ? `<div class="bw">· 이 사이 조치이력: ${a.actions.map((x) => esc(`${x.date.slice(5)} ${x.kind} ${x.note}`)).join(" / ")}</div>` : ""}
+      ${a.peak ? `<details><summary>영상 보기</summary><div class="bcols"><div><b>잘 된 편</b>${a.peak.영상.map((v) => `<div class="bv">${v.date.slice(5)} ${v.hour}시 · <b>${f(v.v24)}</b> · <span class="bsub">${esc(v.hook)}</span><br>${esc(v.title)}</div>`).join("")}</div>
+        <div><b>최근</b>${a.recent.영상.map((v) => `<div class="bv">${v.date.slice(5)} ${v.hour}시 · <b>${f(v.v24)}</b> · <span class="bsub">${esc(v.hook)}</span><br>${esc(v.title)}</div>`).join("")}</div></div></details>` : ""}
+    </div>`).join("");
+    const serList = B.groups.filter((g) => !g.name.endsWith("전체") && g.v24 && g.v24.n >= 5).map((g) => g.name);
+    if (!serList.includes(curSeries)) curSeries = serList.includes("시황 숏폼") ? "시황 숏폼" : serList[0];
+
     box.innerHTML = `
+      ${al ? `<h3 class="bh">🚨 흐름 경보 <span class="bsub">시리즈마다 최근 편들이 평소·잘 나오던 때와 비교해 어떤지</span></h3><div class="bstack">${al}</div>` : ""}
+      <h3 class="bh">📉 시리즈별 흐름 <span class="bsub">점 = 영상 1편의 업로드 24시간 조회수 · 주황 = 질문·이유·반전형 제목 · 회색 = 뉴스 요약형 · 세로선 = 조치이력</span>
+        <select id="benchSeries" style="margin-left:auto">${serList.map((x) => `<option ${x === curSeries ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></h3>
+      <div class="panel"><div style="position:relative;height:280px"><canvas id="benchSerChart"></canvas></div><div class="bsub" id="benchSerNote" style="margin-top:6px"></div></div>
       <h3 class="bh">🚀 지금 올라가는 중 <span class="bsub">업로드 후 숏폼 24시간·롱폼 7일까지, 같은 시점의 우리 영상들과 비교</span></h3>
       <div class="bgrid">${liveHtml}</div>
       <h3 class="bh">🧪 이번 주 해볼 것 <span class="bsub">아래 '차이'에서 바로 나온 실험이에요. 해 보고 '판단' 기준으로 확인해요</span></h3>
@@ -76,9 +92,38 @@
       <div class="panel"><div class="table-wrap"><table class="btable"><thead><tr><th style="text-align:left">구분</th><th>편수</th><th>24시간 조회수</th><th>다 자란 조회수</th><th>평균조회율</th><th>1,000회당 구독</th></tr></thead><tbody>${grows}</tbody></table></div></div>
       <h3 class="bh">📈 시리즈 흐름</h3>
       <div class="bpanel"><ul class="blist">${tr}</ul></div>
-      <div class="bsub" style="margin-top:10px">영상 ${B.coverage.videos}편 중 24시간 조회수가 기록된 영상 ${B.coverage.with24h}편 · 기준 시각 ${new Date(B.at).toLocaleString("ko-KR")}</div>`;
+      <div class="bsub" style="margin-top:10px">제목 형태는 자동 분류예요: '?·~까'는 질문형, '왜·이유'는 이유형, '~는데·~지만·~에도'는 반전형, 나머지는 뉴스 요약형. 영상 ${B.coverage.videos}편 중 24시간 조회수가 기록된 영상 ${B.coverage.with24h}편 · 기준 시각 ${new Date(B.at).toLocaleString("ko-KR")}</div>`;
+    const sel = $("benchSeries"); if (sel) sel.onchange = () => { curSeries = sel.value; drawSeries(); };
+    drawSeries();
   }
 
+  let curSeries = null, serChart = null;
+  function drawSeries() {
+    const cv = $("benchSerChart"); if (!cv || !B) return;
+    if (serChart) { serChart.destroy(); serChart = null; }
+    const arr = B.videos.filter((v) => v.series === curSeries && v.v24 != null).sort((a, b) => a.pub.localeCompare(b.pub)).slice(-40);
+    const g = B.groups.find((x) => x.name === curSeries);
+    const labels = arr.map((v) => v.kdate.slice(5).replace("-", "/"));
+    const roll = arr.map((_, i) => { const w = arr.slice(Math.max(0, i - 4), i + 1).map((v) => v.v24).sort((a, b) => a - b); return w[w.length >> 1]; });
+    const acts = (B.actions || []).filter((a) => a.date >= (arr[0] || {}).kdate);
+    const actPlugin = { id: "benchActs", afterDraw(c) {
+      const xa = c.scales.x, ya = c.scales.y, ctx = c.ctx;
+      acts.forEach((a) => { let i = arr.findIndex((v) => v.kdate >= a.date); if (i < 0) return; const x = xa.getPixelForValue(i) - (i > 0 ? (xa.getPixelForValue(i) - xa.getPixelForValue(i - 1)) / 2 : 0);
+        ctx.save(); ctx.strokeStyle = "rgba(225,29,72,.55)"; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(x, ya.top); ctx.lineTo(x, ya.bottom); ctx.stroke();
+        ctx.setLineDash([]); ctx.fillStyle = "rgba(225,29,72,.9)"; ctx.font = "11px system-ui"; ctx.fillText("🔧 " + (a.kind || "").slice(0, 8), x + 3, ya.top + 12); ctx.restore(); }); } };
+    serChart = new Chart(cv, { data: { labels, datasets: [
+      { type: "line", label: "최근 5편 중간값", data: roll, borderColor: "#3182f6", borderWidth: 2, pointRadius: 0, tension: .3 },
+      { type: "line", label: "24시간 조회수", data: arr.map((v) => v.v24), showLine: false, pointRadius: 6, pointHoverRadius: 8,
+        pointBackgroundColor: arr.map((v) => v.hook === "뉴스 요약형" ? "#adb5bd" : "#f0a020"), pointBorderColor: "transparent" },
+      ...(g && g.v24 ? [{ type: "line", label: "시리즈 중간값", data: arr.map(() => g.v24.med), borderColor: "rgba(139,149,161,.6)", borderDash: [5, 5], borderWidth: 1, pointRadius: 0 }] : []),
+    ] }, plugins: [actPlugin], options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "nearest", intersect: true },
+      plugins: { legend: { labels: { boxWidth: 10, color: "#8b95a1" } }, tooltip: { callbacks: { title: (it) => { const v = arr[it[0].dataIndex]; return `${v.kdate} ${v.hour}시 · ${v.hook}`; }, label: (c) => c.datasetIndex === 1 ? `${arr[c.dataIndex].title.split("#")[0].slice(0, 40)} — ${f(c.parsed.y)}회` : `${c.dataset.label} ${f(c.parsed.y)}회` } } },
+      onClick: (ev, els) => { const e = els.find((x) => x.datasetIndex === 1); if (e) { const v = arr[e.index]; openVideo(v.id, v.title, v.pub.slice(0, 10)); } },
+      scales: { x: { ticks: { color: "#8b95a1", maxRotation: 0, autoSkip: true }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: "#8b95a1" }, grid: { color: typeof gridCol === "function" ? gridCol() : "#eee" } } } } });
+    const cur = arr.filter((v) => v.hook !== "뉴스 요약형").map((v) => v.v24).sort((a, b) => a - b), nw = arr.filter((v) => v.hook === "뉴스 요약형").map((v) => v.v24).sort((a, b) => a - b);
+    const md = (a) => a.length ? a[a.length >> 1] : null;
+    $("benchSerNote").innerHTML = cur.length && nw.length ? `이 시리즈 최근 ${arr.length}편: 질문·이유·반전형 ${cur.length}편 중간값 <b>${f(md(cur))}회</b> · 뉴스 요약형 ${nw.length}편 <b>${f(md(nw))}회</b>. 포맷·TTS처럼 바꾼 날은 관리자 → 조치이력에 남기면 세로선으로 표시돼요.` : "포맷·TTS처럼 바꾼 날은 관리자 → 조치이력에 남기면 세로선으로 표시돼요.";
+  }
   async function load(force) {
     loading = true; render();
     try { const r = await fetch("/api/benchmarks" + (force ? "?fresh=1" : "")).then((r) => r.json()); B = r.ok ? r : null; } catch (_) { B = null; }

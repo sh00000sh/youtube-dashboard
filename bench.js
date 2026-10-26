@@ -34,6 +34,16 @@ function seriesOf(title, form) {
   return "교육 숏폼 · 단편";
 }
 const isEdu = (s) => s.startsWith("교육 숏폼");
+// 제목 형태 (해시태그·'| 10/26 옵션 시황' 같은 꼬리는 떼고 본다)
+//   질문형: ~까? ~나요?  이유형: 왜·이유  반전형: ~는데/~지만/~에도  나머지 = 뉴스 요약형(사실을 그대로 요약)
+const mainTitle = (t) => String(t || "").split("#")[0].replace(/\|\s*\d{1,2}[./]\s?\d{1,2}.*$/, "").replace(/\|\s*26\.\s?\d{2}.*$/, "").trim();
+function hookOf(t) {
+  const m = mainTitle(t);
+  if (/\?|까$|까요|나요|을까|ㄹ까|일까|할까|될까/.test(m)) return "질문형";
+  if (/이유|왜\s/.test(m)) return "이유형";
+  if (/는데|지만|에도|인데|했더니|대신/.test(m)) return "반전형";
+  return "뉴스 요약형";
+}
 
 // 시간별 스냅샷 → 업로드 24시간 시점 조회수 (앞뒤 스냅샷을 이어 24h 값을 추정)
 function viewsAt(snaps, hours) {
@@ -48,7 +58,7 @@ function viewsAt(snaps, hours) {
   return null;
 }
 
-function computeBench(videoRows, snapRows, now = Date.now()) {
+function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
   // 1) 영상 정리 — 2026-05 이후, 제목 있는 공개 영상, 같은 ID는 조회수 큰 행 하나만
   const byId = {};
   videoRows.forEach((r) => {
@@ -63,7 +73,7 @@ function computeBench(videoRows, snapRows, now = Date.now()) {
   let vids = Object.values(byId).map((v) => {
     const form = v.dur > 180 ? "L" : "S";
     const k = kst(v.pub), age = (now - Date.parse(v.pub)) / 86400000;
-    return { ...v, form, series: seriesOf(v.title, form), hour: k.getUTCHours(), dow: k.getUTCDay(), bucket: hourBucket(k.getUTCHours()),
+    return { ...v, form, series: seriesOf(v.title, form), hook: hookOf(v.title), hasNum: /\d/.test(mainTitle(v.title)), tlen: mainTitle(v.title).length, hour: k.getUTCHours(), dow: k.getUTCDay(), bucket: hourBucket(k.getUTCHours()),
       kdate: k.toISOString().slice(0, 10), age: Math.round(age * 10) / 10, v24: viewsAt(snapBy[v.id], 24),
       per1k: v.views ? Math.round(v.subs / v.views * 1000 * 10) / 10 : null };
   });
@@ -133,6 +143,13 @@ function computeBench(videoRows, snapRows, now = Date.now()) {
   cmp("제목 형태", mktS.filter((v) => !/\|/.test(v.title.replace(/\|\s*\d{2}[./]\d{2}.*$/, ""))), mktS.filter((v) => /\|/.test(v.title.replace(/\|\s*\d{2}[./]\d{2}.*$/, ""))), "views", "시황 숏폼만", "한 문장 제목", "| 로 이어 붙인 제목");
   cmp("롱폼 종류", L.filter((v) => v.series.includes("개념")), L.filter((v) => v.series.includes("화면")), "views", "다 자란 롱폼, 조회수 중간값", "개념 설명", "화면·주문 가이드");
   if (subsOk) cmp("구독 전환", eduS, L, "per1k", "조회 1,000회당 구독", "교육 숏폼", "롱폼");
+  Object.keys(groups).filter((g) => !g.endsWith("전체")).forEach((g) => {
+    const arr = vids.filter((v) => v.series === g && v.v24 != null && v.age <= 60);
+    const a = arr.filter((v) => v.hook !== "뉴스 요약형").map((v) => v.v24), b = arr.filter((v) => v.hook === "뉴스 요약형").map((v) => v.v24);
+    if (a.length < 3 || b.length < 3) return;
+    const ma = median(a), mb = median(b), r = ma / mb;
+    if (r >= 1.5) findings.push({ topic: "제목 형태", ctx: `${g}만, 최근 60일 24시간 조회수`, hi: "질문·이유·반전형 제목", lo: "뉴스 요약형 제목", hiMed: Math.round(ma), loMed: Math.round(mb), nHi: a.length, nLo: b.length, ratio: Math.round(r * 10) / 10 });
+  });
   findings.sort((a, b) => b.ratio - a.ratio);
 
   // 5) 시리즈별 최근 흐름: 최근 14일 vs 그 전 28일 (24시간 조회수 기준 — 나이 차이에 안 흔들림)
@@ -157,14 +174,65 @@ function computeBench(videoRows, snapRows, now = Date.now()) {
   }
   const tT = f("제목 형태", (x) => x.ctx.startsWith("교육"));
   if (tT) tryNext.push({ what: `교육 숏폼 제목을 '${tT.hi}'으로`, why: `${tT.hi} ${tT.hiMed.toLocaleString()}회 vs ${tT.lo} ${tT.loMed.toLocaleString()}회 (중간값)`, measure: "다음 5편 24시간 조회수 중간값 비교" });
-  const tS = f("제목 형태", (x) => x.ctx.startsWith("시황"));
+  const tS = f("제목 형태", (x) => x.ctx === "시황 숏폼만");
   if (tS) tryNext.push({ what: `시황 숏폼 제목을 '${tS.hi}'으로 (날짜는 맨 끝 한 번만)`, why: `${tS.hi} ${tS.hiMed.toLocaleString()}회 vs ${tS.lo} ${tS.loMed.toLocaleString()}회 (중간값, ${tS.nHi}편·${tS.nLo}편)`, measure: "다음 시황 숏폼 5편 조회수 중간값 비교" });
   const tL = f("롱폼 종류");
   if (tL) tryNext.push({ what: `조회수를 노리는 롱폼은 '${tL.hi}'형으로`, why: `${tL.hi} ${tL.hiMed}회 vs ${tL.lo} ${tL.loMed}회 (다 자란 롱폼 중간값). ${tL.lo === "화면·주문 가이드" ? "화면 가이드는 조회수보다 알림톡·고객 안내용으로 쓰는 게 맞아요" : ""}`.trim(), measure: "다음 롱폼 2주 조회수가 롱폼 중간값을 넘는지" });
   const best = trends.filter((t) => t.series.startsWith("교육")).sort((a, b) => b.recentMed - a.recentMed)[0];
   if (best && best.change > 15) tryNext.push({ what: `요즘 잘 되는 '${best.series.replace("교육 숏폼 · ", "")}' 시리즈 한 편 더`, why: `최근 2주 24시간 조회수 중간값 ${best.recentMed}회, 그 전보다 ${best.change}% 높음`, measure: "같은 시리즈 다음 편이 상위 25%에 드는지" });
 
-  return { at: new Date(now).toISOString(), videos: vids, groups: Object.values(groups), recent, findings, trends, tryNext: tryNext.slice(0, 3),
+  // 7) 흐름 경보 — 10/26 사용자: "시황 숏폼이 포맷 바꾸고 TTS 넣은 직후엔 잘 나오다가 다시 100회도 안 나오는데 이런 걸 못 집는다"
+  //    시리즈마다 업로드 순서대로 24시간 조회수를 보고, '잘 나오던 구간 → 최근 구간'이 꺾였는지 / 계속 바닥인지 / 올라왔는지 본다
+  //    잘 된 구간과 최근 구간의 차이(제목 형태·업로드 시간·제목 길이·조치이력)를 같이 낸다
+  const actions = (actionRows || []).filter((a) => a[0]).map((a) => { const d = String(a[0]).trim(); return { date: d.length === 8 ? "20" + d : d, vid: (a[1] || "").trim(), kind: (a[2] || "").trim(), note: (a[3] || "").trim() }; });
+  const alerts = [];
+  const cntBy = (arr, f) => { const c = {}; arr.forEach((v) => { const k = f(v); c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" · "); };
+  const describe = (arr) => ({ 편수: arr.length, 중간값: Math.round(median(arr.map((v) => v.v24))), 제목형태: cntBy(arr, (v) => v.hook), 업로드시각: arr.map((v) => v.hour + "시").join("·"),
+    제목길이_평균: Math.round(arr.reduce((a, v) => a + v.tlen, 0) / arr.length), 영상: arr.map((v) => ({ id: v.id, date: v.kdate, title: mainTitle(v.title).slice(0, 40), v24: v.v24, hook: v.hook, hour: v.hour })) });
+  Object.keys(groups).filter((g) => !g.endsWith("전체")).forEach((g) => {
+    const arr = vids.filter((v) => v.series === g && v.v24 != null && v.age <= 60).sort((a, b) => a.pub.localeCompare(b.pub));
+    const gm = groups[g].v24 ? groups[g].v24.med : null;
+    if (arr.length < 6 || !gm) return;
+    const K = Math.min(5, Math.max(3, Math.floor(arr.length / 3)));
+    const recentA = arr.slice(-K), before = arr.slice(0, -K);
+    const rMed = median(recentA.map((v) => v.v24));
+    // 잘 된 구간 = 최근 구간 직전 30일 안에서 24시간 조회수 상위 3편 (날짜순으로 다시 정렬)
+    const pool = before.filter((v) => v.age <= 30 + K * 2);
+    const top3 = [...pool].sort((a, b) => b.v24 - a.v24).slice(0, 3).sort((a, b) => a.pub.localeCompare(b.pub));
+    const peak = top3.length === 3 ? { m: median(top3.map((v) => v.v24)), w: top3 } : null;
+    const inRange = (a, b) => actions.filter((x) => x.date >= a && x.date <= b);
+    if (peak && peak.m >= gm * 1.8 && rMed <= peak.m * 0.5) {
+      const P = describe(peak.w), R = describe(recentA);
+      const diffs = [];
+      const cur = (a) => a.filter((v) => v.hook !== "뉴스 요약형").length;
+      const pc = cur(peak.w), rc = cur(recentA);
+      if (pc / peak.w.length - rc / recentA.length >= 0.34) diffs.push(`제목 형태: 잘 된 ${peak.w.length}편 중 ${pc}편이 질문·이유·반전형 → 최근 ${recentA.length}편은 ${rc}편뿐(나머지는 뉴스 요약형)`);
+      else if (P.제목형태 !== R.제목형태) diffs.push(`제목 형태: 잘 된 구간 ${P.제목형태} → 최근 ${R.제목형태}`);
+      const ph = peak.w.map((v) => v.hour), rh = recentA.map((v) => v.hour);
+      if (Math.abs(median(ph) - median(rh)) >= 3) diffs.push(`업로드 시각: 잘 된 구간 ${P.업로드시각} → 최근 ${R.업로드시각}`);
+      if (Math.abs(P.제목길이_평균 - R.제목길이_평균) >= 6) diffs.push(`제목 길이: 잘 된 구간 평균 ${P.제목길이_평균}자 → 최근 ${R.제목길이_평균}자`);
+      const acts = inRange(peak.w[0].kdate, recentA[recentA.length - 1].kdate);
+      alerts.push({ type: "꺾임", series: g, level: "bad", curiousPeak: pc, curiousRecent: rc,
+        title: `${g}: ${peak.w.map((v) => v.kdate.slice(5).replace("-", "/")).join("·")}엔 잘 나왔는데 최근 ${K}편은 다시 떨어졌어요`,
+        detail: `잘 된 3편 24시간 중간값 ${Math.round(peak.m)}회 → 최근 ${K}편 ${Math.round(rMed)}회 (시리즈 평소 ${gm}회)`,
+        peak: P, recent: R, diffs, actions: acts });
+    } else if (recentA.length >= 4 && recentA.slice(-4).every((v) => v.v24 < (groups[g].v24.p25 || 0))) {
+      alerts.push({ type: "부진", series: g, level: "warn", title: `${g}: 최근 4편 연속 시리즈 하위 25%(${groups[g].v24.p25}회 미만)`,
+        detail: `최근 ${K}편 24시간 중간값 ${Math.round(rMed)}회 (평소 ${gm}회)`, recent: describe(recentA), diffs: [], actions: inRange(recentA[0].kdate, recentA[recentA.length - 1].kdate) });
+    } else if (rMed >= gm * 1.6) {
+      alerts.push({ type: "상승", series: g, level: "good", title: `${g}: 최근 ${K}편이 평소보다 잘 나오고 있어요`,
+        detail: `최근 ${K}편 24시간 중간값 ${Math.round(rMed)}회 (평소 ${gm}회)`, recent: describe(recentA), diffs: [], actions: inRange(recentA[0].kdate, recentA[recentA.length - 1].kdate) });
+    }
+  });
+  alerts.sort((a, b) => ({ bad: 0, warn: 1, good: 2 }[a.level] - { bad: 0, warn: 1, good: 2 }[b.level]));
+  // 꺾임 경보는 '이번 주 해볼 것' 맨 앞에: 잘 된 구간의 공통점으로 되돌리기
+  alerts.filter((a) => a.type === "꺾임" && a.curiousPeak > a.curiousRecent).reverse().forEach((a) => {
+    const how = a.curiousPeak > a.curiousRecent ? "질문·이유·반전형 제목(예: '~했을까?', '~늘어난 이유', '~올랐는데 ~')" : "잘 된 편들과 같은 형식";
+    tryNext.unshift({ what: `${a.series}: 잘 나왔던 편들처럼 ${how}으로 3편 연속 올려 보기`,
+      why: `${a.detail}. ${a.diffs[0] || "잘 된 구간과 최근 구간의 차이를 아래 경보에서 확인하세요"}`, measure: `3편의 24시간 조회수 중간값이 시리즈 평소(${groups[a.series].v24.med}회)를 넘는지` });
+  });
+
+  return { at: new Date(now).toISOString(), videos: vids, groups: Object.values(groups), recent, findings, trends, tryNext: tryNext.slice(0, 3), alerts, actions,
     coverage: { videos: vids.length, with24h: vids.filter((v) => v.v24 != null).length, mature: vids.filter(mature).length } };
 }
 

@@ -32,6 +32,11 @@
     .seg .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .12s;}
     .seg .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     /* 2단 네비게이션 — 최상위 카테고리(큰 탭) + 하위 탭(작은 탭) */
+    .navplat{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 22px;padding-bottom:18px;border-bottom:1.5px solid var(--divider);}
+    .navplat .pt{background:var(--card);color:var(--text);border:1px solid var(--line);padding:12px 26px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:var(--shadow);transition:all .12s;}
+    .navplat .pt.active{background:var(--text);color:var(--card);border-color:var(--text);}
+    body.plat-cal #ytTop,body.plat-ig #ytTop,body.plat-cal #stickyBar,body.plat-ig #stickyBar,body.plat-cal #navCat,body.plat-ig #navCat{display:none!important;}
+    body.plat-cal #navSub{display:none;}
     .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:1.5px solid var(--divider);padding-top:26px;}
     .navcat .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:11px 24px;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:all .12s;}
     .navcat .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
@@ -359,6 +364,12 @@
     #sec-bench .btable td{text-align:center;font-variant-numeric:tabular-nums;vertical-align:middle;}
     #sec-bench .btable tr.tot td{background:var(--th);font-weight:600;}
     #sec-bench .empty{padding:16px;text-align:left;}
+    #sec-bench .bstack{display:flex;flex-direction:column;gap:10px;}
+    #sec-bench .balert{background:var(--card);border-radius:16px;padding:14px 18px;box-shadow:var(--shadow);border-left:5px solid var(--sub);display:flex;flex-direction:column;gap:4px;}
+    #sec-bench .balert.bad{border-left-color:#e15a72;} #sec-bench .balert.warn{border-left-color:#f0a020;} #sec-bench .balert.good{border-left-color:#1f9d57;}
+    #sec-bench .balert details{margin-top:6px;font-size:12.5px;} #sec-bench .balert summary{cursor:pointer;color:var(--blue);}
+    #sec-bench .bcols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;} #sec-bench .bv{padding:6px 0;border-bottom:1px solid var(--line);line-height:1.45;}
+    @media (max-width:640px){ #sec-bench .bcols{grid-template-columns:1fr;} }
     /* ===== 📅 콘텐츠 캘린더 (#sec-cal) ===== */
     :root{--c-coral:#ffb8ab;--c-yellow:#ffe39a;--c-green:#bfe6b3;--c-mint:#a9e0d8;--c-blue:#b3cdfd;--c-purple:#d3c1ff;--c-pink:#ffc6de;--c-gray:#d7dde1;--c-orange:#ffcf9e;--c-sun:#d9534f;--c-sat:#3f72cf;--blk-fg:#25292c;}
     body.dark{--c-coral:#e59a8d;--c-yellow:#e2c46f;--c-green:#98c58d;--c-mint:#84c2b9;--c-blue:#8eaee6;--c-purple:#b3a0e6;--c-pink:#e3a4c0;--c-gray:#9aa4ab;--c-orange:#e8ad72;--c-sun:#ef8a86;--c-sat:#86a8ec;}
@@ -480,6 +491,9 @@
       <button id="adminBtn" onclick="toggleAdmin()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🔒 관리자</button>
       <button id="themeBtn" onclick="toggleTheme()" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">🌙 다크</button>
     </div>
+    <!-- 10/26 사용자: 큰 카테고리는 캘린더 · 유튜브 · 인스타 -->
+    <div class="navplat" id="navPlat"></div>
+    <div id="ytTop">
     <div class="desc" style="margin-top:-10px">채널 성과를 한곳에서 봐요.<br>동기화를 누르면 유튜브에서 최신 숫자를 가져와 새로고침돼요.</div>
 
     <div class="bar" style="margin:6px 0 18px">
@@ -610,6 +624,8 @@
     <div class="cards" id="gaugePanel" style="grid-template-columns:repeat(3,1fr)"></div>
 
     </div>
+
+    </div><!-- /ytTop -->
 
     <!-- 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 -->
     <div class="navcat" id="navCat"></div>
@@ -1791,7 +1807,7 @@
           const p=(arr,v)=>arr.length? v.toFixed(0)+"%" : "발행 없음";
           const cls = !lV.length?"" : lA<kL.avp*0.7?RED : lA<kL.avp?YEL:GRN;
           return c2(`유지 · 평균 조회율`, `숏폼 ${p(sV,sA)} · 롱폼 ${p(lV,lA)}`, cls,
-            `KPI는 숏폼 <b>${kS.avp}%</b> · 롱폼 <b>${kL.avp}%</b>. 롱폼이 기준을 크게 밑돌면 오프닝(훅) 문제예요.
+            `KPI는 숏폼 <b>${kS.avp}%</b> · 롱폼 <b>${kL.avp}%</b>. 롱폼은 교육 영상이라 끝까지 보는 비율이 원래 낮아요(참고만).
              <a onclick="goSub('explore','sec-vd')">게시 후 성과 →</a>`);
         })()+
         // ⑤ 검색 유입 — 제목·챕터·재생목록 작업의 성패를 재는 지표
@@ -1815,7 +1831,7 @@
       const acts=[];
       if(sD==null||sD>=4) acts.push(["숏폼 발행 재개", `마지막 숏폼이 ${sD==null?"기록 없음":sD+"일 전"}이에요. 숏폼은 이 채널에서 신규 유입을 만드는 가장 빠른 경로예요.`, RED]);
       if(lD==null||lD>=10) acts.push(["롱폼 발행", `마지막 롱폼이 ${lD==null?"기록 없음":lD+"일 전"}이에요. 롱폼은 구독 전환과 시청시간을 만드는 축이에요.`, RED]);
-      if(lA>0&&lA<kL.avp) acts.push(["롱폼 오프닝 재편집", `롱폼 평균 조회율 ${lA.toFixed(0)}%로 KPI ${kL.avp}%에 못 미쳐요. 0~15초 훅부터 점검하세요.`, YEL]);
+      // 10/26 사용자: 롱폼은 교육 영상이라 오프닝(훅)은 바꾸지 않기로 함 → 이 제안은 하지 않는다
       if(sQ<1&&sV.length) acts.push(["숏폼 → 롱폼 연결 장치", `숏폼 1,000회당 구독이 ${sQ.toFixed(1)}명이에요. 고정 댓글·최종화면에 롱폼을 연결해 유입을 붙잡으세요.`, YEL]);
       if(dv.hasPrev&&dv.pct<-15) acts.push(["조회수 하락 원인 점검", `직전 같은 기간 대비 ${Math.abs(dv.pct).toFixed(0)}% 줄었어요. 발행 리듬과 최근 영상 성과를 함께 보세요.`, RED]);
       if(!acts.length) acts.push(["현 페이스 유지", "지표가 모두 기준 안에 있어요. 발행 리듬을 그대로 유지하세요.", GRN]);
@@ -1846,7 +1862,6 @@
       if(level!=="bad"){
         if(m.sD!=null&&m.sD>=4){ level="warn"; reasons.push("숏폼 발행 간격이 벌어지고 있습니다"); }
         if(m.lD!=null&&m.lD>=10){ level="warn"; reasons.push("롱폼 발행 간격이 벌어지고 있습니다"); }
-        if(m.lA>0&&m.lA<KPI.video_long.avp*0.7){ level="warn"; reasons.push(`롱폼 조회율 ${m.lA.toFixed(0)}%가 KPI ${KPI.video_long.avp}%를 크게 밑돕니다`); }
         if(m.sQ<1&&m.lQ<1){ level="warn"; reasons.push("숏폼·롱폼 모두 1,000회당 구독이 1명 미만입니다"); }
       }
       const MAP={ok:["🟢","정상","v-ok"],warn:["🟡","주의","v-warn"],bad:["🔴","경고","v-bad"]};
@@ -2560,14 +2575,25 @@
         {id:"sec-dtable",  label:"일일 상세",       secs:["sec-dtable"],  draw:()=>renderDailyTable()},
       ]},
     ];
+    NAV.push({cat:"ig", label:"📸 인스타", subs:[
+      {id:"sec-ig",      label:"계정 비교",       secs:["sec-ig"],      draw:()=>{ if(window.igDraw) igDraw("compare"); }},
+      {id:"sec-igposts", label:"게시물 성과",     secs:["sec-igposts"], draw:()=>{ if(window.igDraw) igDraw("posts"); }},
+    ]});
+    // 큰 카테고리(플랫폼) → 그 안의 카테고리 → 하위 탭
+    const PLATS=[{id:"cal",label:"📅 캘린더",cats:["plan"]},{id:"yt",label:"▶️ 유튜브",cats:["today","perf","explore"]},{id:"ig",label:"📸 인스타",cats:["ig"]}];
+    const platOf=(cat)=>(PLATS.find(p=>p.cats.includes(cat))||PLATS[1]).id;
+    let activeYtCat="today";
     const ALL_SUBS=NAV.flatMap(c=>c.subs);
     const ALL_SECS=[...new Set(ALL_SUBS.flatMap(s=>s.secs))];  // 토글 대상 섹션 전체
     let activeCat="plan", activeSub={};   // 10/26 사용자: 캘린더가 가장 먼저   // activeSub[cat]=현재 선택된 하위 탭 id
     NAV.forEach(c=>activeSub[c.cat]=c.subs[0].id);
 
     function buildNav(){
+      const pb=document.getElementById("navPlat");
+      pb.innerHTML=PLATS.map(p=>`<div class="pt" data-plat="${p.id}">${p.label}</div>`).join("");
+      pb.querySelectorAll(".pt").forEach(b=>b.onclick=()=>{ const p=PLATS.find(x=>x.id===b.dataset.plat); showCat(p.id==="yt"?activeYtCat:p.cats[0]); });
       const catBar=document.getElementById("navCat");
-      catBar.innerHTML=NAV.map(c=>`<div class="st ${c.cat===activeCat?'active':''}" data-cat="${c.cat}">${c.label}</div>`).join("");
+      catBar.innerHTML=NAV.filter(c=>platOf(c.cat)==="yt").map(c=>`<div class="st ${c.cat===activeCat?'active':''}" data-cat="${c.cat}">${c.label}</div>`).join("");
       catBar.querySelectorAll(".st").forEach(b=>b.onclick=()=>showCat(b.dataset.cat));
       buildSubBar();
     }
@@ -2579,6 +2605,9 @@
     }
     function showCat(cat){
       activeCat=cat;
+      const plat=platOf(cat); if(plat==="yt") activeYtCat=cat;
+      document.body.classList.remove("plat-cal","plat-yt","plat-ig"); document.body.classList.add("plat-"+plat);
+      document.querySelectorAll("#navPlat .pt").forEach(b=>b.classList.toggle("active",b.dataset.plat===plat));
       document.getElementById("navCat").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.cat===cat));
       buildSubBar();
       showSub(activeSub[cat]);   // 그 카테고리에서 마지막으로 보던 하위 탭
@@ -3299,7 +3328,7 @@
       buildTabs();drawChart();buildGrowthTabs();drawGrowth();renderCumulative();renderDailyTable();renderVideos();
       renderDelayBadge();renderDeltas();renderGauge();renderBestWorst();renderFormCompare();drawScatter();drawWeekday();renderBrief();renderKpiSuggest();
       renderSticky();populateVideoSelect();
-      buildNav(); showSub(activeSub[activeCat]);   // 초기: 일일 → 실시간
+      buildNav(); showCat(activeCat);   // 초기: 캘린더
     }
     // 추이 영상 선택 드롭다운 채우기 (업로드 최신순)
     function populateVideoSelect(){
