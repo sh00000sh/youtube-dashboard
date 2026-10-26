@@ -1808,8 +1808,10 @@ async function reachWriteBack(sheets) {
   return data.length;
 }
 app.get("/api/reach-status", (req, res) => res.json({ ok: true, ...reachState }));
-setInterval(() => reachJob().catch(() => {}), 6 * 60 * 60 * 1000);
-setTimeout(() => reachJob().catch(() => {}), 45 * 1000);
+// 6시간마다. 단 실패(예: API를 아직 안 켬) 상태면 30분마다 다시 시도해서, 켜는 즉시 수집이 시작되게
+let reachLastOk = 0;
+setInterval(() => { if (reachState.error || Date.now() - reachLastOk > 6 * 3600e3) reachJob().then(() => { if (!reachState.error) reachLastOk = Date.now(); }).catch(() => {}); }, 30 * 60 * 1000);
+setTimeout(() => reachJob().then(() => { if (!reachState.error) reachLastOk = Date.now(); }).catch(() => {}), 45 * 1000);
 
 // ===================================================================
 //  📏 우리 채널 기준 (bench.js) — 15분 캐시
