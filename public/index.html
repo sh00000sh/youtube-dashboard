@@ -369,6 +369,10 @@
     .bx .empty{padding:16px;text-align:left;}
     .bx .igf{background:var(--chip);color:var(--text);border:1px solid var(--line);padding:6px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;}
     .bx .igf.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .bx .iggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:8px;}
+    .bx .igl{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sub);}
+    .bx .igl input,.bx .igl select{font:inherit;font-size:13px;color:var(--text);background:var(--bg);border:1px solid var(--divider);border-radius:8px;padding:6px 8px;}
+    .bx tr.igm:hover td{background:var(--hover);}
     .bx .bstack{display:flex;flex-direction:column;gap:10px;}
     .bx .balert{background:var(--card);border-radius:16px;padding:14px 18px;box-shadow:var(--shadow);border-left:5px solid var(--sub);display:flex;flex-direction:column;gap:4px;}
     .bx .balert.bad{border-left-color:#e15a72;} .bx .balert.warn{border-left-color:#f0a020;} .bx .balert.good{border-left-color:#1f9d57;}

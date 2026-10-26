@@ -90,21 +90,71 @@
     const P = D.posts.map(prep).sort((a, b) => b.ts.localeCompare(a.ts));
     const list = P.filter((p) => acctFilter === "전체" || p.acc === acctFilter);
     const pool = (p) => P.filter((q) => q.acc === p.acc && q.fmt === p.fmt && q.reach != null && q.age >= 2).map((q) => q.reach);
-    box.innerHTML = `<div style="display:flex;gap:6px;margin-bottom:10px">${["전체", ...ACC].map((a) => `<button class="igf ${a === acctFilter ? "on" : ""}" data-a="${a}">${a}</button>`).join("")}</div>
+    box.innerHTML = `<div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">${["전체", ...ACC].map((a) => `<button class="igf ${a === acctFilter ? "on" : ""}" data-a="${a}">${a}</button>`).join("")}
+      <button class="igf on" style="margin-left:auto" id="igAdd">+ 직접 입력</button></div>
+      <div id="igForm"></div>
       <div class="panel"><div class="table-wrap"><table class="btable"><thead><tr><th>게시</th><th>계정</th><th style="text-align:left">첫 줄</th><th>형식</th><th>도달</th><th>조회</th><th>좋아요</th><th>댓글</th><th>저장</th><th>공유</th><th>팔로우</th><th>참여율</th></tr></thead><tbody>
-      ${list.map((p) => `<tr><td style="white-space:nowrap">${p.kdate.slice(5)} ${p.hour}시</td><td>${esc(p.acc)}</td>
+      ${list.map((p) => `<tr ${String(p.id).startsWith("manual_") ? `class="igm" data-id="${esc(p.id)}" title="눌러서 고치기" style="cursor:pointer"` : ""}><td style="white-space:nowrap">${p.kdate.slice(5)} ${p.hour}시${String(p.id).startsWith("manual_") ? ' <span class="bsub">✍️</span>' : ""}</td><td>${esc(p.acc)}</td>
         <td style="text-align:left"><a href="${esc(p.link)}" target="_blank">${esc((p.first || "(첫 줄 없음)").slice(0, 36))}</a><div class="bsub">${p.hook}</div></td><td>${esc(p.fmt)}</td>
         <td>${f(p.reach)} ${p.age >= 2 ? grade(rank(pool(p), p.reach)) : `<span class="bsub">${Math.floor(p.age * 24)}시간째</span>`}</td><td>${f(p.views)}</td><td>${f(p.likes)}</td><td>${f(p.com)}</td><td>${f(p.sav)}</td><td>${f(p.sh)}</td><td>${f(p.fol)}</td><td>${p1(p.eng)}</td></tr>`).join("") || '<tr><td colspan="12" class="empty">아직 수집된 게시물이 없어요.</td></tr>'}
       </tbody></table></div></div>`;
-    box.querySelectorAll(".igf").forEach((b) => b.onclick = () => { acctFilter = b.dataset.a; renderPosts(box); });
+    box.querySelectorAll(".igf[data-a]").forEach((b) => b.onclick = () => { acctFilter = b.dataset.a; renderPosts(box); });
+    box.querySelector("#igAdd").onclick = () => openForm(box.querySelector("#igForm"), null);
+    box.querySelectorAll("tr.igm").forEach((tr) => tr.onclick = (ev) => { if (ev.target.closest("a")) return; openForm(box.querySelector("#igForm"), D.posts.find((x) => x["미디어ID"] === tr.dataset.id)); box.querySelector("#igForm").scrollIntoView({ behavior: "smooth", block: "center" }); });
+  }
+
+  // ✍️ 직접 입력 폼 — 캘린더에 적어 둔 인스타 게시물을 골라 계정·형식·시각·제목을 채울 수 있다
+  let CAL = null;
+  async function calPosts() { if (CAL) return CAL; try { const r = await fetch("/api/calendar").then((r) => r.json()); CAL = (r.items || []).filter((x) => x.kind === "post" && ACC.includes(x.account)); } catch (_) { CAL = []; } return CAL; }
+  const FIELDS = [["reach", "도달"], ["views", "조회"], ["likes", "좋아요"], ["comments", "댓글"], ["saved", "저장"], ["shares", "공유"], ["follows", "팔로우"], ["visits", "프로필 방문"], ["watch", "릴스 평균 시청(초)"]];
+  const COLK = { reach: "도달", views: "조회", likes: "좋아요", comments: "댓글", saved: "저장", shares: "공유", follows: "팔로우", visits: "프로필방문", watch: "릴스평균시청초" };
+  async function openForm(el, row) {
+    const v = (k) => row ? row[COLK[k]] ?? "" : "";
+    const ts = row ? new Date(Date.parse(row["게시시각"]) + 9 * 3600e3).toISOString().slice(0, 16) : new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 16);
+    const cal = await calPosts();
+    const done = new Set(D.posts.map((p) => p["첫줄"]));
+    el.innerHTML = `<div class="bpanel igform"><div class="bt" style="margin-bottom:8px">${row ? "게시물 고치기" : "게시물 직접 입력"} <span class="bsub">인스타 앱 → 게시물 → 인사이트 보기의 숫자를 그대로 넣어 주세요</span></div>
+      ${row ? "" : `<label class="igl">캘린더에서 불러오기 <select id="igCal"><option value="">— 고르면 아래가 채워져요 —</option>${cal.filter((c) => !done.has(c.title)).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)).slice(0, 40).map((c) => `<option value="${esc(c.id)}">${esc(c.date.slice(5))} ${esc(c.time || "")} · ${esc(c.account)} ${esc(c.format === "릴스" ? "릴스" : "게시물")} · ${esc((c.title || "").slice(0, 30))}</option>`).join("")}</select></label>`}
+      <div class="iggrid">
+        <label class="igl">계정 <select id="igAcc">${ACC.map((a) => `<option ${row && row["계정"] === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+        <label class="igl">형식 <select id="igFmt">${FMT.map((a) => `<option ${row && row["형식"] === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+        <label class="igl">올린 시각 <input type="datetime-local" id="igTs" value="${ts}"></label>
+        <label class="igl" style="grid-column:span 2">첫 줄(후킹 문장) <input id="igFirst" value="${esc(row ? row["첫줄"] : "")}"></label>
+        <label class="igl">링크 <input id="igLink" value="${esc(row ? row["링크"] : "")}" placeholder="https://www.instagram.com/p/…"></label>
+        ${FIELDS.map(([k, l]) => `<label class="igl">${l} <input type="number" min="0" step="any" id="ig_${k}" value="${esc(v(k))}"></label>`).join("")}
+      </div>
+      <div id="igPwRow"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">${row ? `<button class="igf" id="igDel" style="color:#e15a72">삭제</button>` : ""}<span class="bsub" id="igMsg" style="margin-left:auto"></span>
+        <button class="igf" id="igCancel">닫기</button><button class="igf on" id="igSave">저장</button></div></div>`;
+    const q = (id) => el.querySelector("#" + id);
+    if (q("igCal")) q("igCal").onchange = () => { const c = cal.find((x) => x.id === q("igCal").value); if (!c) return; q("igAcc").value = c.account; q("igFmt").value = c.format === "릴스" ? "릴스" : "캐러셀"; q("igTs").value = `${c.date}T${c.time || "09:00"}`; q("igFirst").value = c.title || ""; };
+    q("igCancel").onclick = () => { el.innerHTML = ""; };
+    const send = async (op) => {
+      const item = { id: row ? row["미디어ID"] : null, acc: q("igAcc").value, fmt: q("igFmt").value, ts: q("igTs").value ? new Date(q("igTs").value + ":00+09:00").toISOString() : null, first: q("igFirst").value.trim(), link: q("igLink").value.trim() };
+      FIELDS.forEach(([k]) => { item[k] = q("ig_" + k).value; });
+      const pwEl = el.querySelector("#igPw");
+      q("igMsg").textContent = "저장 중…";
+      try {
+        const r = await fetch("/api/ig/manual", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, item, pw: (pwEl && pwEl.value) || (typeof ADMIN !== "undefined" && ADMIN ? ADMIN_PW : "") }) }).then((r) => r.json());
+        if (r.needPw) { q("igPwRow").innerHTML = `<div class="bpanel" style="margin-top:8px;background:var(--chip)"><div class="bsub">${esc(r.error)} 한 번 맞히면 이 브라우저에선 30일 동안 바로 저장돼요.</div><input type="password" id="igPw" placeholder="대시보드 관리자 비밀번호" style="width:100%;margin-top:6px"></div>`; el.querySelector("#igPw").focus(); q("igMsg").textContent = ""; return; }
+        if (!r.ok) { q("igMsg").textContent = "❌ " + (r.error || "실패"); return; }
+        el.innerHTML = ""; await load();
+      } catch (e) { q("igMsg").textContent = "❌ " + e.message; }
+    };
+    q("igSave").onclick = () => send("upsert");
+    if (q("igDel")) q("igDel").onclick = () => { if (q("igDel").dataset.arm) send("delete"); else { q("igDel").dataset.arm = 1; q("igDel").textContent = "한 번 더 누르면 삭제"; } };
   }
 
   function render(mode) {
     const box = $(mode === "posts" ? "igPostsBody" : "igBody"); if (!box) return;
     if (!D) { box.innerHTML = `<div class="empty">${loading ? "불러오는 중…" : "인스타 데이터를 불러오지 못했어요."}</div>`; return; }
-    if (!D.accounts.some((a) => a.configured)) { box.innerHTML = setupGuide(); return; }
-    if (!D.posts.length) { box.innerHTML = `<div class="bpanel">계정은 연결됐어요. 첫 수집이 끝나면(1~2분) 여기 채워져요. ${D.accounts.map((a) => a.error ? `<div class="bw">⚠️ ${esc(a.key)}: ${esc(a.error)}</div>` : "").join("")}</div>`; return; }
-    mode === "posts" ? renderPosts(box) : renderCompare(box);
+    const api = D.accounts.some((a) => a.configured);
+    const banner = api ? "" : `<div class="bpanel" style="margin-bottom:12px"><b>지금은 직접 입력한 숫자로 분석해요.</b> <span class="bsub">인스타 API 연결(메타 개발자 등록)이 페이스북 보안 제한으로 막혀 있어요. 풀리면 자동 수집으로 바뀌고, 입력한 숫자는 그대로 남아요.</span>
+      <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--blue);font-size:12.5px">자동 연결 방법 보기</summary>${setupGuide()}</details></div>`;
+    if (!D.posts.length && mode !== "posts") { box.innerHTML = banner + `<div class="bpanel">아직 입력된 게시물이 없어요. <a onclick="showSub('sec-igposts')" style="cursor:pointer;color:var(--blue)">게시물 성과 → + 직접 입력</a>에서 인스타 인사이트 숫자를 넣으면 여기서 두 계정을 비교해 줘요.</div>`; return; }
+    const inner = document.createElement("div");
+    mode === "posts" ? renderPosts(inner) : renderCompare(inner);
+    box.innerHTML = banner; box.appendChild(inner);
   }
   let lastMode = "compare";
   async function load() { loading = true; render(lastMode); try { const r = await fetch("/api/ig").then((r) => r.json()); D = r.ok ? r : null; } catch (_) { D = null; } loading = false; render(lastMode); }

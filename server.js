@@ -974,7 +974,7 @@ function calTokOk(req) {
 function calTokSet(req, res) {
   const exp = Date.now() + CAL_TOK_DAYS * 86400000;
   const secure = (req.get("x-forwarded-proto") || req.protocol) === "https" ? "; Secure" : "";
-  res.setHeader("Set-Cookie", `cal_tok=${exp}.${calSign(exp)}; Max-Age=${CAL_TOK_DAYS * 86400}; Path=/api/calendar; HttpOnly; SameSite=Strict${secure}`);
+  res.setHeader("Set-Cookie", `cal_tok=${exp}.${calSign(exp)}; Max-Age=${CAL_TOK_DAYS * 86400}; Path=/api; HttpOnly; SameSite=Strict${secure}`);
 }
 // 화면이 처음 열릴 때 '이 브라우저는 바로 편집 가능한지'만 알려 준다
 const calHits = new Map();
@@ -1831,7 +1831,9 @@ async function getBench(force) {
   return data;
 }
 // 📸 인스타그램 (ig.js)
-require("./ig")({ app, getSheetsClient, ensureTab, SHEET_ID });
+require("./ig")({ app, getSheetsClient, ensureTab, SHEET_ID,
+  // 직접 입력 저장 권한: 캘린더와 같은 방식(처음 한 번 비밀번호 → 30일 쿠키)
+  canWrite: (req, res, pw) => { if (pw) { if (!checkPw(pw)) return false; calTokSet(req, res); return true; } return calTokOk(req); } });
 
 // 🤝 다른 클로드 작업(영상 기획·제목·대본)이 읽어 가는 요약 — 사람이 읽을 수 있는 텍스트
 //   10/26 사용자: "코워크 프로젝트가 대시보드 분석 결과를 보고 앞으로 만드는 영상에 반영하면 좋겠다"

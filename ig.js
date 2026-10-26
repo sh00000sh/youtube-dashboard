@@ -14,7 +14,7 @@ const ACCOUNTS = [
   { key: "회사", env: "IG_TOKEN_COMPANY", handle: "eugeneoptions" },
 ];
 
-module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID }) {
+module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, canWrite }) {
   const tokens = {};   // 메모리 안에서 갱신한 토큰 (서버가 켜져 있는 동안 60일 만료를 계속 미룬다)
   const state = {};    // 계정별 상태
   ACCOUNTS.forEach((a) => { tokens[a.key] = process.env[a.env] || ""; state[a.key] = { key: a.key, handle: a.handle, configured: !!tokens[a.key], ok: false, error: null, followers: null, mediaCount: null, lastSync: null, tokenExpiresAt: null }; });
@@ -108,6 +108,32 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID })
         history = (r.data.valueRanges?.[1]?.values || []).map((x) => ({ at: x[0], account: x[1], followers: Number(x[2] || 0), media: Number(x[3] || 0) }));
       } catch (_) { /* 탭 없음 */ }
       res.json({ ok: true, accounts: Object.values(state), posts, history });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  // ✍️ 직접 입력 (API 연결 전 임시 · 연결 뒤에도 API가 못 주는 값 보정용)
+  //   10/26: 페이스북 보안 제한으로 개발자 등록이 막혀 당분간 인사이트 숫자를 손으로 넣는다
+  //   미디어ID가 manual_ 로 시작하는 줄만 고치거나 지운다(API로 받은 줄은 건드리지 않음)
+  app.post("/api/ig/manual", async (req, res) => {
+    try {
+      const { pw, op, item } = req.body || {};
+      if (!canWrite(req, res, pw)) return res.status(401).json({ ok: false, needPw: true, error: "이 브라우저에서 처음 한 번만 비밀번호가 필요해요." });
+      if (!item || !["미주옵", "회사"].includes(item.acc)) return res.status(400).json({ ok: false, error: "계정을 골라 주세요." });
+      const id = item.id && /^manual_[\w-]{1,40}$/.test(item.id) ? item.id : "manual_" + Date.now().toString(36);
+      const sheets = getSheetsClient();
+      await ensureTab(sheets, IG_POST_TAB, IG_COLS);
+      const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!B2:B` });
+      const at = (r.data.values || []).findIndex((x) => x[0] === id);
+      if (op === "delete") {
+        if (at >= 0) await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A${at + 2}:P${at + 2}` });
+        return res.json({ ok: true });
+      }
+      const n = (k) => (item[k] === "" || item[k] == null || isNaN(Number(item[k])) ? "" : Number(item[k]));
+      const ts = item.ts ? new Date(item.ts).toISOString() : new Date().toISOString();
+      const row = [item.acc, id, ts, ["캐러셀", "릴스"].includes(item.fmt) ? item.fmt : "캐러셀", String(item.first || "").slice(0, 120), String(item.link || "").slice(0, 300),
+        n("reach"), n("views"), n("likes"), n("comments"), n("saved"), n("shares"), n("follows"), n("visits"), n("watch"), new Date().toISOString()];
+      if (at >= 0) await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A${at + 2}:P${at + 2}`, valueInputOption: "RAW", requestBody: { values: [row] } });
+      else await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A:P`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: [row] } });
+      res.json({ ok: true, id });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
   setInterval(() => igSync().catch(() => {}), 3 * 60 * 60 * 1000);
