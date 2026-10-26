@@ -38,7 +38,8 @@
     body.plat-cal #navPlat{padding-bottom:16px;border-bottom:1.5px solid var(--divider);margin-bottom:22px;}
     .navplat .pt{background:var(--card);color:var(--text);border:1px solid var(--line);padding:12px 26px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:var(--shadow);transition:all .12s;}
     .navplat .pt.active{background:var(--text);color:var(--card);border-color:var(--text);}
-    body.plat-cal #ytTop,body.plat-ig #ytTop,body.plat-cal #stickyBar,body.plat-ig #stickyBar,body.plat-cal #navCat,body.plat-ig #navCat{display:none!important;}
+    body.plat-cal #ytTop,body.plat-ig #ytTop,body.plat-radar #ytTop,body.plat-cal #stickyBar,body.plat-ig #stickyBar,body.plat-radar #stickyBar,body.plat-cal #navCat,body.plat-ig #navCat,body.plat-radar #navCat{display:none!important;}
+    body.plat-radar #navSub{display:none;}
     body.plat-cal #navSub{display:none;}
     .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:0;}
     .navcat .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:11px 24px;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:all .12s;}
@@ -642,6 +643,11 @@
 
     <!-- 토글 섹션 묶음: 최소 높이를 고정해 탭 전환 시 스크롤 위치가 출렁이지 않게 함 -->
     <div id="secWrap">
+    <div class="sec bx" id="sec-radar" style="display:none">
+    <h2>📡 이슈 레이더 <span class="kpi-badge">DART 공시 10분 · 뉴스 15분마다 자동 수집</span></h2>
+    <div class="desc">카드뉴스로 만들 만한 <b>계약·인수합병·속보·실적</b> 소식을 모아요. 공시(DART)가 가장 빠르고 정확해서 맨 위에 둬요. '미국 관련'은 제목이나 공시 본문에 미국이 나온 것이에요.</div>
+    <div id="radarBody"></div>
+    </div>
     <div class="sec bx" id="sec-ig" style="display:none">
     <h2>📸 인스타 계정 비교 <span class="kpi-badge">미주옵 · 회사 — 각 계정 게시물들의 중간값으로 판정</span>
       <button onclick="igDraw('compare')" style="display:none"></button></h2>
@@ -2598,8 +2604,12 @@
       {id:"sec-ig",      label:"계정 비교",       secs:["sec-ig"],      draw:()=>{ if(window.igDraw) igDraw("compare"); }},
       {id:"sec-igposts", label:"게시물 성과",     secs:["sec-igposts"], draw:()=>{ if(window.igDraw) igDraw("posts"); }},
     ]});
+    // 10/26 사용자: 계약·합병·속보 이슈를 계속 모니터링해서 카드뉴스로
+    NAV.push({cat:"radar", label:"📡 이슈 레이더", subs:[
+      {id:"sec-radar",   label:"이슈 후보",       secs:["sec-radar"],   draw:()=>{ if(window.radarDraw) radarDraw(); }},
+    ]});
     // 큰 카테고리(플랫폼) → 그 안의 카테고리 → 하위 탭
-    const PLATS=[{id:"cal",label:"📅 캘린더",cats:["plan"]},{id:"yt",label:"▶️ 유튜브",cats:["today","perf","explore"]},{id:"ig",label:"📸 인스타",cats:["ig"]}];
+    const PLATS=[{id:"cal",label:"📅 캘린더",cats:["plan"]},{id:"yt",label:"▶️ 유튜브",cats:["today","perf","explore"]},{id:"ig",label:"📸 인스타",cats:["ig"]},{id:"radar",label:"📡 이슈 레이더",cats:["radar"]}];
     const platOf=(cat)=>(PLATS.find(p=>p.cats.includes(cat))||PLATS[1]).id;
     let activeYtCat="today";
     const ALL_SUBS=NAV.flatMap(c=>c.subs);
@@ -2625,7 +2635,7 @@
     function showCat(cat){
       activeCat=cat;
       const plat=platOf(cat); if(plat==="yt") activeYtCat=cat;
-      document.body.classList.remove("plat-cal","plat-yt","plat-ig"); document.body.classList.add("plat-"+plat);
+      document.body.classList.remove("plat-cal","plat-yt","plat-ig","plat-radar"); document.body.classList.add("plat-"+plat);
       document.querySelectorAll("#navPlat .pt").forEach(b=>b.classList.toggle("active",b.dataset.plat===plat));
       document.getElementById("navCat").querySelectorAll(".st").forEach(b=>b.classList.toggle("active",b.dataset.cat===cat));
       buildSubBar();
@@ -3404,5 +3414,6 @@
   <script src="/calendar.js"></script>
   <script src="/bench.js"></script>
   <script src="/ig.js"></script>
+  <script src="/radar.js"></script>
 </body>
 </html>

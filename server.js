@@ -1830,6 +1830,8 @@ async function getBench(force) {
   benchCache = { at: Date.now(), data };
   return data;
 }
+// 📡 이슈 레이더 (issues.js) — DART 공시 + 뉴스 RSS
+require("./issues")({ app, getSheetsClient, ensureTab, SHEET_ID });
 // 📸 인스타그램 (ig.js)
 require("./ig")({ app, getSheetsClient, ensureTab, SHEET_ID,
   // 직접 입력 저장 권한: 캘린더와 같은 방식(처음 한 번 비밀번호 → 30일 쿠키)
