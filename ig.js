@@ -14,6 +14,9 @@ const ACCOUNTS = [
   { key: "회사", env: "IG_TOKEN_COMPANY", handle: "eugeneoptions" },
 ];
 
+// 10/26: values.append가 표를 잘못 잡아 P열 오른쪽에 붙이던 문제 → 마지막으로 B열이 찬 줄 다음에 직접 쓴다
+const nextRow = (bVals) => { let last = 1; (bVals || []).forEach((x, i) => { if (x && x[0]) last = i + 2; }); return last + 1; };
+
 module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, canWrite }) {
   const tokens = {};   // 메모리 안에서 갱신한 토큰 (서버가 켜져 있는 동안 60일 만료를 계속 미룬다)
   const state = {};    // 계정별 상태
@@ -63,7 +66,7 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
       const upd = [], app = [];
       rows.forEach((r) => { const at = idRow[r[1]]; if (at) upd.push({ range: `${IG_POST_TAB}!A${at}:P${at}`, values: [r] }); else app.push(r); });
       for (let i = 0; i < upd.length; i += 200) await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { valueInputOption: "RAW", data: upd.slice(i, i + 200) } });
-      if (app.length) await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A:P`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: app } });
+      if (app.length) { const next = idRow.__next || 2; await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A${next}:P${next + app.length - 1}`, valueInputOption: "RAW", requestBody: { values: app } }); idRow.__next = next + app.length; }
       await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${IG_ACC_TAB}!A:D`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
         requestBody: { values: [[new Date().toISOString(), acc.key, st.followers ?? "", st.mediaCount ?? ""]] } });
       st.ok = true; st.error = null; st.lastSync = new Date().toISOString();
@@ -93,7 +96,7 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
       await ensureTab(sheets, IG_POST_TAB, IG_COLS);
       await ensureTab(sheets, IG_ACC_TAB, ["시각", "계정", "팔로워", "게시물수"]);
       const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!B2:B` });
-      const idRow = {}; (r.data.values || []).forEach((x, i) => { if (x[0]) idRow[x[0]] = i + 2; });
+      const idRow = {}; (r.data.values || []).forEach((x, i) => { if (x[0]) idRow[x[0]] = i + 2; }); idRow.__next = nextRow(r.data.values);
       for (const a of ACCOUNTS) await syncAccount(a, sheets, idRow);
     } finally { syncing = false; }
   }
@@ -126,6 +129,17 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
       const id = item.id && /^manual_[\w-]{1,40}$/.test(item.id) ? item.id : "manual_" + Date.now().toString(36);
       const sheets = getSheetsClient();
       await ensureTab(sheets, IG_POST_TAB, IG_COLS);
+      if (op === "repair") {
+        const g = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A2:AF` });
+        const vals = g.data.values || [];
+        const rows = vals.map((x) => { const a = x.slice(0, 16); if (!a[1] && x[16]) return x.slice(15, 31); return a; });
+        const seen = new Set(), keep = new Array(rows.length).fill(null);
+        for (let i = rows.length - 1; i >= 0; i--) { const id = rows[i] && rows[i][1]; if (!id || seen.has(id)) continue; seen.add(id); keep[i] = rows[i]; }
+        const packed = keep.filter(Boolean);
+        await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A2:AF` });
+        if (packed.length) await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A2:P${packed.length + 1}`, valueInputOption: "RAW", requestBody: { values: packed.map((x) => { const y = x.slice(0, 16); while (y.length < 16) y.push(""); return y; }) } });
+        return res.json({ ok: true, before: vals.length, after: packed.length });
+      }
       if (op === "followers") {   // 팔로워 수 직접 기록
         await ensureTab(sheets, IG_ACC_TAB, ["시각", "계정", "팔로워", "게시물수"]);
         await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${IG_ACC_TAB}!A:D`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
@@ -143,7 +157,7 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
       const row = [item.acc, id, ts, ["캐러셀", "릴스"].includes(item.fmt) ? item.fmt : "캐러셀", String(item.first || "").slice(0, 120), String(item.link || "").slice(0, 300),
         n("reach"), n("views"), n("likes"), n("comments"), n("saved"), n("shares"), n("follows"), n("visits"), n("watch"), new Date().toISOString()];
       if (at >= 0) await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A${at + 2}:P${at + 2}`, valueInputOption: "RAW", requestBody: { values: [row] } });
-      else await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A:P`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: [row] } });
+      else { const next = nextRow(r.data.values); await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A${next}:P${next}`, valueInputOption: "RAW", requestBody: { values: [row] } }); }
       res.json({ ok: true, id });
     } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
   });
