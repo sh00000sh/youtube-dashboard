@@ -1727,6 +1727,91 @@ app.get("/api/posts", async (req, res) => {
 });
 
 // ===================================================================
+//  👁 노출수·CTR 자동 수집 (YouTube Reporting API · channel_reach_basic_a1)
+//   10/26 사용자: "노출수랑 CTR은 자동 입력되게"
+//   - Analytics API에는 썸네일 노출수·CTR이 없고, Reporting API의 '도달' 리포트에만 있다(영상×날짜)
+//   - 처음 한 번 리포트 작업(job)을 만들면 구글이 매일 CSV를 만들어 둔다(첫 파일은 하루~이틀 뒤)
+//   - 6시간마다 새 CSV를 받아 '노출CTR_일별' 탭에 쌓고, 영상별 F·G열과 일별 I·J열에 합계를 채운다
+//   - 숏폼은 쇼츠 피드 노출이 '썸네일 노출'로 잡히지 않아 대부분 비어 있을 수 있다
+// ===================================================================
+const REACH_TAB = process.env.REACH_TAB || "노출CTR_일별";
+const REACH_DONE_TAB = process.env.REACH_DONE_TAB || "노출CTR_받은파일";
+let reachState = { at: null, jobId: null, reports: 0, newReports: 0, lastDate: null, error: null };
+async function reachJob() {
+  if (!OAUTH_REFRESH_TOKEN || !GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return;
+  const auth = getOAuth();
+  const yr = google.youtubereporting({ version: "v1", auth });
+  try {
+    const jl = await yr.jobs.list({});
+    let job = (jl.data.jobs || []).find((j) => j.reportTypeId === "channel_reach_basic_a1");
+    if (!job) job = (await yr.jobs.create({ requestBody: { reportTypeId: "channel_reach_basic_a1", name: "dashboard-reach" } })).data;
+    reachState.jobId = job.id;
+    let reports = [], token;
+    do {
+      const r = await yr.jobs.reports.list({ jobId: job.id, pageToken: token, pageSize: 100 });
+      reports = reports.concat(r.data.reports || []); token = r.data.nextPageToken;
+    } while (token);
+    reachState.reports = reports.length;
+    const sheets = getSheetsClient();
+    await ensureTab(sheets, REACH_TAB, ["날짜", "영상ID", "노출수", "CTR(%)", "리포트생성"]);
+    await ensureTab(sheets, REACH_DONE_TAB, ["리포트ID", "받은시각", "줄 수"]);
+    const done = new Set(((await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${REACH_DONE_TAB}!A2:A` })).data.values || []).map((x) => x[0]));
+    const todo = reports.filter((r) => !done.has(r.id)).sort((a, b) => String(a.startTime).localeCompare(String(b.startTime))).slice(0, 40);
+    const { token: at } = await auth.getAccessToken();
+    let added = 0;
+    for (const rep of todo) {
+      const csv = await (await fetch(rep.downloadUrl, { headers: { Authorization: "Bearer " + at } })).text();
+      const lines = csv.trim().split(/\r?\n/); const head = (lines.shift() || "").split(",");
+      const iD = head.indexOf("date"), iV = head.indexOf("video_id"), iI = head.indexOf("video_thumbnail_impressions"), iC = head.indexOf("video_thumbnail_impressions_ctr");
+      if (iD < 0 || iV < 0 || iI < 0) throw new Error("리포트 형식이 예상과 달라요: " + head.join(","));
+      const rows = lines.map((l) => l.split(",")).filter((c) => c[iV]).map((c) => {
+        const d = c[iD]; const ctr = Number(c[iC] || 0);
+        return [`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, c[iV], Number(c[iI] || 0), Math.round((ctr <= 1 ? ctr * 100 : ctr) * 100) / 100, rep.createTime || ""];
+      }).filter((r) => r[2] > 0);
+      if (rows.length) await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${REACH_TAB}!A:E`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: rows } });
+      await sheets.spreadsheets.values.append({ spreadsheetId: SHEET_ID, range: `${REACH_DONE_TAB}!A:C`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS", requestBody: { values: [[rep.id, new Date().toISOString(), rows.length]] } });
+      added++;
+    }
+    reachState.newReports = added;
+    if (added) await reachWriteBack(sheets);
+    reachState.error = null;
+  } catch (e) {
+    const m = e && (e.errors?.[0]?.message || e.message) || String(e);
+    reachState.error = /has not been used|is disabled|accessNotConfigured/i.test(m)
+      ? "구글 클라우드에서 'YouTube Reporting API'가 꺼져 있어요. 콘솔 → API 및 서비스 → 라이브러리에서 'YouTube Reporting API'를 사용 설정해 주세요."
+      : /insufficient|scope|permission/i.test(m) ? "로그인 권한(yt-analytics.readonly)이 부족해요: " + m : m;
+    console.log("reach err:", m);
+  } finally { reachState.at = new Date().toISOString(); }
+}
+// 쌓인 일별 노출수·CTR → 영상별(F노출수 G CTR, 누적) · 일별(I노출수 J CTR, 채널 합계)
+async function reachWriteBack(sheets) {
+  const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${REACH_TAB}!A2:E` });
+  const last = {};   // 같은 날·영상이 다시 생성된 리포트로 또 오면 나중 것만
+  (r.data.values || []).forEach((x) => { const k = x[0] + "|" + x[1]; if (!last[k] || String(x[4] || "") >= String(last[k][4] || "")) last[k] = x; });
+  const byVid = {}, byDay = {};
+  Object.values(last).forEach((x) => {
+    const imp = Number(x[2] || 0), ctr = Number(x[3] || 0); if (!imp) return;
+    (byVid[x[1]] = byVid[x[1]] || { imp: 0, clk: 0 }); byVid[x[1]].imp += imp; byVid[x[1]].clk += imp * ctr / 100;
+    (byDay[x[0]] = byDay[x[0]] || { imp: 0, clk: 0 }); byDay[x[0]].imp += imp; byDay[x[0]].clk += imp * ctr / 100;
+  });
+  reachState.lastDate = Object.keys(byDay).sort().pop() || null;
+  const data = [];
+  const vm = (await readColumn(sheets, VIDEO_TAB, "A", VIDEO_FIRST_ROW)).map;
+  // 영상별 '누적' 노출수는 리포트가 시작된 날 이후에 올라온 영상만 쓴다(그 전 영상은 앞부분이 빠진 반쪽 합계라서 — 손으로 넣은 값을 지키기 위해)
+  const firstDay = Object.keys(byDay).sort()[0] || "9999";
+  const pubOf = {}; try { (await readForDashboard(sheets)).videos.forEach((v) => { if (v[0] && v[22]) pubOf[v[0]] = kstDate(Date.parse(v[22])); }); } catch (_) {}
+  Object.entries(byVid).forEach(([id, a]) => { const row = vm[id]; if (row && pubOf[id] && pubOf[id] >= firstDay) data.push({ range: `${VIDEO_TAB}!F${row}:G${row}`, values: [[a.imp, (a.clk / a.imp * 100).toFixed(1) + "%"]] }); });
+  const dm = (await readColumn(sheets, DAILY_TAB, "B", DAILY_FIRST_ROW)).map;
+  Object.entries(byDay).forEach(([d, a]) => { const row = dm[d.slice(2)]; if (row) data.push({ range: `${DAILY_TAB}!I${row}:J${row}`, values: [[a.imp, (a.clk / a.imp * 100).toFixed(1) + "%"]] }); });
+  for (let i = 0; i < data.length; i += 400)
+    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { valueInputOption: "USER_ENTERED", data: data.slice(i, i + 400) } });
+  return data.length;
+}
+app.get("/api/reach-status", (req, res) => res.json({ ok: true, ...reachState }));
+setInterval(() => reachJob().catch(() => {}), 6 * 60 * 60 * 1000);
+setTimeout(() => reachJob().catch(() => {}), 45 * 1000);
+
+// ===================================================================
 //  📏 우리 채널 기준 (bench.js) — 15분 캐시
 // ===================================================================
 const { computeBench } = require("./bench");

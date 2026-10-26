@@ -847,6 +847,7 @@
     <div class="sec" id="sec-scatter" style="display:none">
     <h2>🎯 CTR × 평균조회율 (낚시 감별) <span class="kpi-badge">오른쪽 위 = 좋은 영상 / 오른쪽 아래 = 낚시 주의</span></h2>
     <div class="desc">클릭은 잘 됐는데(오른쪽) 끝까지 안 본(아래쪽) 영상은 제목·썸네일이 내용과 안 맞을 수 있어요. 점에 마우스를 올리면 어떤 영상인지 나와요.</div>
+    <div class="desc" id="reachStatus" style="margin-top:-6px"></div>
     <div class="panel"><div class="chart-box"><canvas id="scatterChart"></canvas></div></div>
 
     </div>
@@ -2366,8 +2367,21 @@
 
     // CTR × 평균조회율 산점도
     let scatter=null;
+    // 노출수·CTR 자동 수집 상태 (Reporting API)
+    async function loadReachStatus(){
+      const el=document.getElementById("reachStatus"); if(!el) return;
+      try{
+        const r=await fetch("/api/reach-status").then(r=>r.json());
+        el.innerHTML = r.error ? `⚠️ 노출수·CTR 자동 수집: ${r.error}`
+          : r.lastDate ? `👁 노출수·CTR은 유튜브 도달 리포트에서 자동으로 채워져요 · 마지막 데이터 ${r.lastDate} · 리포트 ${r.reports}개`
+          : r.jobId ? `👁 노출수·CTR 자동 수집을 시작했어요. 유튜브가 첫 리포트를 만드는 데 하루~이틀 걸려요.`
+          : `👁 노출수·CTR 자동 수집 준비 중…`;
+      }catch(_){ el.textContent=""; }
+    }
     function drawScatter(){
-      const pts=VIDEOS.filter(x=>x[6]).map(x=>({x:N(x[6]),y:toPctNum(x[7]),t:x[3]}));
+      loadReachStatus();
+      // 784% 같은 반복재생 숏폼 하나 때문에 축이 찌그러지지 않게 조회율은 150%에서 자른다
+      const pts=VIDEOS.filter(x=>x[6]).map(x=>({x:N(x[6]),y:Math.min(toPctNum(x[7]),150),t:x[3]}));
       if(scatter)scatter.destroy();
       scatter=new Chart(document.getElementById("scatterChart"),{type:"scatter",
         data:{datasets:[{label:"영상",data:pts,backgroundColor:"#3182f6",pointRadius:6,pointHoverRadius:9}]},
