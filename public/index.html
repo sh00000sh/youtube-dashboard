@@ -138,7 +138,7 @@
     .cmp .crow:last-child{border-bottom:0;}
     .cmp .crow b{font-variant-numeric:tabular-nums;}
     .cmp .crow b.g{color:#15803d;} .cmp .crow b.y{color:#b88600;} .cmp .crow b.r{color:#e11d48;}
-    .cmp .crow b .k-t{font-style:normal;font-weight:500;color:var(--muted);font-size:11px;margin-left:5px;}
+    .cmp .crow b .k-t{font-style:normal;font-weight:500;color:var(--sub);font-size:11px;margin-left:5px;}
     /* 반복재생 배지: 평균조회율 100% 초과분(쇼츠 되감기) */
     /* 한 줄 판정 배너 */
     .verdict{border-radius:18px;padding:18px 20px;margin:0 0 18px;display:flex;gap:14px;align-items:flex-start;
@@ -160,7 +160,7 @@
     .cards .why a{color:var(--blue,#3182f6);text-decoration:none;font-weight:600;cursor:pointer;}
     .cards .why a:hover{text-decoration:underline;}
     .dlt{font-size:12.5px;font-weight:700;margin-left:6px;}
-    .dlt.up{color:#15803d;} .dlt.dn{color:#e11d48;} .dlt.flat{color:var(--muted);}
+    .dlt.up{color:#15803d;} .dlt.dn{color:#e11d48;} .dlt.flat{color:var(--sub);}
     body.dark .dlt.up{color:#4ade80;} body.dark .dlt.dn{color:#ff8093;}
     /* 이번 주 할 일 */
     .act-list{display:flex;flex-direction:column;gap:9px;}
@@ -179,7 +179,7 @@
     .act-row b{flex:0 0 auto;font-variant-numeric:tabular-nums;}
     .act-row .ak{flex:0 0 auto;padding:1px 6px;border-radius:6px;background:var(--chip);font-size:11px;font-weight:600;}
     .act-row .an{flex:0 0 auto;color:var(--sub);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    .act-row .ad{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .act-row .ad{color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     /* KPI 자동 제안 */
     .sug{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--sub);}
     .sug b{color:var(--text);}
@@ -217,7 +217,7 @@
     td.adm:hover{outline:2px solid var(--blue,#3182f6);outline-offset:-2px;border-radius:4px;}
     td.adm::after{content:"✎";font-size:10px;opacity:.45;margin-left:4px;}
     .cfg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;}
-    .cfg-f{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px;}
+    .cfg-f{font-size:12px;color:var(--sub);display:flex;flex-direction:column;gap:3px;}
     .cfg-f input{width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;}
     /* 셀 인라인 편집 입력칸 */
     .cell-inp{width:72px;max-width:100%;box-sizing:border-box;padding:3px 6px;border:1.5px solid var(--blue,#3182f6);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;text-align:right;}
@@ -483,31 +483,31 @@
 
     <!-- 🔧 관리자 설정 패널 (관리자 모드일 때만 표시) -->
     <div id="adminPanel" style="display:none;border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 18px;background:var(--chip)">
-      <div style="font-weight:700;margin-bottom:4px">🔧 KPI 설정 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 저장하면 모든 사용자 화면에 반영돼요</span></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 <b>노출수·CTR</b>은 상세 표에서 셀을 클릭해 바로 수정, <b>대시보드 제목</b>은 상단 제목을 클릭해 바로 수정할 수 있어요. KPI 값만 아래에서 수정하고 저장하세요.</div>
+      <div style="font-weight:700;margin-bottom:4px">🔧 KPI 설정 <span style="font-weight:400;font-size:12px;color:var(--sub)">— 저장하면 모든 사용자 화면에 반영돼요</span></div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:12px">💡 <b>노출수·CTR</b>은 상세 표에서 셀을 클릭해 바로 수정, <b>대시보드 제목</b>은 상단 제목을 클릭해 바로 수정할 수 있어요. KPI 값만 아래에서 수정하고 저장하세요.</div>
       <div style="display:flex;gap:24px;flex-wrap:wrap">
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">일별 KPI</div><div id="cfgDaily" class="cfg-grid"></div></div>
-        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI <span style="font-weight:400;color:var(--muted)">(형태 무관·전체 기준)</span></div><div id="cfgVideo" class="cfg-grid"></div></div>
+        <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">영상별 KPI <span style="font-weight:400;color:var(--sub)">(형태 무관·전체 기준)</span></div><div id="cfgVideo" class="cfg-grid"></div></div>
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎬 숏폼 KPI</div><div id="cfgVideoShort" class="cfg-grid"></div></div>
         <div><div style="font-size:13px;font-weight:600;margin-bottom:6px">🎞️ 롱폼 KPI</div><div id="cfgVideoLong" class="cfg-grid"></div></div>
       </div>
       <div style="border-top:1px solid var(--line);margin:16px 0 0;padding-top:14px">
-        <div style="font-weight:700;margin-bottom:4px">🔧 조치이력 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 제목·썸네일·챕터를 고친 날을 남기면 성과 그래프에 세로선으로 표시돼요</span></div>
+        <div style="font-weight:700;margin-bottom:4px">🔧 조치이력 <span style="font-weight:400;font-size:12px;color:var(--sub)">— 제목·썸네일·챕터를 고친 날을 남기면 성과 그래프에 세로선으로 표시돼요</span></div>
         <div class="cfg-grid" style="margin-top:8px">
           <label class="cfg-f">날짜(26-08-10)<input id="actDate" placeholder="26-08-10"></label>
-          <label class="cfg-f">영상ID <span style="font-weight:400;color:var(--muted)">(비우면 채널 전체)</span><input id="actVideo" placeholder="DM3uNz1PS-8"></label>
+          <label class="cfg-f">영상ID <span style="font-weight:400;color:var(--sub)">(비우면 채널 전체)</span><input id="actVideo" placeholder="DM3uNz1PS-8"></label>
           <label class="cfg-f">구분<input id="actKind" placeholder="제목 / 썸네일 / 챕터 / 설명 / 재생목록"></label>
           <label class="cfg-f">내용<input id="actNote" placeholder="검색어를 앞으로 이동"></label>
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
           <button onclick="addAction()">조치 추가</button>
-          <span id="actStatus" style="font-size:12.5px;color:var(--muted)"></span>
+          <span id="actStatus" style="font-size:12.5px;color:var(--sub)"></span>
         </div>
         <div id="actList" style="margin-top:12px"></div>
       </div>
       <div style="border-top:1px solid var(--line);margin:16px 0 0;padding-top:14px">
-        <div style="font-weight:700;margin-bottom:4px">🧹 중복 영상 행 정리 <span style="font-weight:400;font-size:12px;color:var(--muted)">— 제목을 바꿀 때마다 옛 제목 행이 남아 같은 영상이 2~3번 세어졌어요</span></div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        <div style="font-weight:700;margin-bottom:4px">🧹 중복 영상 행 정리 <span style="font-weight:400;font-size:12px;color:var(--sub)">— 제목을 바꿀 때마다 옛 제목 행이 남아 같은 영상이 2~3번 세어졌어요</span></div>
+        <div style="font-size:12px;color:var(--sub);margin-bottom:10px">
           먼저 <b>검사</b>를 눌러 무엇이 정리될지 확인하세요. <b>정리 실행</b>은 지우기 전에
           <b>영상별_구제목보관</b> 탭으로 원본을 복사해두므로 되돌릴 수 있어요.<br>
           손으로 넣은 노출수·CTR은 <b>옛 제목 시점의 값</b>이라 새 행으로 합치지 않아요(기간이 섞이면 판정이 오염돼요).
@@ -515,14 +515,14 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button onclick="dedupeVideos(false)">🔍 검사 (변경 없음)</button>
           <button onclick="dedupeVideos(true)" style="background:#e35d6a;color:#fff;border:none;padding:8px 14px;border-radius:10px;font-weight:600;cursor:pointer">🧹 정리 실행</button>
-          <span id="dedupeStatus" style="font-size:12.5px;color:var(--muted)"></span>
+          <span id="dedupeStatus" style="font-size:12.5px;color:var(--sub)"></span>
         </div>
         <pre id="dedupeOut" style="display:none;margin-top:10px;padding:10px;background:var(--chip);border:1px solid var(--line);border-radius:10px;font-size:12px;max-height:320px;overflow:auto;white-space:pre-wrap"></pre>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
         <button onclick="applyKpiPreset()" title="실측 데이터로 재산정한 KPI 세트를 폼에 채웁니다. 저장을 눌러야 반영돼요" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">📐 재산정 KPI 적용 (2026-09-14)</button>
         <button onclick="saveConfig()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">💾 설정 저장</button>
-        <span id="cfgStatus" style="font-size:13px;color:var(--muted)"></span>
+        <span id="cfgStatus" style="font-size:13px;color:var(--sub)"></span>
       </div>
     </div>
 
@@ -982,7 +982,7 @@
   <div id="pwModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);align-items:center;justify-content:center" onclick="if(event.target===this)closePwModal()">
     <div style="background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:24px;width:min(340px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.35)">
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">🔒 관리자 로그인</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">관리자 비밀번호를 입력하세요.</div>
+      <div style="font-size:13px;color:var(--sub);margin-bottom:14px">관리자 비밀번호를 입력하세요.</div>
       <input id="pwInput" type="password" autocomplete="current-password" placeholder="비밀번호"
         onkeydown="if(event.key==='Enter')submitPw();if(event.key==='Escape')closePwModal();"
         style="width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--chip);color:var(--text);font-size:15px">
@@ -1613,7 +1613,7 @@
     };
     function renderActionList(){
       const el=document.getElementById("actList"); if(!el) return;
-      if(!ACTIONS.length){ el.innerHTML=`<div style="color:var(--muted);padding:8px 0">아직 기록된 조치가 없어요.</div>`; return; }
+      if(!ACTIONS.length){ el.innerHTML=`<div style="color:var(--sub);padding:8px 0">아직 기록된 조치가 없어요.</div>`; return; }
       const title=(id)=>{ const v=VIDEOS.find(x=>x[0]===id); return v?(v[3]||"").slice(0,30):id; };
       el.innerHTML=[...ACTIONS].reverse().slice(0,12).map(a=>
         `<div class="act-row"><b>${a.date}</b><span class="ak">${a.kind}</span>
@@ -1953,7 +1953,7 @@
         const rt=(d.recentToday||[]).filter(v=>v.todayViews>0).slice(0,3);
         let rtTxt="";
         if(rt.length){ rtTxt="<br>오늘 조회를 끄는 영상: "+rt.map(v=>`"${(v.title||'').slice(0,18)}…" ${fmt(v.todayViews)}회`).join(" · "); }
-        brief.style.color="var(--tx)";
+        brief.style.color="var(--text)";
         brief.innerHTML=`<b style="font-size:15px">오늘 지금까지 ${fmt(soFar)}회</b><br>${paceTxt}${progTxt}${rtTxt}<div style="color:var(--sub);font-size:11.5px;margin-top:6px">※ 진행 중이라 하루가 끝나면 달라질 수 있어요. 트래픽 소스(검색/추천)별 분해는 유튜브 확정(2~3일) 후 가능.</div>`;
       }
       // 시간대별 차트: 오늘 누적 곡선 + 어제 같은시각 수평 기준선
@@ -2674,9 +2674,10 @@
     function renderAIReport(text,targetId){
       const ar=document.getElementById(targetId||"aiReport");
       if(!ar) return;
-      const META={"핵심 진단":["🩺","#378add","rgba(55,138,221,.08)"],"수치 분석":["📊","#8b5cf6","rgba(139,92,246,.08)"],"전망":["🔮","#f0a020","rgba(240,160,32,.08)"],"실행 제안":["✅","#19a974","rgba(25,169,116,.08)"],
+      const META={"오늘 한 줄":["🩺","#378add","rgba(55,138,221,.08)"],"달라진 점":["🔄","#8b5cf6","rgba(139,92,246,.08)"],"우리 기준 성적":["📏","#f0a020","rgba(240,160,32,.08)"],"이번 주 실험":["🧪","#19a974","rgba(25,169,116,.08)"],
+        "핵심 진단":["🩺","#378add","rgba(55,138,221,.08)"],"수치 분석":["📊","#8b5cf6","rgba(139,92,246,.08)"],"전망":["🔮","#f0a020","rgba(240,160,32,.08)"],"실행 제안":["✅","#19a974","rgba(25,169,116,.08)"],
         "지금 상황":["🟢","#378add","rgba(55,138,221,.08)"],"오늘 페이스":["⚡","#f0a020","rgba(240,160,32,.08)"],"지금 할 일":["✅","#19a974","rgba(25,169,116,.08)"]};
-      const SECS="핵심 진단|수치 분석|전망|실행 제안|지금 상황|오늘 페이스|지금 할 일";
+      const SECS="오늘 한 줄|달라진 점|우리 기준 성적|이번 주 실험|핵심 진단|수치 분석|전망|실행 제안|지금 상황|오늘 페이스|지금 할 일";
       const secRe=new RegExp("\\[("+SECS+")\\]");
       // 첫 섹션 앞의 머리말(마크다운 제목 등) 제거
       const cm=text.match(secRe);
@@ -2691,13 +2692,13 @@
           const m=META[name]||["📌","var(--sub)","transparent"];
           let body=(parts[i+1]||"").trim();
           body=body.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");       // 이스케이프
-          body=body.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--tx);font-size:14px">$1</b>'); // **요약** → 볼드
+          body=body.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--text);font-size:14px">$1</b>'); // **요약** → 볼드
           body=body.replace(/[#*]/g,"");
           // 실행 제안/지금 할 일은 번호별 줄바꿈
-          if(name==="실행 제안"||name==="지금 할 일") body=body.replace(/\s*(\d\.)\s*/g,"\n$1 ").trim();
+          if(name==="실행 제안"||name==="지금 할 일"||name==="이번 주 실험") body=body.replace(/\s*(\d\.)\s*/g,"\n$1 ").trim();
           cards+=`<div style="border-top:4px solid ${m[1]};background:${m[2]};border-radius:12px;padding:14px 16px">
             <div style="font-weight:800;font-size:14px;margin-bottom:8px;color:${m[1]}">${m[0]} ${name}</div>
-            <div style="white-space:pre-wrap;line-height:1.7;font-size:13.5px;color:var(--tx)">${body}</div></div>`;
+            <div style="white-space:pre-wrap;line-height:1.7;font-size:13.5px;color:var(--text)">${body}</div></div>`;
         }
       }
       ar.innerHTML=`<div style="color:var(--sub);font-size:12px;margin-bottom:10px">※ 실시간 집계 기준이라 수치는 이후 변동될 수 있어요.</div>
@@ -2730,7 +2731,7 @@
           <div style="padding:10px 12px">
             <div style="font-size:12.5px;font-weight:600;line-height:1.35;height:2.7em;overflow:hidden">${v.title}</div>
             <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:var(--sub)">
-              <span>👁 <b style="color:var(--tx)">${fmt(v.views)}</b></span>
+              <span>👁 <b style="color:var(--text)">${fmt(v.views)}</b></span>
               <span>👍 ${fmt(v.likes)}</span><span>💬 ${fmt(v.comments)}</span></div>
             <div style="font-size:10px;color:var(--sub);margin-top:4px">${v.published}</div>
           </div></div>`;
@@ -3147,9 +3148,9 @@
         if(!s){ el.innerHTML=`<span>데이터가 쌓이면 제안값이 표시돼요.</span>`; return; }
         const lb=(k)=>(KPI_FIELDS.find(f=>f[0]===k)||[,k])[1];
         const txt=Object.entries(s.vals).map(([k,v])=>
-          `${lb(k)} <b>${v}</b>${s.kept.includes(k)?'<span style="color:var(--muted)">(유지)</span>':''}`).join(" · ");
+          `${lb(k)} <b>${v}</b>${s.kept.includes(k)?'<span style="color:var(--sub)">(유지)</span>':''}`).join(" · ");
         const note=s.kept.length
-          ? `<span style="color:var(--muted)">※ ${s.kept.map(lb).join("·")}는 실적이 현 목표에 못 미쳐 <b>목표를 낮추지 않고 유지</b>했어요.</span>` : "";
+          ? `<span style="color:var(--sub)">※ ${s.kept.map(lb).join("·")}는 실적이 현 목표에 못 미쳐 <b>목표를 낮추지 않고 유지</b>했어요.</span>` : "";
         el.innerHTML=`<span>📐 ${s.base} 기준 제안(+10%): ${txt}</span>
           <button onclick="applyKpiSuggest('${grp}')">제안값 적용</button>${note}`;
       });
