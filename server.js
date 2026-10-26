@@ -1845,6 +1845,8 @@ app.get("/api/brief", async (req, res) => {
     b.groups.forEach((g) => L.push(`- ${g.name} (${g.n}편): 24시간 ${g.v24 ? `${g.v24.med}회 (${g.v24.p25}~${g.v24.p75})` : "-"} · 다 자란 ${g.views ? g.views.med + "회" : "-"}`));
     L.push("", "## 흐름 경보");
     (b.alerts || []).length ? b.alerts.forEach((a) => { L.push(`- ${a.title} — ${a.detail}`); (a.diffs || []).forEach((d) => L.push(`  - ${d}`)); }) : L.push("- 없음");
+    L.push("", "## 바꾼 것의 효과 (조치 전후, 24시간 조회수 중간값)");
+    (b.actionEffects || []).length ? b.actionEffects.forEach((e) => L.push(`- ${e.date} ${e.kind} (${e.target}): ${e.note} — 전 ${e.preN}편 ${e.preMed}회 → 후 ${e.postN}편 ${e.postMed}회 (${e.change}%), 직후 3편 ${e.first3Med}회 → 최근 ${e.lastN}편 ${e.lastMed}회 · 바꾼 뒤 제목 형태 ${e.postHooks}`)) : L.push("- 없음");
     L.push("", "## 데이터가 말하는 차이");
     b.findings.forEach((x) => L.push(`- ${x.hi}이 ${x.lo}보다 ${x.ratio}배 (${x.ctx}: ${x.hiMed} vs ${x.loMed}, ${x.nHi}편·${x.nLo}편)`));
     L.push("", "## 이번 주 해볼 것");
@@ -2054,6 +2056,7 @@ async function runAIReport(force) {
     흐름경보: (bench.alerts || []).map((a) => ({ 경보: a.title, 숫자: a.detail, 차이: a.diffs, 조치이력: (a.actions || []).map((x) => `${x.date} ${x.kind} ${x.note}`),
       잘된구간: a.peak ? a.peak.영상.map((v) => `${v.date} ${v.hour}시 "${v.title}" ${v.v24}회 (${v.hook})`) : undefined,
       최근구간: a.recent ? a.recent.영상.map((v) => `${v.date} ${v.hour}시 "${v.title}" ${v.v24}회 (${v.hook})`) : undefined })),
+    조치전후: (bench.actionEffects || []).map((e) => `${e.date} ${e.kind}(${e.target}): ${e.note} — 전 ${e.preN}편 중간값 ${e.preMed}회 → 후 ${e.postN}편 ${e.postMed}회(${e.change}%), 직후 3편 ${e.first3Med}회 → 최근 ${e.lastN}편 ${e.lastMed}회, 바꾼 뒤 제목형태 ${e.postHooks}`),
     잘된것_안된것_차이: bench.findings.map((x) => `${x.hi}이 ${x.lo}보다 ${x.ratio}배 (${x.ctx}: ${x.hiMed} vs ${x.loMed}, ${x.nHi}편·${x.nLo}편)`),
     데이터에서_나온_실험후보: bench.tryNext.map((t) => `${t.what} — ${t.why} — 판단: ${t.measure}`),
     시리즈흐름: bench.trends.map((t) => `${t.series}: 최근2주 24시간 중간값 ${t.recentMed}회 (그 전 ${t.prevMed}회, ${t.change}%)`),

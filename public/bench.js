@@ -72,10 +72,17 @@
       ${a.peak ? `<details><summary>영상 보기</summary><div class="bcols"><div><b>잘 된 편</b>${a.peak.영상.map((v) => `<div class="bv">${v.date.slice(5)} ${v.hour}시 · <b>${f(v.v24)}</b> · <span class="bsub">${esc(v.hook)}</span><br>${esc(v.title)}</div>`).join("")}</div>
         <div><b>최근</b>${a.recent.영상.map((v) => `<div class="bv">${v.date.slice(5)} ${v.hour}시 · <b>${f(v.v24)}</b> · <span class="bsub">${esc(v.hook)}</span><br>${esc(v.title)}</div>`).join("")}</div></div></details>` : ""}
     </div>`).join("");
+    const fx2 = (B.actionEffects || []).map((e) => `<div class="balert">
+      <div class="bt">🔧 ${esc(e.date.slice(5).replace("-", "/"))} ${esc(e.kind)} — ${esc(e.target)}</div>
+      <div class="bw">${esc(e.note)}</div>
+      <div class="bw">24시간 조회수 중간값: 바꾸기 전 ${e.preN}편 <b>${f(e.preMed)}회</b> → 바꾼 뒤 ${e.postN}편 <b>${f(e.postMed)}회</b> <span class="${e.change >= 0 ? "pos" : "neg"}">(${e.change >= 0 ? "+" : ""}${e.change}%)</span></div>
+      <div class="bw">바꾼 직후 3편 <b>${f(e.first3Med)}회</b> → 최근 ${e.lastN}편 <b>${f(e.lastMed)}회</b> · 바꾼 뒤 제목 형태: ${esc(e.postHooks)}</div>
+    </div>`).join("");
     const serList = B.groups.filter((g) => !g.name.endsWith("전체") && g.v24 && g.v24.n >= 5).map((g) => g.name);
     if (!serList.includes(curSeries)) curSeries = serList.includes("시황 숏폼") ? "시황 숏폼" : serList[0];
 
     box.innerHTML = `
+      ${fx2 ? `<h3 class="bh">🔧 바꾼 것의 효과 <span class="bsub">조치이력(포맷·TTS·제목 방식 등) 전후 비교</span></h3><div class="bstack">${fx2}</div>` : ""}
       ${al ? `<h3 class="bh">🚨 흐름 경보 <span class="bsub">시리즈마다 최근 편들이 평소·잘 나오던 때와 비교해 어떤지</span></h3><div class="bstack">${al}</div>` : ""}
       <h3 class="bh">📉 시리즈별 흐름 <span class="bsub">점 = 영상 1편의 업로드 24시간 조회수 · 주황 = 질문·이유·반전형 제목 · 회색 = 뉴스 요약형 · 세로선 = 조치이력</span>
         <select id="benchSeries" style="margin-left:auto">${serList.map((x) => `<option ${x === curSeries ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></h3>

@@ -58,6 +58,10 @@ function viewsAt(snaps, hours) {
   return null;
 }
 
+// 운영자가 알려준 큰 변화 (시트 조치이력과 같이 쓴다)
+const KNOWN_EVENTS = [
+  { date: "2026-10-15", kind: "포맷 변경", series: "시황 숏폼", note: "시황 숏폼 'Options Trend' → '옵션 시황' 포맷, TTS 추가 (10/26 사용자)" },
+];
 function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
   // 1) 영상 정리 — 2026-05 이후, 제목 있는 공개 영상, 같은 ID는 조회수 큰 행 하나만
   const byId = {};
@@ -184,7 +188,8 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
   // 7) 흐름 경보 — 10/26 사용자: "시황 숏폼이 포맷 바꾸고 TTS 넣은 직후엔 잘 나오다가 다시 100회도 안 나오는데 이런 걸 못 집는다"
   //    시리즈마다 업로드 순서대로 24시간 조회수를 보고, '잘 나오던 구간 → 최근 구간'이 꺾였는지 / 계속 바닥인지 / 올라왔는지 본다
   //    잘 된 구간과 최근 구간의 차이(제목 형태·업로드 시간·제목 길이·조치이력)를 같이 낸다
-  const actions = (actionRows || []).filter((a) => a[0]).map((a) => { const d = String(a[0]).trim(); return { date: d.length === 8 ? "20" + d : d, vid: (a[1] || "").trim(), kind: (a[2] || "").trim(), note: (a[3] || "").trim() }; });
+  const actions = [...KNOWN_EVENTS, ...(actionRows || []).filter((a) => a[0]).map((a) => { const d = String(a[0]).trim(); return { date: d.length === 8 ? "20" + d : d, vid: (a[1] || "").trim(), kind: (a[2] || "").trim(), note: (a[3] || "").trim() }; })]
+    .sort((a, b) => a.date.localeCompare(b.date));
   const alerts = [];
   const cntBy = (arr, f) => { const c = {}; arr.forEach((v) => { const k = f(v); c[k] = (c[k] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" · "); };
   const describe = (arr) => ({ 편수: arr.length, 중간값: Math.round(median(arr.map((v) => v.v24))), 제목형태: cntBy(arr, (v) => v.hook), 업로드시각: arr.map((v) => v.hour + "시").join("·"),
@@ -224,6 +229,19 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
         detail: `최근 ${K}편 24시간 중간값 ${Math.round(rMed)}회 (평소 ${gm}회)`, recent: describe(recentA), diffs: [], actions: inRange(recentA[0].kdate, recentA[recentA.length - 1].kdate) });
     }
   });
+  // 조치 전후: 시리즈가 지정된 조치는 그 시리즈, 아니면 같은 형태 전체에서 조치 전 최대 10편 vs 조치 후 편들 (24시간 조회수)
+  const actionEffects = actions.filter((a) => a.date >= "2026-05").map((a) => {
+    const target = a.series ? vids.filter((v) => v.series === a.series) : a.vid ? [] : vids.filter((v) => v.form === "S");
+    const arr = target.filter((v) => v.v24 != null).sort((x, y) => x.pub.localeCompare(y.pub));
+    const pre = arr.filter((v) => v.kdate < a.date).slice(-10), post = arr.filter((v) => v.kdate >= a.date);
+    if (pre.length < 3 || post.length < 2) return null;
+    const m1 = median(pre.map((v) => v.v24)), m2 = median(post.map((v) => v.v24));
+    const post3 = post.slice(0, 3), postLast = post.slice(-Math.min(5, post.length));
+    return { ...a, target: a.series || "숏폼 전체", preN: pre.length, preMed: Math.round(m1), postN: post.length, postMed: Math.round(m2),
+      first3Med: Math.round(median(post3.map((v) => v.v24))), lastMed: Math.round(median(postLast.map((v) => v.v24))), lastN: postLast.length,
+      change: Math.round((m2 / m1 - 1) * 100),
+      postHooks: cntBy(post, (v) => v.hook) };
+  }).filter(Boolean);
   alerts.sort((a, b) => ({ bad: 0, warn: 1, good: 2 }[a.level] - { bad: 0, warn: 1, good: 2 }[b.level]));
   // 꺾임 경보는 '이번 주 해볼 것' 맨 앞에: 잘 된 구간의 공통점으로 되돌리기
   alerts.filter((a) => a.type === "꺾임" && a.curiousPeak > a.curiousRecent).reverse().forEach((a) => {
@@ -232,7 +250,7 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
       why: `${a.detail}. ${a.diffs[0] || "잘 된 구간과 최근 구간의 차이를 아래 경보에서 확인하세요"}`, measure: `3편의 24시간 조회수 중간값이 시리즈 평소(${groups[a.series].v24.med}회)를 넘는지` });
   });
 
-  return { at: new Date(now).toISOString(), videos: vids, groups: Object.values(groups), recent, findings, trends, tryNext: tryNext.slice(0, 3), alerts, actions,
+  return { at: new Date(now).toISOString(), videos: vids, groups: Object.values(groups), recent, findings, trends, tryNext: tryNext.slice(0, 3), alerts, actions, actionEffects,
     coverage: { videos: vids.length, with24h: vids.filter((v) => v.v24 != null).length, mature: vids.filter(mature).length } };
 }
 
