@@ -330,7 +330,14 @@
       .card .value{font-size:20px;}
       .channel .info{gap:10px;}
     }
-      /* ===== 📏 우리 채널 기준 (#sec-bench) ===== */
+      /* 요일×시간 히트맵 */
+    table.hm{border-collapse:separate;border-spacing:3px;width:100%;min-width:640px;font-size:12px;}
+    table.hm th{background:none;color:var(--sub);font-weight:600;font-size:11.5px;padding:4px;position:static;}
+    table.hm td{text-align:center;border-radius:8px;padding:6px 2px;background:var(--chip);font-variant-numeric:tabular-nums;}
+    table.hm td.hm0{background:var(--bg);}
+    table.hm .hmn{font-size:10px;color:var(--sub);}
+    table.hm tr.hmt th,table.hm td:last-child{font-weight:700;}
+    /* ===== 📏 우리 채널 기준 (#sec-bench) ===== */
     #sec-bench .bh{font-size:15px;font-weight:800;margin:22px 0 10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
     #sec-bench .bh:first-of-type{margin-top:4px;}
     #sec-bench .bsub{font-size:11.5px;color:var(--sub);font-weight:400;}
@@ -860,7 +867,12 @@
     </h2>
     <div class="desc">어느 요일·시간에 올렸을 때 조회수가 잘 나왔는지 보여줘요. 잘 나온 시간대에 업로드하면 유리해요. (영상이 적으면 참고용)</div>
     <div class="panel"><div class="chart-box"><canvas id="weekdayChart"></canvas></div></div>
-
+    <h2 style="font-size:15px;margin-top:22px">🗓 요일 × 시간 <span class="kpi-badge">한국시간 · 칸 = 조회수 중간값(편수) · 다 자란 영상만(숏폼 1주·롱폼 2주)</span>
+      <select id="heatForm" style="margin-left:auto" onchange="drawHeat()">
+        <option value="edu">교육 숏폼</option><option value="mkt">시황 숏폼</option><option value="S">숏폼 전체</option><option value="L">롱폼</option>
+      </select></h2>
+    <div class="desc">시황 숏폼은 대부분 아침 9시에 올라가서, 숏폼 전체로 보면 '아침이 약하다'처럼 보일 수 있어요. 그래서 종류별로 나눠 봐요. 색이 진할수록 그 종류의 평소보다 잘 된 칸이에요.</div>
+    <div class="panel" style="overflow-x:auto"><div id="heatBox"></div></div>
     </div>
     <div class="sec" id="sec-vtable" style="display:none">
     <h2>🎬 영상별 <span class="kpi-badge" id="videoKpiBadge"></span>
@@ -1894,7 +1906,7 @@
         const sums=Array(7).fill(0), cnts=Array(7).fill(0);
         VIDEOS.forEach(v=>{
           const d=v[1]; if(!d)return;
-          const dt=new Date("20"+d); if(isNaN(dt))return;
+          const dt=new Date(String(d).length===10?d+"T00:00:00":"20"+d); if(isNaN(dt))return;   // 업로드일은 YYYY-MM-DD (예전 YY-MM-DD도 허용)
           const w=dt.getDay(); sums[w]+=N(v[8]); cnts[w]++;
         });
         const order=[1,2,3,4,5,6,0];
@@ -1908,6 +1920,31 @@
         options:{responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>`평균 ${c.parsed.y.toLocaleString("ko-KR")}회 (영상 ${counts[c.dataIndex]}개)`}}},
           scales:{x:{ticks:{color:"#8b95a1"},grid:{display:false}},y:{ticks:{color:"#8b95a1"},grid:{color:gridCol()}}}}});
+    }
+
+    // 🗓 요일×시간 히트맵 (KST, 형태·종류별, 다 자란 영상 조회수 중간값)
+    function drawHeat(){
+      const box=document.getElementById("heatBox"); if(!box) return;
+      const mode=(document.getElementById("heatForm")||{}).value||"edu";
+      const MKT=/Options\s*Trend|옵션\s*시황/i, now=Date.now();
+      const vs=VIDEOS.filter(v=>v[22]&&v[22]>="2026-05"&&v[3]).map(v=>{
+        const S=isShort(v), age=(now-Date.parse(v[22]))/864e5, k=new Date(Date.parse(v[22])+9*3600e3);
+        return {S, mkt:S&&MKT.test(v[3]), age, dow:k.getUTCDay(), h:k.getUTCHours(), views:N(v[8])};
+      }).filter(v=> v.age>=(v.S?7:14) && (mode==="L"?!v.S : mode==="S"?v.S : mode==="mkt"?v.mkt : v.S&&!v.mkt));
+      if(!vs.length){ box.innerHTML='<div class="empty">아직 다 자란 영상이 없어요.</div>'; return; }
+      const COLS=[["새벽",0,7],["7~9시",7,10],["10~12",10,13],["13~15",13,16],["16~17",16,18],["18~19",18,20],["20~21",20,22],["22~23",22,24]];
+      const DOW=[1,2,3,4,5,6,0], DN=["일","월","화","수","목","금","토"];
+      const med=(a)=>{ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+      const all=med(vs.map(v=>v.views));
+      const cell=(arr)=>{ if(!arr.length) return '<td class="hm0"></td>';
+        const m=med(arr.map(v=>v.views)), r=all?m/all:1, a=Math.max(.06,Math.min(.85,(r-0.4)/1.6*0.85));
+        const col=r>=1?`rgba(49,130,246,${a})`:`rgba(225,90,114,${Math.min(.5,(1-r)*0.6)})`;
+        return `<td style="background:${col}" title="${arr.length}편 · 중간값 ${Math.round(m).toLocaleString("ko-KR")}회"><b>${Math.round(m).toLocaleString("ko-KR")}</b><div class="hmn">${arr.length}편</div></td>`; };
+      let html='<table class="hm"><thead><tr><th></th>'+COLS.map(c=>`<th>${c[0]}</th>`).join("")+'<th>요일 전체</th></tr></thead><tbody>';
+      DOW.forEach(d=>{ const row=vs.filter(v=>v.dow===d);
+        html+=`<tr><th>${DN[d]}</th>`+COLS.map(([,a,b])=>cell(row.filter(v=>v.h>=a&&v.h<b))).join("")+cell(row)+'</tr>'; });
+      html+='<tr class="hmt"><th>시간 전체</th>'+COLS.map(([,a,b])=>cell(vs.filter(v=>v.h>=a&&v.h<b))).join("")+cell(vs)+'</tr></tbody></table>';
+      box.innerHTML=html+`<div class="desc" style="margin-top:8px">기준 ${vs.length}편 · 전체 중간값 ${Math.round(all).toLocaleString("ko-KR")}회 · 파랑 = 이보다 잘 됨, 분홍 = 덜 됨 · 1~2편짜리 칸은 우연일 수 있어요.</div>`;
     }
 
     // ===== 실시간 (Data API 현재값) =====
@@ -2518,7 +2555,7 @@
         {id:"sec-vd",      label:"게시 후 성과",    secs:["sec-vd"],      draw:()=>{ if(vd.id)drawVd(); }},
         {id:"sec-vlink",   label:"알림톡 링크",     secs:["sec-vlink"],   draw:()=>loadVideoLinks()},
         {id:"sec-scatter", label:"CTR×평균조회율",  secs:["sec-scatter"], draw:()=>drawScatter()},
-        {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>drawWeekday()},
+        {id:"sec-upload",  label:"업로드 성과",     secs:["sec-upload"],  draw:()=>{drawWeekday();drawHeat();}},
         {id:"sec-dchart",  label:"일일 그래프",     secs:["sec-dchart"],  draw:()=>drawChart()},
         {id:"sec-dtable",  label:"일일 상세",       secs:["sec-dtable"],  draw:()=>renderDailyTable()},
       ]},
@@ -2627,6 +2664,9 @@
           <div><div style="font-size:13px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px">시간대별 클릭 <span id="vlHrLbl" style="font-weight:400;color:var(--blue)">${dayMode?vlDay+" · "+fmt(hrSum)+"건":"기간 전체 합산"}</span>${dayMode?`<button onclick="vlDay='all';vlRenderDetail()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:3px 8px;border-radius:7px;font-size:11px;cursor:pointer">기간 전체</button>`:""}</div>
             <div style="max-height:220px;overflow:auto"><table><thead><tr><th>시간</th><th>클릭</th></tr></thead><tbody>${hrRows}</tbody></table></div></div>
         </div>
+        <div style="margin-top:16px"><div style="font-size:13px;font-weight:600;margin-bottom:4px">📣 알림톡 효과 <span style="font-weight:400;color:var(--sub)">${dayMode?vlDay+" · 링크 클릭(막대)과 영상 조회수 증가(선)를 시간대별로":"위 일별 막대에서 날짜를 누르면 그날 클릭과 조회수 증가를 겹쳐 보여줘요"}</span></div>
+          <div id="vlFxNote" class="desc" style="margin:4px 0 6px"></div>
+          ${dayMode?`<div style="position:relative;height:240px"><canvas id="vlFxChart"></canvas></div>`:""}</div>
         <div class="note" style="display:flex;align-items:center;gap:10px">첫 클릭 ${L.first||"-"} · 마지막 클릭 ${L.last||"-"}${ADMIN?`<button onclick="vlToggleLock()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer">${vlUnlocked?"🔓 잠금 ("+vlLockLeft+"초 뒤 자동)":"🔒 초기화 잠금 해제"}</button>`:""}${ADMIN&&vlUnlocked?`<button onclick="vlReset('${L.k}','${L.name.replace(/'/g,"")}')" style="background:var(--chip);color:#e5484d;border:1px solid var(--line);padding:5px 10px;border-radius:8px;font-size:12px;cursor:pointer">🗑 이 영상 클릭 기록 초기화</button>`:""}</div>
       </div>`;
       const days=Object.keys(L.byDate).sort();
@@ -2639,6 +2679,41 @@
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}},
           onClick:(ev,els)=>{ if(!els.length) return; const d=labels[els[0].index]; vlDay = (vlDay===d) ? "all" : d; vlRenderDetail(); },
           onHover:(ev,els)=>{ ev.native.target.style.cursor = els.length ? "pointer" : "default"; }}});
+      if(dayMode) vlDrawEffect(L, vlDay);
+    }
+    // 📣 알림톡 효과: 그날 시간대별 링크 클릭 vs 영상 조회수 증가(시간별 스냅샷)
+    let vlFxChart=null;
+    async function vlDrawEffect(L, day){
+      const note=document.getElementById("vlFxNote"); if(vlFxChart){ vlFxChart.destroy(); vlFxChart=null; }
+      const v=VIDEOS.find(x=>x[0]===L.video), pub=v&&v[22]?Date.parse(v[22]):null;
+      let rows=[]; try{ const r=await fetch("/api/video-hourly?id="+L.video).then(r=>r.json()); rows=r.ok?(r.rows||[]):[]; }catch(_){}
+      if(vlSel!==L.k||vlDay!==day||!document.getElementById("vlFxChart")) return;   // 그새 다른 걸 골랐으면 그리지 않음
+      // 스냅샷(업로드 후 n시간 누적) → KST 시각별 누적 → 정각마다 보간해서 시간당 증가량
+      const pts=pub?rows.map(r=>({t:pub+r.hours*3600e3, v:r.views})).sort((a,b)=>a.t-b.t):[];
+      const at=(t)=>{ const b=pts.filter(p=>p.t<=t).pop(), a=pts.find(p=>p.t>=t); if(!b||!a) return null; return a.t===b.t?b.v:b.v+(a.v-b.v)*(t-b.t)/(a.t-b.t); };
+      const d0=Date.parse(day+"T00:00:00+09:00");
+      const views=[...Array(24)].map((_,h)=>{ const x=at(d0+h*3600e3), y=at(d0+(h+1)*3600e3); return x==null||y==null?null:Math.max(0,Math.round(y-x)); });
+      const clicks=[...Array(24)].map((_,h)=>(L.byDateHour[day]||{})[String(h).padStart(2,"0")]||0);
+      const have=views.filter(x=>x!=null);
+      if(!have.length){
+        note.textContent=pub&&pts.length?"이 날은 이 영상의 시간별 조회수 기록이 없어요(숏폼은 업로드 후 24시간, 롱폼은 7일까지만 기록해요). 클릭만 표시할게요.":"이 영상의 시간별 조회수 기록이 없어요. 클릭만 표시할게요.";
+      } else {
+        const peak=clicks.indexOf(Math.max(...clicks));
+        const after=[views[peak],views[peak+1]].filter(x=>x!=null), base=have.slice().sort((a,b)=>a-b)[Math.floor(have.length/2)];
+        const gain=after.length?Math.round(after.reduce((a,b)=>a+b,0)/after.length):null;
+        if(Math.max(...clicks)>0 && views[peak]==null){ note.innerHTML=`클릭이 가장 많았던 <b>${peak}시</b>(${clicks[peak]}건)에는 아직 이 영상의 시간별 조회수 기록이 없어요(업로드 직후 첫 기록 전이거나 기록이 끝난 뒤). 선이 있는 시간대만 비교해 주세요.`; }
+        else note.innerHTML = Math.max(...clicks)>0 && gain!=null
+          ? `클릭이 가장 많았던 <b>${peak}시</b>(${clicks[peak]}건) 그 시간과 다음 시간에 조회수가 시간당 <b>${gain}회</b> 늘었어요. 그날 보통 시간당 <b>${base}회</b> → ${base?`<b>${(gain/base).toFixed(1)}배</b>`:"평소엔 거의 0"}. 유튜브 조회수 숫자는 몇십 분~몇 시간 늦게 반영돼서 효과가 다음 시간대에 보일 수 있어요.`
+          : `그날 시간당 조회수 증가 중간값 ${base}회.`;
+      }
+      const blue=getComputedStyle(document.documentElement).getPropertyValue("--blue").trim();
+      vlFxChart=new Chart(document.getElementById("vlFxChart"),{data:{labels:[...Array(24)].map((_,h)=>h+"시"),datasets:[
+        {type:"bar",label:"링크 클릭",data:clicks,backgroundColor:blue+"88",borderRadius:3,yAxisID:"y"},
+        {type:"line",label:"조회수 증가",data:views,borderColor:"#f0a020",backgroundColor:"#f0a020",tension:.3,pointRadius:2,spanGaps:false,yAxisID:"y2"}]},
+        options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{labels:{boxWidth:10,color:"#8b95a1"}}},
+          scales:{y:{beginAtZero:true,ticks:{precision:0,color:"#8b95a1"},title:{display:true,text:"클릭",color:"#8b95a1"},grid:{color:gridCol()}},
+                  y2:{position:"right",beginAtZero:true,ticks:{precision:0,color:"#8b95a1"},title:{display:true,text:"조회수 증가",color:"#8b95a1"},grid:{display:false}},
+                  x:{ticks:{color:"#8b95a1",maxRotation:0,autoSkip:true},grid:{display:false}}}}});
     }
     // 클릭 기록 초기화(관리자) — 테스트 클릭 지울 때. 시트 영상링크로그에서 해당 키 행 삭제
     async function vlReset(key,name){
