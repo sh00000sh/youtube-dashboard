@@ -330,7 +330,29 @@
       .card .value{font-size:20px;}
       .channel .info{gap:10px;}
     }
-      /* ===== 📅 콘텐츠 캘린더 (#sec-cal) ===== */
+      /* ===== 📏 우리 채널 기준 (#sec-bench) ===== */
+    #sec-bench .bh{font-size:15px;font-weight:800;margin:22px 0 10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+    #sec-bench .bh:first-of-type{margin-top:4px;}
+    #sec-bench .bsub{font-size:11.5px;color:var(--sub);font-weight:400;}
+    #sec-bench .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+    #sec-bench .bcard{background:var(--card);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column;gap:5px;}
+    #sec-bench .bcard:hover{box-shadow:var(--shadow-h);}
+    #sec-bench .bk{font-size:11.5px;color:var(--sub);}
+    #sec-bench .bt{font-size:14px;font-weight:700;line-height:1.4;}
+    #sec-bench .bn{font-size:20px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    #sec-bench .bw{font-size:12.5px;color:var(--text);line-height:1.5;}
+    #sec-bench .pos{color:var(--g-tx);} #sec-bench .neg{color:var(--r-tx);}
+    #sec-bench .bchip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;vertical-align:1px;white-space:nowrap;}
+    #sec-bench .bchip.up{background:var(--g-bg);color:var(--g-tx);} #sec-bench .bchip.mid{background:var(--chip);color:var(--sub);} #sec-bench .bchip.dn{background:var(--r-bg);color:var(--r-tx);}
+    #sec-bench .bpanel{background:var(--card);border-radius:16px;padding:14px 18px;box-shadow:var(--shadow);}
+    #sec-bench .blist{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;line-height:1.5;}
+    #sec-bench .btry{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);} #sec-bench .btry:last-child{border-bottom:0;}
+    #sec-bench .btry .bi{flex:none;width:24px;height:24px;border-radius:999px;background:var(--blue);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+    #sec-bench .btry .bw{color:var(--sub);font-size:12.5px;}
+    #sec-bench .btable td{text-align:center;font-variant-numeric:tabular-nums;vertical-align:middle;}
+    #sec-bench .btable tr.tot td{background:var(--th);font-weight:600;}
+    #sec-bench .empty{padding:16px;text-align:left;}
+    /* ===== 📅 콘텐츠 캘린더 (#sec-cal) ===== */
     :root{--c-coral:#ffb8ab;--c-yellow:#ffe39a;--c-green:#bfe6b3;--c-mint:#a9e0d8;--c-blue:#b3cdfd;--c-purple:#d3c1ff;--c-pink:#ffc6de;--c-gray:#d7dde1;--c-orange:#ffcf9e;--c-sun:#d9534f;--c-sat:#3f72cf;--blk-fg:#25292c;}
     body.dark{--c-coral:#e59a8d;--c-yellow:#e2c46f;--c-green:#98c58d;--c-mint:#84c2b9;--c-blue:#8eaee6;--c-purple:#b3a0e6;--c-pink:#e3a4c0;--c-gray:#9aa4ab;--c-orange:#e8ad72;--c-sun:#ef8a86;--c-sat:#86a8ec;}
     #sec-cal .split{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:16px;align-items:start;}
@@ -529,6 +551,12 @@
     <div id="verdict" class="verdict"></div>
 
     <!-- ===== 결과 → 원인 → 행동 3층 요약 ===== -->
+    <div class="sec" id="sec-bench" style="display:none">
+    <h2>📏 우리 채널 기준 <span class="kpi-badge">우리 영상들의 중간값으로 판정</span>
+      <button onclick="benchReload()" style="margin-left:auto;background:var(--chip);color:var(--text);border:1px solid var(--line);padding:6px 12px;border-radius:10px;font-size:12.5px;font-weight:600;cursor:pointer">↻ 새로고침</button></h2>
+    <div class="desc">유명 채널 기준이 아니라 <b>우리 채널 영상들의 중간값</b>으로 좋고 나쁨을 봐요. '상위 25%'면 우리 채널에서 잘 된 편이에요. 시황 숏폼·교육 숏폼·롱폼은 원래 조회수 크기가 달라서 시리즈끼리 따로 비교해요.</div>
+    <div id="benchBody"></div>
+    </div>
     <div class="sec" id="sec-brief" style="display:none">
       <h2>🧭 결과
         <select id="briefPeriod" style="margin-left:auto">
@@ -2068,8 +2096,10 @@
     function toggleLiveAuto(){
       const btn=document.getElementById("liveAutoBtn");
       if(liveTimer){ clearInterval(liveTimer); liveTimer=null; btn.textContent="▶ 자동 갱신"; btn.style.background="var(--chip)"; btn.style.color="var(--text)"; }
-      else { loadLive(); liveTimer=setInterval(loadLive,30000); btn.textContent="⏸ 자동 갱신 중"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
+      else { loadLive(); liveTimer=setInterval(()=>{ if(!document.hidden) loadLive(); },LIVE_EVERY); btn.textContent="⏸ 자동 갱신 중 (5분)"; btn.style.background="var(--blue)"; btn.style.color="#fff"; }
     }
+    // 10/26: 실시간 탭을 열면 자동 갱신이 기본으로 켜진다(5분마다, 탭이 안 보일 땐 쉼)
+    const LIVE_EVERY=5*60*1000;
 
     // ===== 롱폼 실시간 (오늘 A/B 테스트 등 최근 롱폼 조회수 추적) =====
     let lfTimer=null, lfCharts={};
@@ -2456,8 +2486,9 @@
         {id:"sec-cal",     label:"콘텐츠 캘린더",   secs:["sec-cal"],     draw:()=>{ if(window.calDraw) calDraw(); }},
       ]},
       {cat:"today", label:"📌 오늘", subs:[
+        {id:"sec-bench",    label:"우리 채널 기준", secs:["sec-bench"],    draw:()=>{ if(window.benchDraw) benchDraw(); }},
         {id:"sec-brief",    label:"요약",           secs:["sec-brief"],    draw:()=>renderBrief()},
-        {id:"sec-live",     label:"실시간",          secs:["sec-live"],     draw:()=>{ if(!dlLoaded) loadDailyLive(); }},
+        {id:"sec-live",     label:"실시간",          secs:["sec-live"],     draw:()=>{ if(!liveTimer) toggleLiveAuto(); else if(!dlLoaded) loadDailyLive(); }},
         {id:"sec-longform", label:"A/B·롱폼 실시간", secs:["sec-longform"], draw:()=>{ initAb(); loadLongformLive(); }},
         {id:"sec-insight",  label:"AI 분석",        secs:["sec-insight"],  draw:()=>loadInsights()},
       ]},
@@ -3233,5 +3264,6 @@
       if(activeSub[activeCat]==="sec-cal"&&window.calDraw) calDraw(); })();
   </script>
   <script src="/calendar.js"></script>
+  <script src="/bench.js"></script>
 </body>
 </html>

@@ -1727,6 +1727,29 @@ app.get("/api/posts", async (req, res) => {
 });
 
 // ===================================================================
+//  📏 우리 채널 기준 (bench.js) — 15분 캐시
+// ===================================================================
+const { computeBench } = require("./bench");
+let benchCache = { at: 0, data: null };
+async function getBench(force) {
+  if (!force && benchCache.data && Date.now() - benchCache.at < 15 * 60 * 1000) return benchCache.data;
+  const sheets = getSheetsClient();
+  const { videos } = await readForDashboard(sheets);
+  let snaps = [];
+  try { const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${SNAP_TAB}!A2:E` }); snaps = r.data.values || []; } catch (_) {}
+  const data = computeBench(videos, snaps);
+  benchCache = { at: Date.now(), data };
+  return data;
+}
+app.get("/api/benchmarks", async (req, res) => {
+  try {
+    if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: false, error: "시트 연결 정보가 없습니다." });
+    const fresh = req.query.fresh && Date.now() - benchCache.at > 2 * 60 * 1000;   // 새로고침은 2분에 한 번까지
+    res.json({ ok: true, ...(await getBench(!!fresh)) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ===================================================================
 //  인사이트 (규칙 엔진 + Claude AI 리포트) & 자동 동기화 스케줄러
 // ===================================================================
 const AILOG_TAB = process.env.AILOG_TAB || "분석로그";
@@ -2113,11 +2136,12 @@ app.post("/api/channel-snapshot", async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-// 1시간마다 자동 스냅샷 (서버 항상 켜져 있으니 별도 Cron 불필요)
-setInterval(() => snapshotJob().catch((e) => console.log("snapshot err:", e.message)), 60 * 60 * 1000);
+// 자동 스냅샷 (서버 항상 켜져 있으니 별도 Cron 불필요)
+// 10/26: 실시간 체감용으로 영상별 30분·채널 15분 간격 (Data API 하루 약 1,200단위 — 한도 10,000의 12%)
+setInterval(() => snapshotJob().catch((e) => console.log("snapshot err:", e.message)), 30 * 60 * 1000);
 setTimeout(() => snapshotJob().catch(() => {}), 15000); // 서버 켜지고 15초 뒤 1회
-// 채널 스냅샷도 1시간마다 + 시작 직후 1회 (일일 실시간용)
-setInterval(() => channelSnapshotJob().catch((e) => console.log("ch-snapshot err:", e.message)), 60 * 60 * 1000);
+// 채널 스냅샷 15분마다 + 시작 직후 1회 (일일 실시간용)
+setInterval(() => channelSnapshotJob().catch((e) => console.log("ch-snapshot err:", e.message)), 15 * 60 * 1000);
 setTimeout(() => channelSnapshotJob().catch(() => {}), 20000);
 
 // ===================================================================
