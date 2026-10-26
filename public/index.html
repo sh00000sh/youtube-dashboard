@@ -32,12 +32,15 @@
     .seg .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .12s;}
     .seg .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     /* 2단 네비게이션 — 최상위 카테고리(큰 탭) + 하위 탭(작은 탭) */
-    .navplat{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 22px;padding-bottom:18px;border-bottom:1.5px solid var(--divider);}
+    .navplat{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px;}
+    #navSub{margin-bottom:22px;padding-bottom:16px;border-bottom:1.5px solid var(--divider);}
+    body.plat-ig #navSub{margin-top:0;}
+    body.plat-cal #navPlat{padding-bottom:16px;border-bottom:1.5px solid var(--divider);margin-bottom:22px;}
     .navplat .pt{background:var(--card);color:var(--text);border:1px solid var(--line);padding:12px 26px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:var(--shadow);transition:all .12s;}
     .navplat .pt.active{background:var(--text);color:var(--card);border-color:var(--text);}
     body.plat-cal #ytTop,body.plat-ig #ytTop,body.plat-cal #stickyBar,body.plat-ig #stickyBar,body.plat-cal #navCat,body.plat-ig #navCat{display:none!important;}
     body.plat-cal #navSub{display:none;}
-    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:34px 0 0;border-top:1.5px solid var(--divider);padding-top:26px;}
+    .navcat{display:flex;gap:8px;flex-wrap:wrap;margin:0;}
     .navcat .st{background:var(--chip);color:var(--sub);border:1px solid var(--line);padding:11px 24px;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:all .12s;}
     .navcat .st.active{background:var(--blue);color:#fff;border-color:var(--blue);}
     .navsub{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 6px;}
@@ -495,6 +498,9 @@
     </div>
     <!-- 10/26 사용자: 큰 카테고리는 캘린더 · 유튜브 · 인스타 -->
     <div class="navplat" id="navPlat"></div>
+    <!-- 10/26 사용자: 탭 선택은 무조건 상단에서 — 플랫폼 바로 아래에 카테고리·하위 탭 -->
+    <div class="navcat" id="navCat"></div>
+    <div class="navsub" id="navSub"></div>
     <div id="ytTop">
     <div class="desc" style="margin-top:-10px">채널 성과를 한곳에서 봐요.<br>동기화를 누르면 유튜브에서 최신 숫자를 가져와 새로고침돼요.</div>
 
@@ -629,9 +635,6 @@
 
     </div><!-- /ytTop -->
 
-    <!-- 2단 네비게이션: 최상위 카테고리(일일·영상·KPI) → 하위 탭 -->
-    <div class="navcat" id="navCat"></div>
-    <div class="navsub" id="navSub"></div>
 
     <!-- 토글 섹션 묶음: 최소 높이를 고정해 탭 전환 시 스크롤 위치가 출렁이지 않게 함 -->
     <div id="secWrap">
