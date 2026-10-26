@@ -106,7 +106,7 @@ module.exports = function setupIg({ app, getSheetsClient, ensureTab, SHEET_ID, c
       try {
         const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_POST_TAB}!A2:P` });
         posts = (r.data.values || []).filter((x) => x[1]).map((x) => Object.fromEntries(IG_COLS.map((k, i) => [k, x[i] ?? ""])));
-        if (req.query.debug) dbg = { range: r.data.range, rows: (r.data.values || []).length, sample: (r.data.values || []).slice(-3).map((x) => x.slice(0, 3)) };
+        if (req.query.debug) dbg = { range: r.data.range, rows: (r.data.values || []).length, sample: (r.data.values || []).map((x, i) => [i + 2, x.findIndex((v) => v !== ""), x.length, String(x.find((v) => v !== "") || "").slice(0, 20)]).filter((x) => x[1] !== 0) };
       } catch (_) { /* 탭 없음 */ }
       try {
         const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${IG_ACC_TAB}!A2:D` });
