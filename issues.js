@@ -76,11 +76,23 @@ module.exports = function setupIssues({ app, getSheetsClient, ensureTab, SHEET_I
   }
   async function save(items) {
     if (!items.length || !SHEET_ID) return;
+    try { await saveRows(items); }
+    catch (e) { items.forEach((o) => seen.delete(o["키"])); throw e; }  // 저장 실패한 후보는 다음 수집 때 다시 시도
+  }
+  async function saveRows(items) {
     const sheets = getSheetsClient();
     const r = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!I2:I` });
     let last = 1; (r.data.values || []).forEach((x, i) => { if (x && x[0]) last = i + 2; });
     const next = last + 1;
-    await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${TAB}!A${next}:I${next + items.length - 1}`, valueInputOption: "RAW",
+    // 시트 줄 수(기본 1000)가 모자라면 먼저 늘린다 — 2026-11-02: 1000줄을 넘겨 10/31부터 저장이 계속 실패했음
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID, fields: "sheets.properties" });
+    const prop = (meta.data.sheets || []).map((x) => x.properties).find((x) => x.title === TAB);
+    const need = next + items.length - 1;
+    if (prop && prop.gridProperties && prop.gridProperties.rowCount < need) {
+      await sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { requests: [
+        { appendDimension: { sheetId: prop.sheetId, dimension: "ROWS", length: Math.max(1000, need - prop.gridProperties.rowCount) } }] } });
+    }
+    await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${TAB}!A${next}:I${need}`, valueInputOption: "RAW",
       requestBody: { values: items.map((o) => COLS.map((k) => o[k] ?? "")) } });
     rows.push(...items);
     if (rows.length > 1500) rows = rows.slice(-1500);
