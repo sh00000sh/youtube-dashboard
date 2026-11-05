@@ -945,6 +945,36 @@ async function calRead(sheets) {
   } catch (_) { return null; }   // 탭 없음
 }
 
+// 시트 줄 수(기본 1000)가 모자라면 늘린다
+async function calEnsureRows(sheets, need) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID, fields: "sheets.properties" });
+  const prop = (meta.data.sheets || []).map((x) => x.properties).find((x) => x.title === CAL_TAB);
+  if (prop && prop.gridProperties && prop.gridProperties.rowCount < need) {
+    await sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { requests: [
+      { appendDimension: { sheetId: prop.sheetId, dimension: "ROWS", length: Math.max(500, need - prop.gridProperties.rowCount) } }] } });
+  }
+}
+// 오른쪽으로 밀려 붙은 줄을 A열로 되돌리고, 빈 줄을 없애고, 같은 id는 마지막 것만 남긴다 (op: "repair")
+async function calRepair(sheets) {
+  const g = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A2:BZ` });
+  const vals = g.data.values || [];
+  let moved = 0;
+  const rows = vals.map((x) => {
+    if (x[0]) return x.slice(0, 13);
+    for (let i = 13; i < x.length; i++) {
+      if (x[i] && /^[\w:.-]{1,80}$/.test(x[i]) && ["post", "event", "ytmeta"].includes(x[i + 1])) { moved++; return x.slice(i, i + 13); }
+    }
+    return null;
+  });
+  const seen = new Set(), keep = new Array(rows.length).fill(null);
+  for (let i = rows.length - 1; i >= 0; i--) { const id = rows[i] && rows[i][0]; if (!id || seen.has(id)) continue; seen.add(id); keep[i] = rows[i]; }
+  const packed = keep.filter(Boolean).map((x) => { const y = x.slice(0, 13); while (y.length < 13) y.push(""); return y; });
+  if (!packed.length) return { ok: false, error: "읽은 줄이 없습니다." };
+  await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A2:BZ` });
+  await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A2:M${packed.length + 1}`, valueInputOption: "RAW", requestBody: { values: packed } });
+  return { ok: true, before: vals.length, after: packed.length, moved };
+}
+
 app.get("/api/calendar", async (req, res) => {
   try {
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, items: calSeed(), seeded: false });
@@ -992,7 +1022,7 @@ app.post("/api/calendar", async (req, res) => {
       return res.status(401).json({ ok: false, needPw: true, error: "이 브라우저에서 처음 한 번만 비밀번호가 필요해요." });
     }
     if (!item || !item.id || !/^[\w:.-]{1,80}$/.test(item.id)) return res.status(400).json({ ok: false, error: "id가 없습니다." });
-    if (op !== "delete" && !["post", "event", "ytmeta"].includes(item.kind)) return res.status(400).json({ ok: false, error: "종류가 올바르지 않습니다." });
+    if (op !== "delete" && op !== "repair" && !["post", "event", "ytmeta"].includes(item.kind)) return res.status(400).json({ ok: false, error: "종류가 올바르지 않습니다." });
     for (const k of CAL_COLS) if (item[k] != null && String(item[k]).length > 2000) return res.status(400).json({ ok: false, error: "내용이 너무 깁니다." });
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.status(500).json({ ok: false, error: "시트 연결 정보가 없습니다." });
     const sheets = getSheetsClient();
@@ -1007,6 +1037,7 @@ app.post("/api/calendar", async (req, res) => {
       });
       rows = seed.map((x) => calObj(calRow(x)));
     }
+    if (op === "repair") return res.json(await calRepair(sheets));
     const idx = rows.findIndex((x) => x.id === item.id);
     if (op === "delete") {
       if (idx >= 0) await sheets.spreadsheets.values.clear({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A${idx + 2}:M${idx + 2}` });
@@ -1019,8 +1050,13 @@ app.post("/api/calendar", async (req, res) => {
         requestBody: { values: [row] },
       });
     } else {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A:M`, valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
+      // 11/5: values.append가 표를 잘못 잡아 N열 오른쪽에 붙여 새 항목이 화면에 안 보이던 문제(인스타 10/26과 같은 증상)
+      //  → 마지막으로 A열(id)이 찬 줄 다음에 직접 쓴다. 시트 줄 수가 모자라면 먼저 늘린다.
+      let last = 1; rows.forEach((x, i) => { if (x.id) last = i + 2; });
+      const next = last + 1;
+      await calEnsureRows(sheets, next);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A${next}:M${next}`, valueInputOption: "RAW",
         requestBody: { values: [row] },
       });
     }
