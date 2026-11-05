@@ -979,6 +979,15 @@ app.get("/api/calendar", async (req, res) => {
   try {
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, items: calSeed(), seeded: false });
     const sheets = getSheetsClient();
+    if (req.query.debug === "1") {   // 읽기 전용 점검: A열이 빈 줄에 무엇이 어디 붙어 있는지
+      const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID, fields: "sheets.properties" });
+      const prop = (meta.data.sheets || []).map((x) => x.properties).find((x) => x.title === CAL_TAB) || {};
+      const g = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${CAL_TAB}!A1:ZZ` });
+      const vals = g.data.values || [];
+      const odd = [];
+      vals.forEach((x, i) => { const first = x.findIndex((v) => v); const wide = x.length > 13; if ((i > 0 && !x[0] && first >= 0) || wide) odd.push({ row: i + 1, first, len: x.length, sample: x.slice(Math.max(first, 0), Math.max(first, 0) + 6) }); });
+      return res.json({ ok: true, grid: prop.gridProperties, rows: vals.length, odd: odd.slice(0, 60) });
+    }
     const rows = await calRead(sheets);
     const items = (rows || []).filter((x) => x.id);
     if (!items.length) return res.json({ ok: true, items: calSeed(), seeded: false });
