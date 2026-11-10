@@ -877,7 +877,7 @@ app.get("/api/traffic", async (req, res) => {
 
 // ----- 조치이력 (제목·썸네일·챕터 수정 등 우리가 한 일) -----
 // 성과 변화를 '언제 무엇을 했는지'와 붙여 읽기 위한 이벤트 로그.
-// 시트 탭: A날짜(26-08-10) B영상ID(비우면 채널 전체) C구분 D내용
+// 시트 탭: A날짜(2026-08-10, 예전 "26-08-10"도 읽을 때 맞춰 줌) B영상ID(비우면 채널 전체) C구분 D내용
 app.get("/api/actions", async (req, res) => {
   try {
     if (!GOOGLE_SERVICE_ACCOUNT || !SHEET_ID) return res.json({ ok: true, actions: [] });
@@ -889,7 +889,8 @@ app.get("/api/actions", async (req, res) => {
     } catch (_) { /* 탭이 아직 없으면 빈 배열 */ }
     const actions = rows
       .filter(r => (r[0] || "").trim())
-      .map(r => ({ date: String(r[0]).trim(), videoId: (r[1] || "").trim(), kind: (r[2] || "").trim(), note: (r[3] || "").trim() }))
+      // 날짜는 시트에 "26-11-03"처럼 들어가 있어도 "2026-11-03"으로 맞춰 내보낸다(그래프 세로선이 날짜 라벨과 정확히 같아야 찍힘)
+      .map(r => ({ date: normDate(r[0]), videoId: (r[1] || "").trim(), kind: (r[2] || "").trim(), note: (r[3] || "").trim() }))
       .sort((a, b) => (a.date < b.date ? -1 : 1));
     res.json({ ok: true, actions });
   } catch (e) {
@@ -916,7 +917,7 @@ app.post("/api/actions", async (req, res) => {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID, range: `${ACTION_TAB}!A:D`,
       valueInputOption: "RAW", insertDataOption: "INSERT_ROWS",
-      requestBody: { values: [[date, videoId || "", kind, note || ""]] },
+      requestBody: { values: [[normDate(date), videoId || "", kind, note || ""]] },
     });
     res.json({ ok: true });
   } catch (e) {
