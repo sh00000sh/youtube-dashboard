@@ -78,7 +78,7 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
     const form = v.dur > 180 ? "L" : "S";
     const k = kst(v.pub), age = (now - Date.parse(v.pub)) / 86400000;
     return { ...v, form, series: seriesOf(v.title, form), hook: hookOf(v.title), hasNum: /\d/.test(mainTitle(v.title)), tlen: mainTitle(v.title).length, hour: k.getUTCHours(), dow: k.getUTCDay(), bucket: hourBucket(k.getUTCHours()),
-      kdate: k.toISOString().slice(0, 10), age: Math.round(age * 10) / 10, v24: viewsAt(snapBy[v.id], 24),
+      kdate: k.toISOString().slice(0, 10), age: Math.round(age * 10) / 10, v24: viewsAt(snapBy[v.id], 24), v72: form === "L" ? viewsAt(snapBy[v.id], 72) : null,
       per1k: v.views ? Math.round(v.subs / v.views * 1000 * 10) / 10 : null };
   });
   // 3편 미만 시리즈는 '단편'으로 합친다 (한두 편으로는 기준값이 안 선다)
@@ -126,35 +126,45 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
   const recent = vids.filter((v) => v.age <= 14).sort((a, b) => b.pub.localeCompare(a.pub));
 
   // 4) 잘 된 영상 vs 안 된 영상 — 차이가 뚜렷하고 표본이 충분한 것만 (각 그룹 4편 이상, 1.3배 이상)
+  //    11/17 사용자: "바꾼 것의 효과는 업데이트가 안 되고 예전 초반 피드백 그대로" — 5월 이후 전체로만 재면 새 영상 몇 편이 묻혀 결론이 안 바뀐다
+  //    → 최근 RECENT_DAYS일 영상으로 먼저 재고(앞에 놓임), 전체 기간 결과는 최근에 같은 비교가 안 나올 때만 덧붙인다
+  const RECENT_DAYS = 45;
   const findings = [];
-  const cmp = (label, a, b, key, ctx, fmtA, fmtB) => {
-    const xa = a.map((v) => v[key]).filter((x) => x != null), xb = b.map((v) => v[key]).filter((x) => x != null);
-    if (xa.length < 4 || xb.length < 4) return;
-    const ma = median(xa), mb = median(xb); if (!ma || !mb) return;
-    const ratio = ma / mb;
-    if (ratio < 1.3 && ratio > 1 / 1.3) return;
-    const [hi, lo, mh, ml, nh, nl] = ratio >= 1 ? [fmtA, fmtB, ma, mb, xa.length, xb.length] : [fmtB, fmtA, mb, ma, xb.length, xa.length];
-    findings.push({ topic: label, ctx, hi, lo, hiMed: Math.round(mh), loMed: Math.round(ml), nHi: nh, nLo: nl, ratio: Math.round(Math.max(ratio, 1 / ratio) * 10) / 10 });
+  const runFindings = (pool, scope) => {
+    const out = [];
+    const cmp = (label, a, b, key, ctx, fmtA, fmtB) => {
+      const xa = a.map((v) => v[key]).filter((x) => x != null), xb = b.map((v) => v[key]).filter((x) => x != null);
+      if (xa.length < 4 || xb.length < 4) return;
+      const ma = median(xa), mb = median(xb); if (!ma || !mb) return;
+      const ratio = ma / mb;
+      if (ratio < 1.3 && ratio > 1 / 1.3) return;
+      const [hi, lo, mh, ml, nh, nl] = ratio >= 1 ? [fmtA, fmtB, ma, mb, xa.length, xb.length] : [fmtB, fmtA, mb, ma, xb.length, xa.length];
+      out.push({ topic: label, scope, base: ctx, ctx: `${scope} · ${ctx}`, hi, lo, hiMed: Math.round(mh), loMed: Math.round(ml), nHi: nh, nLo: nl, ratio: Math.round(Math.max(ratio, 1 / ratio) * 10) / 10 });
+    };
+    const S = pool.filter((v) => v.form === "S" && mature(v)), L = pool.filter((v) => v.form === "L" && mature(v));
+    const eduS = S.filter((v) => isEdu(v.series)), mktS = S.filter((v) => v.series === "시황 숏폼");
+    cmp("숏폼 종류", eduS, mktS, "views", "다 자란 숏폼, 조회수 중간값", "교육 숏폼", "시황 숏폼");
+    // 교육 숏폼 안에서만 비교해야 시황(아침 9시 고정)과 섞이지 않는다
+    cmp("올리는 시간", eduS.filter((v) => v.hour >= 17), eduS.filter((v) => v.hour < 17), "views", "교육 숏폼만, 조회수 중간값", "오후 5시 이후", "오후 5시 전");
+    cmp("올리는 시간", mktS.filter((v) => v.hour >= 12), mktS.filter((v) => v.hour < 12), "views", "시황 숏폼만, 조회수 중간값", "낮·저녁(12시 이후)", "아침(12시 전)");
+    cmp("제목 형태", eduS.filter((v) => /\?/.test(v.title)), eduS.filter((v) => !/\?/.test(v.title)), "views", "교육 숏폼만, 조회수 중간값", "물음표 있는 제목", "물음표 없는 제목");
+    cmp("제목 형태", eduS.filter((v) => v.title.split("#")[0].trim().length <= 22), eduS.filter((v) => v.title.split("#")[0].trim().length > 22), "views", "교육 숏폼만, 해시태그 뺀 제목 길이", "짧은 제목(22자 이하)", "긴 제목");
+    cmp("제목 형태", mktS.filter((v) => !/\|/.test(v.title.replace(/\|\s*\d{2}[./]\d{2}.*$/, ""))), mktS.filter((v) => /\|/.test(v.title.replace(/\|\s*\d{2}[./]\d{2}.*$/, ""))), "views", "시황 숏폼만", "한 문장 제목", "| 로 이어 붙인 제목");
+    cmp("롱폼 종류", L.filter((v) => v.series.includes("개념")), L.filter((v) => v.series.includes("화면")), "views", "다 자란 롱폼, 조회수 중간값", "개념 설명", "화면·주문 가이드");
+    if (subsOk) cmp("구독 전환", eduS, L, "per1k", "조회 1,000회당 구독", "교육 숏폼", "롱폼");
+    return out.sort((a, b) => b.ratio - a.ratio);
   };
-  const S = vids.filter((v) => v.form === "S" && mature(v)), L = vids.filter((v) => v.form === "L" && mature(v));
-  const eduS = S.filter((v) => isEdu(v.series)), mktS = S.filter((v) => v.series === "시황 숏폼");
-  cmp("숏폼 종류", eduS, mktS, "views", "다 자란 숏폼, 조회수 중간값", "교육 숏폼", "시황 숏폼");
-  // 교육 숏폼 안에서만 비교해야 시황(아침 9시 고정)과 섞이지 않는다
-  cmp("올리는 시간", eduS.filter((v) => v.hour >= 17), eduS.filter((v) => v.hour < 17), "views", "교육 숏폼만, 조회수 중간값", "오후 5시 이후", "오후 5시 전");
-  cmp("올리는 시간", mktS.filter((v) => v.hour >= 12), mktS.filter((v) => v.hour < 12), "views", "시황 숏폼만, 조회수 중간값", "낮·저녁(12시 이후)", "아침(12시 전)");
-  cmp("제목 형태", eduS.filter((v) => /\?/.test(v.title)), eduS.filter((v) => !/\?/.test(v.title)), "views", "교육 숏폼만, 조회수 중간값", "물음표 있는 제목", "물음표 없는 제목");
-  cmp("제목 형태", eduS.filter((v) => v.title.split("#")[0].trim().length <= 22), eduS.filter((v) => v.title.split("#")[0].trim().length > 22), "views", "교육 숏폼만, 해시태그 뺀 제목 길이", "짧은 제목(22자 이하)", "긴 제목");
-  cmp("제목 형태", mktS.filter((v) => !/\|/.test(v.title.replace(/\|\s*\d{2}[./]\d{2}.*$/, ""))), mktS.filter((v) => /\|/.test(v.title.replace(/\|\s*\d{2}[./]\d{2}.*$/, ""))), "views", "시황 숏폼만", "한 문장 제목", "| 로 이어 붙인 제목");
-  cmp("롱폼 종류", L.filter((v) => v.series.includes("개념")), L.filter((v) => v.series.includes("화면")), "views", "다 자란 롱폼, 조회수 중간값", "개념 설명", "화면·주문 가이드");
-  if (subsOk) cmp("구독 전환", eduS, L, "per1k", "조회 1,000회당 구독", "교육 숏폼", "롱폼");
+  const recentF = runFindings(vids.filter((v) => v.age <= RECENT_DAYS), `최근 ${RECENT_DAYS}일`);
+  const allF = runFindings(vids, "전체 기간").filter((x) => !recentF.some((r) => r.topic === x.topic && r.base === x.base));
+  findings.push(...recentF);
   Object.keys(groups).filter((g) => !g.endsWith("전체")).forEach((g) => {
     const arr = vids.filter((v) => v.series === g && v.v24 != null && v.age <= 60);
     const a = arr.filter((v) => v.hook !== "뉴스 요약형").map((v) => v.v24), b = arr.filter((v) => v.hook === "뉴스 요약형").map((v) => v.v24);
     if (a.length < 3 || b.length < 3) return;
     const ma = median(a), mb = median(b), r = ma / mb;
-    if (r >= 1.5) findings.push({ topic: "제목 형태", ctx: `${g}만, 최근 60일 24시간 조회수`, hi: "질문·이유·반전형 제목", lo: "뉴스 요약형 제목", hiMed: Math.round(ma), loMed: Math.round(mb), nHi: a.length, nLo: b.length, ratio: Math.round(r * 10) / 10 });
+    if (r >= 1.5) findings.push({ topic: "제목 형태", scope: "최근 60일", base: `${g}만, 24시간 조회수`, ctx: `최근 60일 · ${g}만, 24시간 조회수`, hi: "질문·이유·반전형 제목", lo: "뉴스 요약형 제목", hiMed: Math.round(ma), loMed: Math.round(mb), nHi: a.length, nLo: b.length, ratio: Math.round(r * 10) / 10 });
   });
-  findings.sort((a, b) => b.ratio - a.ratio);
+  findings.push(...allF);
 
   // 5) 시리즈별 최근 흐름: 최근 14일 vs 그 전 28일 (24시간 조회수 기준 — 나이 차이에 안 흔들림)
   const trends = [];
@@ -167,21 +177,21 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
   // 6) 이번 주 해볼 것 — 위 차이에서 바로 나오는 실험만. 각 항목에 '무엇을 재서 판단할지'를 붙인다
   const tryNext = [];
   const f = (topic, pred) => findings.find((x) => x.topic === topic && (!pred || pred(x)));
-  const tH = f("올리는 시간", (x) => x.ctx.startsWith("교육"));
-  if (tH) tryNext.push({ what: `교육 숏폼은 ${tH.hi}에 올리기`, why: `${tH.hi} ${tH.hiMed.toLocaleString()}회 vs ${tH.lo} ${tH.loMed.toLocaleString()}회 (중간값, ${tH.nHi}편·${tH.nLo}편)`, measure: `이번 주 교육 숏폼이 우리 숏폼 중간값(${(groups["숏폼 전체"]?.views?.med || 0).toLocaleString()}회)을 넘는지` });
+  const tH = f("올리는 시간", (x) => x.base.startsWith("교육"));
+  if (tH) tryNext.push({ what: `교육 숏폼은 ${tH.hi}에 올리기`, why: `${tH.hi} ${tH.hiMed.toLocaleString()}회 vs ${tH.lo} ${tH.loMed.toLocaleString()}회 (${tH.scope} 중간값, ${tH.nHi}편·${tH.nLo}편)`, measure: `이번 주 교육 숏폼이 우리 숏폼 중간값(${(groups["숏폼 전체"]?.views?.med || 0).toLocaleString()}회)을 넘는지` });
   const tK = f("숏폼 종류");
   if (tK && tK.lo === "시황 숏폼") {
-    const tM = f("올리는 시간", (x) => x.ctx.startsWith("시황"));
+    const tM = f("올리는 시간", (x) => x.base.startsWith("시황"));
     tryNext.push({ what: tM ? `시황 숏폼을 ${tM.hi}에 올려 보기` : "시황 숏폼 한 편은 교육 숏폼처럼 '질문 하나'로 제목·첫 문장 열기",
-      why: `시황 숏폼 중간값 ${tK.loMed.toLocaleString()}회로 교육 숏폼(${tK.hiMed.toLocaleString()}회)의 ${Math.round(tK.loMed / tK.hiMed * 100)}% 수준` + (tM ? ` · 시황끼리도 ${tM.hi} ${tM.hiMed}회 vs ${tM.lo} ${tM.loMed}회` : ""),
+      why: `시황 숏폼 중간값 ${tK.loMed.toLocaleString()}회로 교육 숏폼(${tK.hiMed.toLocaleString()}회)의 ${Math.round(tK.loMed / tK.hiMed * 100)}% 수준(${tK.scope})` + (tM ? ` · 시황끼리도 ${tM.hi} ${tM.hiMed}회 vs ${tM.lo} ${tM.loMed}회` : ""),
       measure: groups["시황 숏폼"]?.v24 ? `시황 숏폼 24시간 조회수가 시황 중간값(${groups["시황 숏폼"].v24.med.toLocaleString()}회)보다 높은지 3편 이상 비교` : `시황 숏폼 1주 조회수가 시황 중간값(${tK.loMed.toLocaleString()}회)보다 높은지 3편 이상 비교` });
   }
-  const tT = f("제목 형태", (x) => x.ctx.startsWith("교육"));
-  if (tT) tryNext.push({ what: `교육 숏폼 제목을 '${tT.hi}'으로`, why: `${tT.hi} ${tT.hiMed.toLocaleString()}회 vs ${tT.lo} ${tT.loMed.toLocaleString()}회 (중간값)`, measure: "다음 5편 24시간 조회수 중간값 비교" });
-  const tS = f("제목 형태", (x) => x.ctx === "시황 숏폼만");
-  if (tS) tryNext.push({ what: `시황 숏폼 제목을 '${tS.hi}'으로 (날짜는 맨 끝 한 번만)`, why: `${tS.hi} ${tS.hiMed.toLocaleString()}회 vs ${tS.lo} ${tS.loMed.toLocaleString()}회 (중간값, ${tS.nHi}편·${tS.nLo}편)`, measure: "다음 시황 숏폼 5편 조회수 중간값 비교" });
+  const tT = f("제목 형태", (x) => x.base.startsWith("교육"));
+  if (tT) tryNext.push({ what: `교육 숏폼 제목을 '${tT.hi}'으로`, why: `${tT.hi} ${tT.hiMed.toLocaleString()}회 vs ${tT.lo} ${tT.loMed.toLocaleString()}회 (${tT.scope} 중간값)`, measure: "다음 5편 24시간 조회수 중간값 비교" });
+  const tS = f("제목 형태", (x) => x.base === "시황 숏폼만");
+  if (tS) tryNext.push({ what: `시황 숏폼 제목을 '${tS.hi}'으로 (날짜는 맨 끝 한 번만)`, why: `${tS.hi} ${tS.hiMed.toLocaleString()}회 vs ${tS.lo} ${tS.loMed.toLocaleString()}회 (${tS.scope} 중간값, ${tS.nHi}편·${tS.nLo}편)`, measure: "다음 시황 숏폼 5편 조회수 중간값 비교" });
   const tL = f("롱폼 종류");
-  if (tL) tryNext.push({ what: `조회수를 노리는 롱폼은 '${tL.hi}'형으로`, why: `${tL.hi} ${tL.hiMed}회 vs ${tL.lo} ${tL.loMed}회 (다 자란 롱폼 중간값). ${tL.lo === "화면·주문 가이드" ? "화면 가이드는 조회수보다 알림톡·고객 안내용으로 쓰는 게 맞아요" : ""}`.trim(), measure: "다음 롱폼 2주 조회수가 롱폼 중간값을 넘는지" });
+  if (tL) tryNext.push({ what: `조회수를 노리는 롱폼은 '${tL.hi}'형으로`, why: `${tL.hi} ${tL.hiMed}회 vs ${tL.lo} ${tL.loMed}회 (${tL.scope}, 다 자란 롱폼 중간값). ${tL.lo === "화면·주문 가이드" ? "화면 가이드는 조회수보다 알림톡·고객 안내용으로 쓰는 게 맞아요" : ""}`.trim(), measure: "다음 롱폼 2주 조회수가 롱폼 중간값을 넘는지" });
   const best = trends.filter((t) => t.series.startsWith("교육")).sort((a, b) => b.recentMed - a.recentMed)[0];
   if (best && best.change > 15) tryNext.push({ what: `요즘 잘 되는 '${best.series.replace("교육 숏폼 · ", "")}' 시리즈 한 편 더`, why: `최근 2주 24시간 조회수 중간값 ${best.recentMed}회, 그 전보다 ${best.change}% 높음`, measure: "같은 시리즈 다음 편이 상위 25%에 드는지" });
 
@@ -229,19 +239,65 @@ function computeBench(videoRows, snapRows, now = Date.now(), actionRows = []) {
         detail: `최근 ${K}편 24시간 중간값 ${Math.round(rMed)}회 (평소 ${gm}회)`, recent: describe(recentA), diffs: [], actions: inRange(recentA[0].kdate, recentA[recentA.length - 1].kdate) });
     }
   });
-  // 조치 전후: 시리즈가 지정된 조치는 그 시리즈, 아니면 같은 형태 전체에서 조치 전 최대 10편 vs 조치 후 편들 (24시간 조회수)
-  const actionEffects = actions.filter((a) => a.date >= "2026-05").map((a) => {
-    const target = a.series ? vids.filter((v) => v.series === a.series) : a.vid ? [] : vids.filter((v) => v.form === "S");
-    const arr = target.filter((v) => v.v24 != null).sort((x, y) => x.pub.localeCompare(y.pub));
-    const pre = arr.filter((v) => v.kdate < a.date).slice(-10), post = arr.filter((v) => v.kdate >= a.date);
-    if (pre.length < 3 || post.length < 2) return null;
-    const m1 = median(pre.map((v) => v.v24)), m2 = median(post.map((v) => v.v24));
+  // 조치 전후 (11/17 사용자: "바꾼 것의 효과가 업데이트가 안 된다" → 비교 방식 손봄)
+  //   ① 대상: 시리즈가 지정되면 그 시리즈, 아니면 메모에서 읽는다(롱폼·블랙박스 → 롱폼 전체 / 시황 → 시황 숏폼 / 교육 → 교육 숏폼)
+  //      예전엔 전부 '숏폼 전체'(교육+시황 섞임)로 재서, 롱폼 조치도 숏폼 조회수로 판정되고 있었다
+  //   ② '바꾼 뒤'는 같은 대상의 다음 조치 전까지만 센다(예전엔 오늘까지 전부라 조치끼리 구간이 겹쳤다)
+  //   ③ 지표: 숏폼 = 업로드 24시간 조회수, 롱폼 = 업로드 3일(72시간) 조회수
+  //      (11월 롱폼은 숏폼이 매일 올라오면서 최근 업로드 15개 밖으로 밀려 7일까지 기록이 안 남은 게 많다 → 3일로 잰다)
+  //   ④ 영상 1편 조치(썸네일 교체 등): 그 영상의 교체 전 W시간 vs 교체 뒤 W시간 조회수 증가를,
+  //      같은 형태 다른 영상들이 같은 나이 구간에서 보인 변화(원래 줄어드는 정도)와 비교한다
+  //   표본이 모자라면 버리지 않고 '판단 보류'로 이유를 같이 보여 준다
+  const targetOf = (a) => {
+    if (a.series) return { label: a.series, form: a.series.startsWith("롱폼") ? "L" : "S", pick: (v) => v.series === a.series };
+    const n = a.note || "";
+    if (/롱폼|블랙박스|MBB/.test(n)) return { label: "롱폼 전체", form: "L", pick: (v) => v.form === "L" };
+    if (/시황/.test(n)) return { label: "시황 숏폼", form: "S", pick: (v) => v.series === "시황 숏폼" };
+    if (/교육/.test(n)) return { label: "교육 숏폼", form: "S", pick: (v) => isEdu(v.series) };
+    return { label: "숏폼 전체", form: "S", pick: (v) => v.form === "S" };
+  };
+  const metricOf = (form) => (form === "L" ? { key: "v72", label: "3일 조회수" } : { key: "v24", label: "24시간 조회수" });
+  const pad2 = (x) => String(x).padStart(2, "0");
+  const perVideoEffect = (a) => {
+    const v = vids.find((x) => x.id === a.vid);
+    if (!v) return { ...a, target: "영상 1편", perVideo: true, thin: true, reason: "이 영상 ID를 데이터에서 못 찾았어요" };
+    const base = { ...a, target: `영상 1편 · ${mainTitle(v.title).slice(0, 28)}`, perVideo: true, videoTitle: v.title };
+    const tm = /(\d{1,2})\s*[:시]\s*(\d{2})?/.exec(a.note || "");
+    const ts = Date.parse(`${a.date}T${pad2(tm ? Math.min(23, +tm[1]) : 12)}:${pad2(tm && tm[2] ? +tm[2] : 0)}:00+09:00`);
+    const hc = (ts - Date.parse(v.pub)) / 3600e3;
+    const withZero = (s) => (s && s.length ? [{ h: 0, v: 0 }, ...s] : s);   // 업로드 순간 조회수 0으로 시작점을 깐다
+    const sn = withZero(snapBy[v.id]) || [];
+    const lastH = sn.length ? Math.max(...sn.map((x) => x.h)) : 0;
+    const trackH = v.form === "L" ? 168 : 24;
+    if (hc < 0) return { ...base, thin: true, reason: "조치 시각이 업로드 전으로 적혀 있어요" };
+    if (hc >= trackH) return { ...base, thin: true, reason: `시간별 기록은 업로드 뒤 ${v.form === "L" ? "7일" : "24시간"}까지만 있어서 이 조치(업로드 ${Math.round(hc / 24)}일째)는 전후 비교를 못 해요` };
+    const W = Math.min(24, hc, lastH - hc);
+    if (W < 3) return { ...base, hc: Math.round(hc), thin: true, reason: `바꾼 뒤 기록이 아직 ${Math.max(0, Math.round((lastH - hc) * 10) / 10)}시간뿐이라 판단 보류 (3시간 이상 쌓이면 계산해요)` };
+    const gain = (s, h0, h1) => { const x0 = viewsAt(s, h0), x1 = viewsAt(s, h1); return x0 == null || x1 == null ? null : x1 - x0; };
+    const before = gain(sn, hc - W, hc), after = gain(sn, hc, hc + W);
+    if (!before || after == null) return { ...base, hc: Math.round(hc), thin: true, reason: "바꾸기 전 구간 조회수 기록이 비어 있어요" };
+    const rs = vids.filter((o) => o.id !== v.id && o.form === v.form).map((o) => { const s2 = withZero(snapBy[o.id]); const b2 = gain(s2, hc - W, hc), a2 = gain(s2, hc, hc + W); return b2 > 0 && a2 != null ? a2 / b2 : null; }).filter((x) => x != null);
+    const own = after / before, typ = rs.length >= 4 ? median(rs) : null;
+    return { ...base, hc: Math.round(hc), W: Math.round(W * 10) / 10, before, after, own: Math.round(own * 100) / 100, typ: typ == null ? null : Math.round(typ * 100) / 100, nPeers: rs.length,
+      change: typ ? Math.round((own / typ - 1) * 100) : Math.round((own - 1) * 100), thin: false };
+  };
+  const actionEffects = actions.filter((a) => a.date >= "2026-05").map((a, i, all) => {
+    if (a.vid) return perVideoEffect(a);
+    const t = targetOf(a), m = metricOf(t.form);
+    const next = all.find((x) => !x.vid && x.date > a.date && targetOf(x).label === t.label);
+    const arr = vids.filter(t.pick).filter((v) => v[m.key] != null).sort((x, y) => x.pub.localeCompare(y.pub));
+    const pre = arr.filter((v) => v.kdate < a.date).slice(-10), post = arr.filter((v) => v.kdate >= a.date && (!next || v.kdate < next.date));
+    const base = { ...a, target: t.label, metric: m.label, until: next ? next.date : null, preN: pre.length, postN: post.length };
+    if (pre.length < 3) return { ...base, thin: true, reason: `바꾸기 전 ${t.label} ${m.label} 기록이 ${pre.length}편뿐이라 비교 기준이 안 서요` };
+    if (post.length < 2) return { ...base, thin: true, preMed: Math.round(median(pre.map((v) => v[m.key]))),
+      reason: next ? `다음 조치(${next.date.slice(5).replace("-", "/")})까지 ${post.length}편뿐이라 이 조치만의 효과는 따로 못 봐요` : `바꾼 뒤 ${m.label} 기록이 있는 영상이 아직 ${post.length}편이라 판단 보류${t.form === "L" ? " (롱폼은 업로드 3일이 지나야 셉니다)" : ""}` };
+    const m1 = median(pre.map((v) => v[m.key])), m2 = median(post.map((v) => v[m.key]));
     const post3 = post.slice(0, 3), postLast = post.slice(-Math.min(5, post.length));
-    return { ...a, target: a.series || "숏폼 전체", preN: pre.length, preMed: Math.round(m1), postN: post.length, postMed: Math.round(m2),
-      first3Med: Math.round(median(post3.map((v) => v.v24))), lastMed: Math.round(median(postLast.map((v) => v.v24))), lastN: postLast.length,
+    return { ...base, thin: false, preMed: Math.round(m1), postMed: Math.round(m2),
+      first3Med: Math.round(median(post3.map((v) => v[m.key]))), lastMed: Math.round(median(postLast.map((v) => v[m.key]))), lastN: postLast.length,
       change: Math.round((m2 / m1 - 1) * 100),
       postHooks: cntBy(post, (v) => v.hook) };
-  }).filter(Boolean);
+  });
   alerts.sort((a, b) => ({ bad: 0, warn: 1, good: 2 }[a.level] - { bad: 0, warn: 1, good: 2 }[b.level]));
   // 꺾임 경보는 '이번 주 해볼 것' 맨 앞에: 잘 된 구간의 공통점으로 되돌리기
   alerts.filter((a) => a.type === "꺾임" && a.curiousPeak > a.curiousRecent).reverse().forEach((a) => {
