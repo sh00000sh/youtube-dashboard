@@ -697,7 +697,9 @@
     </div>
     <div class="sec" id="sec-compare" style="display:none">
     <h2>📊 과거 vs 현재 (광고 제외) <span class="kpi-badge">유튜브 광고 유입을 뺀 순수 성과 비교</span></h2>
-    <div class="desc">외주로 돌린 광고 유입(트래픽 소스=광고)이 70% 이상인 영상만 제외했어요. 나머지는 모두 포함해서 과거 영상과 6월 이후 영상의 성과를 비교해요.</div>
+    <div class="desc">외주로 돌린 광고 유입(트래픽 소스=광고)이 70% 이상인 영상만 제외했어요. 나머지로 과거 영상과 6월 이후 영상의 성과를 비교해요.<br>
+      ※ 숫자는 <b>중간값</b>이에요 — 평균은 몇 편의 대박 영상에 끌려가요. 과거 기준은 <b>2022년 이후 영상</b>만 써요(2018·2021년 영상 12편은 5~8년 동안 쌓인 조회수라 지금 영상과 맞지 않음, 월별 그래프엔 그대로 보여요).<br>
+      ※ 조회수·구독전환은 올린 뒤 쌓인 누적이라 오래된 과거 영상이 유리해요. 전체 탭의 조회율은 지금 숏폼 비중이 커서 올라간 몫이 섞여요 — 롱폼·숏폼 탭으로 나눠 보세요.</div>
     <div class="bar"><button onclick="loadCompare()" id="cmpBtn" style="padding:9px 16px;font-size:14px">🔍 비교 불러오기</button> <span class="status" id="cmpStatus">버튼을 눌러 분석을 시작하세요</span></div>
     <div class="metric-tabs" id="cmpFormTabs" style="margin-bottom:14px"></div>
 
@@ -707,10 +709,10 @@
     <h2 style="font-size:15px;margin-top:22px">📋 과거 vs 현재 상세</h2>
     <div class="compare" id="cmpCards"></div>
 
-    <h2 style="font-size:15px;margin-top:22px">🎯 신규 영상 KPI 제안 <span class="kpi-badge">과거 유기적 평균 기반</span></h2>
+    <h2 style="font-size:15px;margin-top:22px">🎯 신규 영상 KPI 제안 <span class="kpi-badge">과거·현재 중간값 기반</span></h2>
     <div class="cards" id="cmpKpiCards" style="grid-template-columns:repeat(2,1fr)"></div>
 
-    <h2 style="font-size:15px;margin-top:22px">📊 월별 유기적 평균 조회수 <span class="kpi-badge">진한 막대 = 6월 이후</span></h2>
+    <h2 style="font-size:15px;margin-top:22px">📊 월별 유기적 조회수 중간값 <span class="kpi-badge">진한 막대 = 6월 이후</span></h2>
     <div class="panel"><div class="chart-box"><canvas id="cmpChart"></canvas></div></div>
     </div>
 
@@ -2377,36 +2379,45 @@
     }
     // 영상 길이(0:42/1:02:03)로 숏폼 판별
     const cmpIsShort=(v)=>durSec(v.duration)<=180;
+    // 과거 기준 = 2022-01-01 ~ 2026-05-31 (2018·2021년 영상은 5~8년 누적 조회수라 기준에서 뺌)
+    const CMP_PAST_FROM="2022-01-01";
+    const cmpIsPastBase=(v)=>{const d=v.publishedAt.slice(0,10); return d>=CMP_PAST_FROM && d<"2026-06-01";};
+    // 중간값 — 평균은 소수 대박 영상에 끌려가서 비교 기준으로 쓰지 않음
+    const cmpMed=(arr,f)=>{ if(!arr.length) return 0; const a=arr.map(f).sort((x,y)=>x-y); const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; };
     function renderCompare(){
       if(!cmpData)return;
       let organic=cmpData.filter(v=>!v.isAd);
       if(cmpForm==="long") organic=organic.filter(v=>!cmpIsShort(v));
       else if(cmpForm==="short") organic=organic.filter(v=>cmpIsShort(v));
 
-      const past=organic.filter(v=>v.publishedAt.slice(0,10)<"2026-06-01");
+      const past=organic.filter(v=>cmpIsPastBase(v));
       const now=organic.filter(v=>v.publishedAt.slice(0,10)>="2026-06-01");
       const avg=(arr,f)=>arr.length?arr.reduce((a,v)=>a+f(v),0)/arr.length:0;
 
-      // (4) 성장률 카드 3개 — 조회수 / 조회율 / 구독전환
+      // (4) 성장률 카드 3개 — 조회수 / 조회율 / 구독전환 (중간값 기준, 평균은 참고로 아래 줄에)
       const metrics=[
-        {l:"유기적 조회수",f:v=>v.organic,fmt:n=>fmt(Math.round(n)),unit:""},
-        {l:"평균 조회율",f:v=>v.avp,fmt:n=>n.toFixed(1)+"%",unit:""},
-        {l:"구독전환",f:v=>v.subs,fmt:n=>n.toFixed(1),unit:""},
+        {l:"유기적 조회수",f:v=>v.organic,fmt:n=>fmt(Math.round(n)),st:"med"},
+        {l:"조회율",f:v=>v.avp,fmt:n=>n.toFixed(1)+"%",st:"med"},
+        {l:"구독전환",f:v=>v.subs,fmt:n=>n.toFixed(1),st:"avg"}, // 편당 구독은 대부분 0이라 중간값이 의미 없음 → 평균
       ];
       document.getElementById("cmpGrowthCards").innerHTML=metrics.map(m=>{
-        const p=avg(past,m.f), n2=avg(now,m.f), g=p?((n2/p-1)*100):0;
+        const S=m.st==="med"?cmpMed:avg;
+        const p=S(past,m.f), n2=S(now,m.f), g=p?((n2/p-1)*100):0;
         const col=g>=0?"#1f9d57":"#e15a72";
-        return `<div class="card"><div class="label">${m.l} 성장률</div>
-          <div class="value" style="color:${col};font-size:30px">${g>=0?"+":""}${g.toFixed(0)}%</div>
-          <div class="note" style="margin-top:6px">${m.fmt(p)} → ${m.fmt(n2)}</div></div>`;
+        const other=m.st==="med"?`평균: ${m.fmt(avg(past,m.f))} → ${m.fmt(avg(now,m.f))}`:"누적이라 오래된 영상이 유리해요";
+        return `<div class="card"><div class="label">${m.l} 성장률 <span style="opacity:.6">(${m.st==="med"?"중간값":"평균"})</span></div>
+          <div class="value" style="color:${col};font-size:30px">${p?((g>=0?"+":"")+g.toFixed(0)+"%"):"-"}</div>
+          <div class="note" style="margin-top:6px">${m.fmt(p)} → ${m.fmt(n2)}</div>
+          <div class="note" style="opacity:.6">${other}</div></div>`;
       }).join("");
 
       // 과거 vs 현재 상세 카드
       const card=(t,arr)=>`<div class="cmp"><h3>${t} (${arr.length}개)</h3>
-        <div class="crow"><span>평균 유기적 조회수</span><b>${fmt(Math.round(avg(arr,v=>v.organic)))}</b></div>
-        <div class="crow"><span>평균 조회율</span><b>${avg(arr,v=>v.avp).toFixed(1)}%</b></div>
-        <div class="crow"><span>평균 구독전환</span><b>${avg(arr,v=>v.subs).toFixed(1)}</b></div></div>`;
-      document.getElementById("cmpCards").innerHTML=card("📼 과거 (6월 이전)",past)+card("🆕 현재 (6월~)",now);
+        <div class="crow"><span>유기적 조회수 중간값</span><b>${fmt(Math.round(cmpMed(arr,v=>v.organic)))}</b></div>
+        <div class="crow"><span>조회율 중간값</span><b>${cmpMed(arr,v=>v.avp).toFixed(1)}%</b></div>
+        <div class="crow"><span>편당 구독전환(평균)</span><b>${avg(arr,v=>v.subs).toFixed(1)}</b></div>
+        <div class="crow" style="opacity:.6"><span>참고: 조회수 평균</span><b>${fmt(Math.round(avg(arr,v=>v.organic)))}</b></div></div>`;
+      document.getElementById("cmpCards").innerHTML=card("📼 과거 (2022년~6월 이전)",past)+card("🆕 현재 (6월~)",now);
 
       // (2)(3) 신규 영상 KPI 제안 — 과거 유기적 평균 기반 (포맷별)
       renderCmpKpi(organic);
@@ -2414,13 +2425,13 @@
       // (5) 월별 유기적 평균 — 6월 기준 색 구분
       const byM={}; organic.forEach(v=>{const m=v.publishedAt.slice(0,7); (byM[m]=byM[m]||[]).push(v.organic);});
       const months=Object.keys(byM).sort();
-      const data=months.map(m=>Math.round(byM[m].reduce((a,b)=>a+b,0)/byM[m].length));
+      const data=months.map(m=>Math.round(cmpMed(byM[m],x=>x)));
       const colors=months.map(m=> m>="2026-06" ? "#3182f6" : "rgba(49,130,246,.32)"); // 6월 이후 진하게, 이전 옅게
       if(cmpChart)cmpChart.destroy();
       cmpChart=new Chart(document.getElementById("cmpChart"),{type:"bar",
-        data:{labels:months,datasets:[{label:"월별 유기적 평균 조회수",data,backgroundColor:colors,borderRadius:6,maxBarThickness:46}]},
+        data:{labels:months,datasets:[{label:"월별 유기적 조회수 중간값",data,backgroundColor:colors,borderRadius:6,maxBarThickness:46}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
-          tooltip:{callbacks:{label:(c)=>`평균 ${c.parsed.y.toLocaleString("ko-KR")}회`+(c.label>="2026-06"?" (현재 시기)":" (과거)")}}},
+          tooltip:{callbacks:{label:(c)=>`중간값 ${c.parsed.y.toLocaleString("ko-KR")}회`+(c.label>="2026-06"?" (현재 시기)":" (과거)")}}},
           scales:{x:{ticks:{color:tickCol()},grid:{display:false}},y:{ticks:{color:tickCol()},grid:{color:gridCol()}}}}});
     }
     // 과거 유기적 평균 → 신규 영상 KPI 기준점 제안
@@ -2428,17 +2439,17 @@
       // 현재 토글에 맞는 포맷만(전체일 땐 롱/숏 둘 다 산출)
       const allOrganic=cmpData.filter(v=>!v.isAd);
       const calc=(arr)=>{
-        const past=arr.filter(v=>v.publishedAt.slice(0,10)<"2026-06-01");
-        const a=past.length?past.reduce((s,v)=>s+v.organic,0)/past.length:0;
-        return {n:past.length, avg:a};
+        const past=arr.filter(v=>cmpIsPastBase(v));
+        const now=arr.filter(v=>v.publishedAt.slice(0,10)>="2026-06-01");
+        return {n:past.length, med:cmpMed(past,v=>v.organic), nowN:now.length, nowMed:cmpMed(now,v=>v.organic)};
       };
       const longC=calc(allOrganic.filter(v=>!cmpIsShort(v)));
       const shortC=calc(allOrganic.filter(v=>cmpIsShort(v)));
-      // KPI 제안 = 과거 유기적 평균의 약 80% (현실적 목표), 100단위 반올림
-      const sug=(a)=>a>0?Math.max(100,Math.round(a*0.8/100)*100):0;
+      // KPI 제안 = 과거(2022~) 중간값과 현재 중간값 중 큰 값의 약 110% — 지금보다 한 걸음 위, 100단위 반올림
+      const sug=(c)=>{const b=Math.max(c.med,c.nowMed); return b>0?Math.max(100,Math.round(b*1.1/100)*100):0;};
       const card=(emoji,label,c)=>`<div class="card"><div class="label">${emoji} ${label} 신규 KPI 제안</div>
-        <div class="value" style="color:var(--blue);font-size:30px">${c.avg>0?fmt(sug(c.avg))+"회":"-"}</div>
-        <div class="note" style="margin-top:6px">${c.n>0?`과거 ${c.n}개 유기적 평균 ${fmt(Math.round(c.avg))}회의 80%`:"과거 데이터 없음"}</div></div>`;
+        <div class="value" style="color:var(--blue);font-size:30px">${(c.med||c.nowMed)?fmt(sug(c))+"회":"-"}</div>
+        <div class="note" style="margin-top:6px">과거(2022~) ${c.n}개 중간값 ${fmt(Math.round(c.med))}회 · 현재 ${c.nowN}개 중간값 ${fmt(Math.round(c.nowMed))}회 중 큰 값의 110%</div></div>`;
       document.getElementById("cmpKpiCards").innerHTML=card("🎞️","롱폼",longC)+card("🎬","숏폼",shortC);
     }
 
