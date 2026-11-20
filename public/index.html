@@ -554,7 +554,7 @@
         <pre id="dedupeOut" style="display:none;margin-top:10px;padding:10px;background:var(--chip);border:1px solid var(--line);border-radius:10px;font-size:12px;max-height:320px;overflow:auto;white-space:pre-wrap"></pre>
       </div>
       <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
-        <button onclick="applyKpiPreset()" title="실측 데이터로 재산정한 KPI 세트를 폼에 채웁니다. 저장을 눌러야 반영돼요" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">📐 재산정 KPI 적용 (2026-09-14)</button>
+        <button onclick="applyKpiPreset()" title="실측 데이터로 재산정한 KPI 세트를 폼에 채웁니다. 저장을 눌러야 반영돼요" style="background:var(--chip);color:var(--text);border:1px solid var(--line);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">📐 재산정 KPI 적용 (2026-11-20)</button>
         <button onclick="saveConfig()" style="background:var(--blue,#3182f6);color:#fff;border:none;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">💾 설정 저장</button>
         <span id="cfgStatus" style="font-size:13px;color:var(--sub)"></span>
       </div>
@@ -1057,24 +1057,35 @@
     // ── 2026-09-14 전면 재산정 (근거: harness _workspace/KPI_재산정_20260914.md) ──
     //  실측 창: 일별 8/15~9/11(28일) · 숏폼 9/1 이후 13편 · 롱폼 8/1 이후 17편 · 스튜디오 8/20 실측
     //  원칙: 현 실적 중앙값~평균 사이에 "한 단계 위"를 놓는다. 대시보드가 못 재는 지표(일별 노출·CTR)는 스튜디오 값 기준
+    // ── 2026-11-20 3기 재산정 (영상별 숏폼·롱폼만, 일별은 2기 그대로) ──
+    //  실측 창: 9/14~11/19 업로드 숏폼 118편 · 롱폼 26편. 원칙: 중앙값의 약 110% ("한 걸음 위")
+    //  숏폼 조회 중앙값 299회 → 400회(비교 섹션 제안과 맞춤) · 조회율 중앙값 47% → 50%
+    //  롱폼 조회 중앙값 153회 → 200회(유지) · 조회율 중앙값 22% → 25% · 구독전환 2 → 1 (대부분 0명이라 '1명 이상'으로)
     const KPI = {
       // 일별: 최근 28일 평균 499회·중앙값 235회(숏폼 발행일에 2,000회+ 스파이크). 구독 +1.25/일
       daily:{ views:500, impr:1000, ctr:2.5, avp:35, subs:2, eng:1.5 },   // eng=참여율(%)
       // 전체(형태 무관): 숏폼·롱폼 섞인 채널 평균. 판단용이 아니라 참고용
       video:{ views:500, impr:1500, ctr:3, avp:50, subs:1, eng:2 },
-      // 숏폼: 9/1 이후 중앙값 755회 (교육형 1,150~1,370 · 시황형 160~320 으로 갈림). 구독 전환 0.1/편·참여 0.6%
-      video_short:{ views:800, impr:400, ctr:5, avp:70, subs:1, eng:1 },
-      // 롱폼: 8/1 이후 평균 153회·중앙값 125회, 최근 4편 243·281·557·99(OSL1 초기). CTR 실측 1.1~3.3% · 참여 5.4%
-      video_long:{ views:200, impr:3000, ctr:2.5, avp:30, subs:2, eng:5 },
+      video_short:{ views:400, impr:400, ctr:5, avp:50, subs:1, eng:1 },
+      video_long:{ views:200, impr:3000, ctr:2.5, avp:25, subs:1, eng:5 },
     };
     // 관리자 패널 "📐 재산정 KPI 적용" 버튼이 넣는 값 (= 위 기본값).
-    // 시트에 저장된 설정이 기본값보다 우선하므로 재산정 반영은 이 버튼 → 💾 설정 저장 순서로 한다
-    const KPI_PRESET = { date:"2026-09-14", kpi: JSON.parse(JSON.stringify(KPI)) };
+    // 3기 이후 시트에 저장된 설정(kpiFrom이 3기 시작일인 것)만 기본값보다 우선한다
+    const KPI_PRESET = { date:"2026-11-20", kpi: JSON.parse(JSON.stringify(KPI)) };
     // ── KPI 세대 ──
-    //  1기(론칭, ~2026-09-13)의 KPI는 그대로 두고, 2기(2026-09-14~)부터 새 KPI를 적용한다.
+    //  1기(론칭, ~2026-09-13) · 2기(2026-09-14~11-19)는 고정값으로 두고, 3기(2026-11-20~)부터 새 KPI를 적용한다.
     //  과거 날짜·과거 업로드 영상은 그 시점의 KPI로 색칠해야 "그때 목표를 달성했는지"가 남는다.
-    //  KPI(현재 세대)는 시트 설정으로 바뀌지만 1기는 고정값.
+    //  KPI(현재 세대)만 시트 설정으로 바뀐다.
     const KPI_PHASE2_FROM="2026-09-14";
+    const KPI_PHASE3_FROM="2026-11-20";
+    // 2기 (9/14 재산정, 근거: harness _workspace/KPI_재산정_20260914.md)
+    //  숏폼: 9/1 이후 중앙값 755회 (교육형 1,150~1,370 · 시황형 160~320). 롱폼: 8/1 이후 평균 153회·중앙값 125회
+    const KPI_PHASE2 = {
+      daily:{ views:500, impr:1000, ctr:2.5, avp:35, subs:2, eng:1.5 },
+      video:{ views:500, impr:1500, ctr:3, avp:50, subs:1, eng:2 },
+      video_short:{ views:800, impr:400, ctr:5, avp:70, subs:1, eng:1 },
+      video_long:{ views:200, impr:3000, ctr:2.5, avp:30, subs:2, eng:5 },
+    };
     const KPI_PHASE1 = {
       daily:{ views:800, impr:400, ctr:5.5, avp:65, subs:2, eng:3 },
       video:{ views:1000, impr:300, ctr:5, avp:65, subs:2, eng:3 },
@@ -1082,8 +1093,9 @@
       video_long:{ views:150, impr:3000, ctr:2, avp:30, subs:2, eng:3 },
     };
     const ymdFull=(d)=>{ d=String(d||"").trim(); return d.length===8 ? "20"+d : d; };   // 26-08-10 → 2026-08-10
-    const kpiAt=(date)=> (date && ymdFull(date) < KPI_PHASE2_FROM) ? KPI_PHASE1 : KPI;
-    const phaseOf=(date)=> (date && ymdFull(date) < KPI_PHASE2_FROM) ? 1 : 2;
+    const phaseOf=(date)=>{ if(!date) return 3; const d=ymdFull(date); return d<KPI_PHASE2_FROM ? 1 : d<KPI_PHASE3_FROM ? 2 : 3; };
+    const kpiAt=(date)=>{ const p=phaseOf(date); return p===1 ? KPI_PHASE1 : p===2 ? KPI_PHASE2 : KPI; };
+    const phaseMark=(date)=>{ const p=phaseOf(date); return p===3 ? '' : ` <span class="muted" title="${p}기 KPI(${p===1?'론칭 ~9/13':'9/14~11/19'}) 기준" style="font-size:10px">${p===1?'①':'②'}</span>`; };
     // KPI 그룹 키: 영상 형태 필터(all/short/long)에 대응
     const kpiFor=(form,date)=>{ const K=kpiAt(date); return form==="short"?K.video_short : form==="long"?K.video_long : K.video; };
     const ENG = { yellow:10, green:30 };   // 좋아요·댓글·공유: 10미만 빨강 / 10~30 노랑 / 30이상 초록
@@ -1519,18 +1531,21 @@
         if(form==="short") vids=vids.filter(v=>isShort(v));
         else if(form==="long") vids=vids.filter(v=>!isShort(v));
         const K=kpiFor(form);
+        // 영상마다 업로드일 세대의 KPI로 판정 (3기 11/20~ · 이전 영상은 그때 목표)
+        const Kv=(v)=>kpiFor(form,v[1]);
         const total=vids.length;
-        const hitV=vids.filter(v=>N(v[8])>=K.views).length;
+        const hitV=vids.filter(v=>N(v[8])>=Kv(v).views).length;
         // 조회율은 100% 캡 기준으로 판정 — 반복재생분이 달성률을 부풀리지 않게
-        const hitA=vids.filter(v=>avpCap(v[7])>=K.avp).length;
-        const hitS=vids.filter(v=>N(v[12])>=K.subs).length;
+        const hitA=vids.filter(v=>avpCap(v[7])>=Kv(v).avp).length;
+        const hitS=vids.filter(v=>N(v[12])>=Kv(v).subs).length;
+        const old=vids.some(v=>phaseOf(v[1])<3);
         items=[
           {l:"조회수 달성률",rate:true,hit:hitV,total,kt:fmt(K.views)+"회 이상"},
           {l:"평균조회율 달성률",rate:true,hit:hitA,total,kt:K.avp+"% 이상"},
           {l:"구독전환 달성률",rate:true,hit:hitS,total,kt:K.subs+" 이상"},
         ];
         const fl = form==="short"?"숏폼":form==="long"?"롱폼":"전체 영상";
-        basis=`${fl} ${total}개 기준`;
+        basis=`${fl} ${total}개 기준 · 3기 KPI(${KPI_PHASE3_FROM.slice(5)}~)${old?" · 그 전 영상은 업로드 당시 목표로 판정":""}`;
       } else if(type==="cumulative"){
         const rows=periodRows(sel), d=rows.length;
         const sum=(i)=>rows.reduce((s,r)=>s+N(r[i]),0);
@@ -2508,7 +2523,7 @@
     }
 
     function renderDailyTable(){
-      document.getElementById("dailyKpiBadge").textContent=`2기 KPI(${KPI_PHASE2_FROM.slice(5)}~): 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·참여율 ${KPI.daily.eng}%·구독자 +${KPI.daily.subs}`;
+      document.getElementById("dailyKpiBadge").textContent=`3기 KPI(${KPI_PHASE3_FROM.slice(5)}~, 이전 날짜는 그때 기준): 노출수 ${fmt(KPI.daily.impr)}·CTR ${KPI.daily.ctr}%·조회수 ${fmt(KPI.daily.views)}·평균조회율 ${KPI.daily.avp}%·참여율 ${KPI.daily.eng}%·구독자 +${KPI.daily.subs}`;
       const el=document.getElementById("dailyRows");
       // 일별 컬럼: 0날짜 1구독자증감 2추가영상 3좋아요 4댓글 5공유 6조회수 7노출수 8CTR 9평균조회율 10시청지속률 11평균시청시간 12특이사항
       const rows=sortRows(DAILY, document.getElementById("dailySortKey").value, document.getElementById("dailySortDir").value, 0);
@@ -2517,7 +2532,7 @@
         const engR=N(x[6])?(N(x[3])+N(x[4])+N(x[5]))/N(x[6])*100:0;
         const KD=kpiAt(x[0]).daily, ph=phaseOf(x[0]);
         return `<tr>
-        <td>${x[0]??""}${ph===1?' <span class="muted" title="1기 KPI(론칭 ~9/13) 기준" style="font-size:10px">①</span>':''}</td>
+        <td>${x[0]??""}${phaseMark(x[0])}</td>
         <td class="${kCls(N(x[1]),KD.subs)}">${fmt(x[1])}</td>
         <td class="${x[7]?kCls(N(x[7]),KD.impr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','impr','${x[7]??''}')"`:''}>${x[7]?fmt(x[7]):"-"}</td>
         <td class="${x[8]?kCls(N(x[8]),KD.ctr):''}${ADMIN?' adm':''}"${ADMIN?` onclick="startCellEdit(this,'daily','${x[0]}','ctr','${x[8]??''}')"`:''}>${x[8]?ctrStr(x[8]):"-"}</td>
@@ -2542,7 +2557,7 @@
       const kOf=(x)=> kpiFor(ff==="all" ? (isShort(x)?"short":"long") : ff, x[1]);   // 업로드일 기준 세대
       document.getElementById("videoKpiBadge").textContent = ff==="all"
         ? "KPI: 행마다 형태별 기준 적용 (숏폼/롱폼 각각)"
-        : `${ff==="short"?"숏폼":"롱폼"} 2기 KPI(${KPI_PHASE2_FROM.slice(5)}~, 이전 업로드는 1기 기준): 노출수 ${fmt(KV.impr)}·CTR ${KV.ctr}%·조회수 ${fmt(KV.views)}·평균조회율 ${KV.avp}%·참여율 ${KV.eng}%·구독전환 ${KV.subs}`;
+        : `${ff==="short"?"숏폼":"롱폼"} 3기 KPI(${KPI_PHASE3_FROM.slice(5)}~, 이전 업로드는 그때 기준): 노출수 ${fmt(KV.impr)}·CTR ${KV.ctr}%·조회수 ${fmt(KV.views)}·평균조회율 ${KV.avp}%·참여율 ${KV.eng}%·구독전환 ${KV.subs}`;
       let list=VIDEOS;
       if(ff==="short") list=VIDEOS.filter(x=>isShort(x));
       else if(ff==="long") list=VIDEOS.filter(x=>!isShort(x));
@@ -2553,7 +2568,7 @@
         const K=kOf(x);
         return `<tr>
         <td><img src="https://i.ytimg.com/vi/${x[0]}/mqdefault.jpg" class="thumb" loading="lazy" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')"></td>
-        <td>${x[1]??""}${phaseOf(x[1])===1?' <span class="muted" title="1기 KPI(론칭 ~9/13) 기준" style="font-size:10px">①</span>':''}</td>
+        <td>${x[1]??""}${phaseMark(x[1])}</td>
         <td>${formLabel(x)}</td>
         <td><span class="vtitle" onclick="openVideo('${x[0]}',\`${(x[3]||'').replace(/`/g,'')}\`,'${x[1]||''}')">${x[3]??""}</span></td>
         <td class="muted">${x[4]??""}</td>
@@ -3210,7 +3225,7 @@
     function getCurrentConfig(){
       const kpi={};
       KPI_GROUPS.forEach(([g])=>kpi[g]={...KPI[g]});
-      return { kpi, title: document.getElementById("dashTitle").textContent.trim() };
+      return { kpi, kpiFrom: KPI_PHASE3_FROM, title: document.getElementById("dashTitle").textContent.trim() };
     }
     // 제목 인라인 편집: 관리자일 때 상단 제목을 클릭해 바로 수정 → blur/Enter 시 저장
     function setupTitleEdit(){
@@ -3244,7 +3259,8 @@
         const r=await fetch("/api/config").then(r=>r.json());
         if(r.ok && r.config){
           CONFIG=r.config;
-          if(r.config.kpi){
+          // 시트 KPI는 지금 세대(3기)에 저장된 것만 적용 — 2기 때 저장된 값이 3기 목표를 덮지 않게
+          if(r.config.kpi && r.config.kpiFrom===KPI_PHASE3_FROM){
             // 저장된 그룹만 덮어씀 — 새로 추가된 그룹(video_short/long)은 코드 기본값 유지
             KPI_GROUPS.forEach(([g])=>{ if(r.config.kpi[g]) Object.assign(KPI[g], r.config.kpi[g]); });
           }
