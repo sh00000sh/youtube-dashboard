@@ -39,6 +39,37 @@
     </div>`;
   }
 
+
+  // 🎯 미주옵 팔로워 KPI (11/23 승현님: "현실적으로 지금 속도로 갔을 때 12월까지") — 11/22 254명 기준, 기본 하루 10명 · 도전 하루 15명
+  const IG_KPI = { acc: "미주옵", setOn: "2026-11-23", base: ["2026-11-22", 254],
+    pts: [["2026-11-30", 320, 360], ["2026-12-07", 390, 460], ["2026-12-14", 460, 570], ["2026-12-21", 530, 670], ["2026-12-24", 560, 710], ["2026-12-31", 630, 800]],
+    prev: "이전 목표(11/13): 11/20 300 · 11/30 500 · 12/24 1,000 — 11/20 300은 못 채움(11/22 254)",
+    rules: [
+      ["11/24~11/30", "마무리 멘트 실험", "아침 편 나레이션 끝: \"내일 아침 6시에 또 정리해 드려요.\" · 밤 22시 이슈 모음 끝: \"내일 밤 10시에 또 정리해 드려요.\" · 단독 편 끝: \"내일 아침 6시엔 간밤 미국장을 정리해 드려요.\"(제안, 승현님 확정 대기) · 화면 자막은 그대로. 11/30에 실험 전 주(11/16~22 릴스 팔로우 50명)와 비교"],
+      ["매주 월요일", "지난주 핫이슈 TOP 5", "순위표는 월요일 아침 편에만. 나레이션은 '5위, GTA 식스 출시.'처럼 순위 + 명사형 제목만"],
+      ["상시", "아침 '간밤 미국장'", "팔로우의 71%가 여기서 나옴(11/14·11/20·11/21) → 6시대·확정 종가·같은 틀로 매일"],
+      ["상시", "캐러셀", "기존 팔로워용 — 승현님이 직접 운영"]] };
+  function renderKpi(hist) {
+    const ymd = (d) => d.slice(0, 10);
+    const H = hist.filter((h) => h.account === IG_KPI.acc).map((h) => [ymd(new Date(Date.parse(h.at) + 9 * 3600e3).toISOString()), h.followers]).sort((a, b) => a[0].localeCompare(b[0]));
+    const at = (d) => { let v = null; H.forEach(([k, f]) => { if (k <= d) v = f; }); return v; };
+    const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+    const all = [IG_KPI.base, ...IG_KPI.pts.map(([d, b]) => [d, b])], allS = [IG_KPI.base, ...IG_KPI.pts.map(([d, , s]) => [d, s])];
+    const interp = (L, d) => { if (d <= L[0][0]) return L[0][1]; for (let i = 1; i < L.length; i++) if (d <= L[i][0]) { const t0 = Date.parse(L[i - 1][0]), t1 = Date.parse(L[i][0]); return Math.round(L[i - 1][1] + (L[i][1] - L[i - 1][1]) * (Date.parse(d) - t0) / (t1 - t0)); } return L[L.length - 1][1]; };
+    const now = H.length ? H[H.length - 1] : null, nowF = now ? now[1] : null;
+    const tb = interp(all, today), ts = interp(allS, today);
+    const st = nowF == null ? "" : nowF >= ts ? `<span class="bchip up">도전 목표 이상</span>` : nowF >= tb ? `<span class="bchip up">기본 목표 달성 중</span>` : `<span class="bchip dn">기본 목표보다 ${tb - nowF}명 밀림</span>`;
+    const pct = (v, goal) => Math.max(0, Math.min(100, Math.round(v / goal * 100)));
+    const bar = (label, goal) => `<div class="bw" style="margin-top:6px">${label} 12/31 <b>${f(goal)}</b>명까지 ${nowF == null ? "-" : pct(nowF, goal) + "%"}<div style="height:8px;background:var(--chip);border-radius:6px;margin-top:3px"><div style="height:8px;width:${nowF == null ? 0 : pct(nowF, goal)}%;background:var(--blue);border-radius:6px"></div></div></div>`;
+    const rows = IG_KPI.pts.map(([d, b, s]) => { const a = d <= today ? at(d) : null; const mark = a == null ? `<span class="bsub">${d <= today ? "기록 없음" : "예정"}</span>` : a >= s ? `<span class="bchip up">도전 달성</span>` : a >= b ? `<span class="bchip up">기본 달성</span>` : `<span class="bchip dn">미달 ${b - a}</span>`;
+      return `<tr><td style="text-align:left">${d.slice(5).replace("-", "/")}</td><td>${f(b)}</td><td>${f(s)}</td><td>${a == null ? "-" : f(a)}</td><td>${mark}</td></tr>`; }).join("");
+    const rules = IG_KPI.rules.map(([w, n, t]) => `<tr><td style="text-align:left;white-space:nowrap">${esc(w)}</td><td style="text-align:left;white-space:nowrap"><b>${esc(n)}</b></td><td style="text-align:left">${esc(t)}</td></tr>`).join("");
+    return `<h3 class="bh">🎯 미주옵 팔로워 KPI <span class="bsub">${IG_KPI.setOn.slice(5).replace("-", "/")} 설정 · 기준 11/22 254명 · 기본 하루 10명 · 도전 하루 15명</span></h3>
+      <div class="bgrid"><div class="bcard" style="cursor:default"><div class="bk">지금 ${now ? now[0].slice(5).replace("-", "/") + " 기록" : ""}</div><div class="bn"><b>${f(nowF)}</b> <span class="bsub">팔로워</span></div>
+        <div class="bw">오늘(${today.slice(5).replace("-", "/")}) 목표 기본 <b>${f(tb)}</b> · 도전 <b>${f(ts)}</b> ${st}</div>${bar("기본", 630)}${bar("도전", 800)}</div>
+      <div class="panel" style="margin:0"><div class="table-wrap"><table class="btable"><thead><tr><th style="text-align:left">점검일</th><th>기본</th><th>도전</th><th>실제</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div class="bsub" style="padding:6px 10px">${esc(IG_KPI.prev)}</div></div></div>
+      <h3 class="bh">🧪 운영 규칙 · 실험 <span class="bsub">KPI를 위해 지금 바꿔 보고 있는 것</span></h3><div class="panel"><div class="table-wrap"><table class="btable"><tbody>${rules}</tbody></table></div></div>`;
+  }
   function renderCompare(box) {
     const P = D.posts.map(prep).filter((p) => p.reach != null);
     const accs = D.accounts;
@@ -78,7 +109,7 @@
       .map((p) => `<div class="bv"><a href="${esc(p.link)}" target="_blank">${esc(p.first.slice(0, 40) || "(첫 줄 없음)")}</a><br><span class="bsub">${p.kdate.slice(5)} ${p.hour}시 · ${p.fmt} · ${p.hook}</span> · 도달 <b>${f(p.reach)}</b> ${grade(p.r)} · 저장 ${f(p.sav)} · 공유 ${f(p.sh)}</div>`).join("") || `<div class="bsub">아직 없어요</div>`;
     const bw = ACC.map((a) => `<div><b>${a}</b><div class="bsub" style="margin:4px 0">잘 된 3개</div>${pick(a, true)}<div class="bsub" style="margin:10px 0 4px">안 된 3개</div>${pick(a, false)}</div>`).join("");
 
-    box.innerHTML = `
+    box.innerHTML = renderKpi(D.history || []) + `
       <h3 class="bh">👥 두 계정 한눈에 <span class="bsub">최근 30일 · 중간값 기준</span></h3><div class="bgrid">${cards}</div>
       <h3 class="bh">⚖️ 계정 × 형식 비교 <span class="bsub">초록 = 네 칸 중 가장 좋은 값. 도달은 팔로워 수 차이를 그대로 반영하니 참여율·저장률을 같이 보세요</span></h3><div class="panel"><div class="table-wrap">${tbl}</div></div>
       <h3 class="bh">🪝 첫 줄 형태별 <span class="bsub">캡션 첫 줄(후킹 문장)을 질문·이유·반전·요약으로 자동 분류</span></h3><div class="panel"><div class="table-wrap">${hookTbl}</div></div>
